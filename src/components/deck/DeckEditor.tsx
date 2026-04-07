@@ -1,0 +1,391 @@
+'use client'
+
+import { useState, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import {
+  Trash2,
+  Download,
+  Check,
+  X,
+  Pencil,
+  Fish,
+} from 'lucide-react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/Button'
+import DeckCard from './DeckCard'
+import DeckStats from './DeckStats'
+import DeckExport from './DeckExport'
+import AddCardSearch from './AddCardSearch'
+import type { Database } from '@/types/supabase'
+
+type CardRow = Database['public']['Tables']['cards']['Row']
+type DeckRow = Database['public']['Tables']['decks']['Row']
+
+interface DeckCardEntry {
+  id: string
+  card: CardRow
+  quantity: number
+  board: string
+}
+
+interface DeckEditorProps {
+  deck: DeckRow
+  initialCards: DeckCardEntry[]
+}
+
+type BoardTab = 'main' | 'sideboard' | 'maybeboard'
+
+const TYPE_ORDER = [
+  'Creatures',
+  'Planeswalkers',
+  'Instants',
+  'Sorceries',
+  'Enchantments',
+  'Artifacts',
+  'Battles',
+  'Lands',
+  'Other',
+]
+
+function getCardTypeCategory(typeLine: string): string {
+  const t = typeLine.toLowerCase()
+  if (t.includes('creature')) return 'Creatures'
+  if (t.includes('planeswalker')) return 'Planeswalkers'
+  if (t.includes('instant')) return 'Instants'
+  if (t.includes('sorcery')) return 'Sorceries'
+  if (t.includes('enchantment')) return 'Enchantments'
+  if (t.includes('artifact')) return 'Artifacts'
+  if (t.includes('battle')) return 'Battles'
+  if (t.includes('land')) return 'Lands'
+  return 'Other'
+}
+
+export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
+  const router = useRouter()
+  const [cards, setCards] = useState<DeckCardEntry[]>(initialCards)
+  const [activeTab, setActiveTab] = useState<BoardTab>('main')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [deckName, setDeckName] = useState(deck.name)
+  const [editingName, setEditingName] = useState(deck.name)
+  const [showExport, setShowExport] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  // Filter cards by active tab
+  const filteredCards = useMemo(
+    () => cards.filter((c) => c.board === activeTab),
+    [cards, activeTab]
+  )
+
+  // Group cards by type
+  const groupedCards = useMemo(() => {
+    const groups: Record<string, DeckCardEntry[]> = {}
+    filteredCards.forEach((entry) => {
+      const cat = getCardTypeCategory(entry.card.type_line)
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(entry)
+    })
+    // Sort by TYPE_ORDER
+    const sorted: [string, DeckCardEntry[]][] = []
+    TYPE_ORDER.forEach((type) => {
+      if (groups[type]) {
+        sorted.push([type, groups[type].sort((a, b) => a.card.cmc - b.card.cmc)])
+      }
+    })
+    return sorted
+  }, [filteredCards])
+
+  const tabCounts = useMemo(() => ({
+    main: cards.filter((c) => c.board === 'main').reduce((s, c) => s + c.quantity, 0),
+    sideboard: cards.filter((c) => c.board === 'sideboard').reduce((s, c) => s + c.quantity, 0),
+    maybeboard: cards.filter((c) => c.board === 'maybeboard').reduce((s, c) => s + c.quantity, 0),
+  }), [cards])
+
+  const handleQuantityChange = useCallback(
+    async (cardId: number, newQuantity: number, board: string) => {
+      if (newQuantity <= 0) {
+        // Remove the card
+        setCards((prev) => prev.filter((c) => !(c.card.id === cardId && c.board === board)))
+        await fetch(`/api/decks/${deck.id}/cards`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_id: cardId, board }),
+        })
+        return
+      }
+
+      setCards((prev) =>
+        prev.map((c) =>
+          c.card.id === cardId && c.board === board
+            ? { ...c, quantity: newQuantity }
+            : c
+        )
+      )
+
+      await fetch(`/api/decks/${deck.id}/cards`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: cardId, quantity: newQuantity, board }),
+      })
+    },
+    [deck.id]
+  )
+
+  const handleRemove = useCallback(
+    async (cardId: number, board: string) => {
+      setCards((prev) => prev.filter((c) => !(c.card.id === cardId && c.board === board)))
+      await fetch(`/api/decks/${deck.id}/cards`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: cardId, board }),
+      })
+    },
+    [deck.id]
+  )
+
+  const handleCardAdded = useCallback(
+    (card: CardRow, board: string) => {
+      setCards((prev) => {
+        const existing = prev.find((c) => c.card.id === card.id && c.board === board)
+        if (existing) {
+          return prev.map((c) =>
+            c.card.id === card.id && c.board === board
+              ? { ...c, quantity: c.quantity + 1 }
+              : c
+          )
+        }
+        return [
+          ...prev,
+          {
+            id: `temp-${Date.now()}`,
+            card,
+            quantity: 1,
+            board,
+          },
+        ]
+      })
+    },
+    []
+  )
+
+  async function saveName() {
+    if (!editingName.trim()) return
+    setDeckName(editingName)
+    setIsEditingName(false)
+    await fetch(`/api/decks/${deck.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editingName }),
+    })
+  }
+
+  async function deleteDeck() {
+    setDeleting(true)
+    const res = await fetch(`/api/decks/${deck.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      router.push('/decks')
+    }
+    setDeleting(false)
+  }
+
+  const statsCards = useMemo(
+    () =>
+      cards.map((c) => ({
+        card: c.card,
+        quantity: c.quantity,
+        board: c.board,
+      })),
+    [cards]
+  )
+
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-6">
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveName()}
+                className="rounded-lg border border-border bg-bg-card px-3 py-1.5 text-xl font-bold text-font-primary focus:border-bg-accent focus:outline-none focus:ring-2 focus:ring-bg-accent/20"
+                autoFocus
+              />
+              <button
+                onClick={saveName}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-bg-green hover:bg-bg-green/10"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditingName(false)
+                  setEditingName(deckName)
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-font-muted hover:bg-bg-hover"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsEditingName(true)}
+              className="group flex items-center gap-2"
+            >
+              <h1 className="text-2xl font-bold text-font-primary">{deckName}</h1>
+              <Pencil className="h-4 w-4 text-font-muted opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+          )}
+          <span className="rounded-full bg-bg-cell px-3 py-1 text-xs font-medium text-font-secondary">
+            {deck.format}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/decks/${deck.id}/goldfish`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-bg-accent px-3 py-1.5 text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark"
+          >
+            <Fish className="h-4 w-4" />
+            Goldfish
+          </Link>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowExport(true)}
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </Button>
+        </div>
+      </div>
+
+      {/* Two-panel layout */}
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Left panel: Card list */}
+        <div className="flex-1">
+          {/* Board tabs */}
+          <div className="mb-4 flex gap-1 rounded-lg bg-bg-cell p-1">
+            {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === tab
+                    ? 'bg-bg-surface text-font-primary shadow-sm'
+                    : 'text-font-secondary hover:text-font-primary'
+                }`}
+              >
+                {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
+                <span className="ml-1.5 text-xs text-font-muted">
+                  ({tabCounts[tab]})
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Card groups */}
+          {groupedCards.length === 0 ? (
+            <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
+              <p className="text-font-muted">
+                No cards in {activeTab === 'main' ? 'main deck' : activeTab}. Use the search below to add cards.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {groupedCards.map(([type, entries]) => (
+                <div key={type}>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
+                    {type}
+                    <span className="text-xs text-font-muted">
+                      ({entries.reduce((s, e) => s + e.quantity, 0)})
+                    </span>
+                  </h3>
+                  <div className="flex flex-col gap-1">
+                    {entries.map((entry) => (
+                      <DeckCard
+                        key={`${entry.card.id}-${entry.board}`}
+                        card={entry.card}
+                        quantity={entry.quantity}
+                        board={entry.board}
+                        onQuantityChange={handleQuantityChange}
+                        onRemove={handleRemove}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add card search */}
+          <div className="mt-4">
+            <AddCardSearch
+              deckId={deck.id}
+              onCardAdded={handleCardAdded}
+              currentBoard={activeTab}
+            />
+          </div>
+        </div>
+
+        {/* Right panel: Stats */}
+        <div className="w-full shrink-0 lg:w-80">
+          <div className="sticky top-6 rounded-xl border border-border bg-bg-surface p-4">
+            <h2 className="mb-4 text-sm font-semibold text-font-secondary">
+              Deck Statistics
+            </h2>
+            <DeckStats cards={statsCards} />
+          </div>
+        </div>
+      </div>
+
+      {/* Export modal */}
+      {showExport && (
+        <DeckExport
+          deckName={deckName}
+          cards={statsCards}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {/* Delete confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-dark/80 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-bg-surface p-6 shadow-2xl">
+            <h2 className="mb-2 text-lg font-bold text-font-primary">Delete Deck</h2>
+            <p className="mb-6 text-sm text-font-secondary">
+              Are you sure you want to delete &quot;{deckName}&quot;? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                onClick={deleteDeck}
+                loading={deleting}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

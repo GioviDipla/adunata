@@ -1,0 +1,143 @@
+'use client'
+
+import { useState } from 'react'
+import { Minus, Plus, X } from 'lucide-react'
+import type { Database } from '@/types/supabase'
+
+type CardRow = Database['public']['Tables']['cards']['Row']
+
+interface DeckCardProps {
+  card: CardRow
+  quantity: number
+  board: string
+  onQuantityChange: (cardId: number, quantity: number, board: string) => void
+  onRemove: (cardId: number, board: string) => void
+}
+
+function ManaCostDisplay({ manaCost }: { manaCost: string | null }) {
+  if (!manaCost) return null
+
+  const symbols = manaCost.match(/\{[^}]+\}/g) || []
+  return (
+    <span className="flex items-center gap-0.5">
+      {symbols.map((symbol, i) => {
+        const s = symbol.replace(/[{}]/g, '')
+        let bgClass = 'bg-bg-cell'
+        let textClass = 'text-font-primary'
+
+        switch (s) {
+          case 'W':
+            bgClass = 'bg-mana-white'
+            textClass = 'text-bg-dark'
+            break
+          case 'U':
+            bgClass = 'bg-mana-blue'
+            textClass = 'text-font-primary'
+            break
+          case 'B':
+            bgClass = 'bg-mana-black'
+            textClass = 'text-font-primary'
+            break
+          case 'R':
+            bgClass = 'bg-mana-red'
+            textClass = 'text-font-primary'
+            break
+          case 'G':
+            bgClass = 'bg-mana-green'
+            textClass = 'text-font-primary'
+            break
+        }
+
+        return (
+          <span
+            key={i}
+            className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${bgClass} ${textClass}`}
+          >
+            {s}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
+export { ManaCostDisplay }
+
+export default function DeckCard({
+  card,
+  quantity,
+  board,
+  onQuantityChange,
+  onRemove,
+}: DeckCardProps) {
+  const [showPreview, setShowPreview] = useState(false)
+
+  return (
+    <div
+      className="group relative flex items-center gap-2 rounded-lg border border-border bg-bg-card px-3 py-2 transition-colors hover:bg-bg-hover"
+      onMouseEnter={() => setShowPreview(true)}
+      onMouseLeave={() => setShowPreview(false)}
+    >
+      {/* Quantity controls */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onQuantityChange(card.id, quantity - 1, board)}
+          className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+          aria-label="Decrease quantity"
+        >
+          <Minus className="h-3 w-3" />
+        </button>
+        <span className="w-6 text-center text-sm font-medium text-font-primary">
+          {quantity}
+        </span>
+        <button
+          onClick={() => onQuantityChange(card.id, quantity + 1, board)}
+          className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+          aria-label="Increase quantity"
+        >
+          <Plus className="h-3 w-3" />
+        </button>
+      </div>
+
+      {/* Card info */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate text-sm font-medium text-font-primary">
+          {card.name}
+        </span>
+        <ManaCostDisplay manaCost={card.mana_cost} />
+      </div>
+
+      {/* Type line */}
+      <span className="hidden text-xs text-font-muted md:inline">
+        {card.type_line?.split('—')[0]?.trim()}
+      </span>
+
+      {/* Price */}
+      {card.prices_usd && (
+        <span className="text-xs text-font-secondary">
+          ${(card.prices_usd * quantity).toFixed(2)}
+        </span>
+      )}
+
+      {/* Remove button */}
+      <button
+        onClick={() => onRemove(card.id, board)}
+        className="flex h-6 w-6 items-center justify-center rounded text-font-muted opacity-0 transition-all hover:bg-bg-red/20 hover:text-bg-red group-hover:opacity-100"
+        aria-label="Remove card"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+
+      {/* Card image preview on hover */}
+      {showPreview && card.image_normal && (
+        <div className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden lg:block">
+          <img
+            src={card.image_normal}
+            alt={card.name}
+            className="h-auto w-56 rounded-lg shadow-2xl"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
