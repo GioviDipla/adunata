@@ -77,6 +77,10 @@ export function createDiscard(playerId: string, playerName: string, instanceId: 
   }
 }
 
+export function createDraw(playerId: string, playerName: string): GameAction {
+  return { type: 'draw', playerId, data: {}, text: `${playerName} draws a card` }
+}
+
 export function createConcede(playerId: string, playerName: string): GameAction {
   return { type: 'concede', playerId, data: {}, text: `${playerName} concedes` }
 }
