@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   createPassPriority, createPlayCard, createTap, createUntap,
   createConfirmUntap, createMoveZone, createLifeChange,
   createDraw, createConcede,
+  createDeclareAttackers, createDeclareBlockers, createCombatDamage, createDiscard,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, CardMap, LogEntry } from '@/lib/game/types'
@@ -19,6 +20,9 @@ import type { HandCardEntry } from '@/components/goldfish/HandArea'
 import GameLog from './GameLog'
 import GameActionBar from './GameActionBar'
 import CardZoneViewer from '@/components/goldfish/CardZoneViewer'
+import CombatAttackers from './CombatAttackers'
+import CombatBlockers from './CombatBlockers'
+import DiscardSelector from './DiscardSelector'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -254,6 +258,121 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     sendAction(createMoveZone(userId, 'You', instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'hand'))
   }, [myState, cardMap, sendAction, userId])
 
+  // Combat: declare attackers
+  const handleDeclareAttackers = useCallback((attackerIds: string[], attackerNames: string[]) => {
+    sendAction(createDeclareAttackers(userId, 'You', attackerIds, attackerNames))
+  }, [sendAction, userId])
+
+  const handleSkipAttackers = useCallback(() => {
+    sendAction(createDeclareAttackers(userId, 'You', [], []))
+  }, [sendAction, userId])
+
+  // Combat: declare blockers
+  const handleDeclareBlockers = useCallback((assignments: { blockerId: string; attackerId: string; blockerName: string; attackerName: string }[]) => {
+    sendAction(createDeclareBlockers(userId, 'You', assignments))
+  }, [sendAction, userId])
+
+  const handleSkipBlockers = useCallback(() => {
+    sendAction(createDeclareBlockers(userId, 'You', []))
+  }, [sendAction, userId])
+
+  // Discard to 7
+  const handleDiscard = useCallback((discards: { instanceId: string; cardId: number; cardName: string }[]) => {
+    for (const d of discards) {
+      sendAction(createDiscard(userId, 'You', d.instanceId, d.cardId, d.cardName))
+    }
+  }, [sendAction, userId])
+
+  // Auto combat damage calculation
+  const combatDamageSentRef = useRef(false)
+
+  useEffect(() => {
+    if (!gameState || !opponentId) return
+    if (gameState.phase !== 'combat_damage') {
+      combatDamageSentRef.current = false
+      return
+    }
+    if (gameState.activePlayerId !== userId) return
+    if (gameState.priorityPlayerId !== userId) return
+    if (combatDamageSentRef.current) return
+    if (gameState.combat.damageAssigned) return
+
+    combatDamageSentRef.current = true
+
+    const { attackers, blockers } = gameState.combat
+    if (attackers.length === 0) {
+      // No attackers, just pass
+      sendAction(createCombatDamage(userId, 0, [], 'No combat damage'))
+      return
+    }
+
+    // Build blocker map: attackerId -> blockerId[]
+    const blockerMap = new Map<string, string[]>()
+    for (const b of blockers) {
+      const list = blockerMap.get(b.blockingInstanceId) ?? []
+      list.push(b.instanceId)
+      blockerMap.set(b.blockingInstanceId, list)
+    }
+
+    let damageToPlayer = 0
+    const creaturesDamaged: { instanceId: string; playerId: string; damage: number; lethal: boolean }[] = []
+    const descParts: string[] = []
+
+    for (const atk of attackers) {
+      const atkData = cardMap[atk.instanceId]
+      const atkPower = parseInt(atkData?.power ?? '0', 10) || 0
+      const atkToughness = parseInt(atkData?.toughness ?? '0', 10) || 0
+      const atkName = atkData?.name ?? 'Attacker'
+
+      const blockingCreatures = blockerMap.get(atk.instanceId)
+
+      if (!blockingCreatures || blockingCreatures.length === 0) {
+        // Unblocked: damage goes to opponent
+        damageToPlayer += atkPower
+        descParts.push(`${atkName} deals ${atkPower} to opponent`)
+      } else {
+        // Blocked: mutual damage
+        for (const blockerId of blockingCreatures) {
+          const blkData = cardMap[blockerId]
+          const blkPower = parseInt(blkData?.power ?? '0', 10) || 0
+          const blkToughness = parseInt(blkData?.toughness ?? '0', 10) || 0
+          const blkName = blkData?.name ?? 'Blocker'
+
+          // Attacker damages blocker
+          const atkLethal = atkPower >= blkToughness
+          creaturesDamaged.push({
+            instanceId: blockerId,
+            playerId: opponentId,  // blocker belongs to the defending player
+            damage: atkPower,
+            lethal: atkLethal,
+          })
+
+          // Blocker damages attacker
+          const blkLethal = blkPower >= atkToughness
+          creaturesDamaged.push({
+            instanceId: atk.instanceId,
+            playerId: userId,  // attacker belongs to the active player
+            damage: blkPower,
+            lethal: blkLethal,
+          })
+
+          descParts.push(`${atkName} (${atkPower}/${atkToughness}) vs ${blkName} (${blkPower}/${blkToughness})`)
+        }
+      }
+    }
+
+    const description = descParts.length > 0
+      ? `Combat: ${descParts.join('; ')}${damageToPlayer > 0 ? ` | ${damageToPlayer} to opponent` : ''}`
+      : 'No combat damage'
+
+    sendAction(createCombatDamage(userId, damageToPlayer, creaturesDamaged, description))
+  }, [gameState, userId, opponentId, cardMap, sendAction])
+
+  // Overlay conditions
+  const showAttackerUI = gameState?.phase === 'declare_attackers' && isActivePlayer && hasPriority
+  const showBlockerUI = gameState?.phase === 'declare_blockers' && !isActivePlayer && hasPriority
+  const showDiscardUI = gameState?.phase === 'cleanup' && myState && myState.hand.length > 7
+
   // Loading state
   if (loading || !gameState || !myState || !opponentState) {
     return (
@@ -279,7 +398,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg-dark">
+    <div className="relative flex min-h-screen flex-col bg-bg-dark">
       {/* Opponent field */}
       <OpponentField state={opponentState} cardMap={cardMap} />
 
@@ -419,6 +538,35 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             setViewingZone(null)
           }}
           groupByType
+        />
+      )}
+
+      {/* Combat & discard overlays */}
+      {showAttackerUI && (
+        <CombatAttackers
+          battlefield={myState.battlefield}
+          cardMap={cardMap}
+          onConfirm={handleDeclareAttackers}
+          onSkip={handleSkipAttackers}
+        />
+      )}
+
+      {showBlockerUI && opponentState && gameState && (
+        <CombatBlockers
+          myBattlefield={myState.battlefield}
+          combat={gameState.combat}
+          opponentBattlefield={opponentState.battlefield}
+          cardMap={cardMap}
+          onConfirm={handleDeclareBlockers}
+          onSkip={handleSkipBlockers}
+        />
+      )}
+
+      {showDiscardUI && (
+        <DiscardSelector
+          hand={myState.hand}
+          cardMap={cardMap}
+          onConfirm={handleDiscard}
         />
       )}
     </div>
