@@ -305,14 +305,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
     >
       <div
         className="relative flex max-h-[90vh] max-w-md flex-col items-center gap-4 p-4"
-        onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={() => setPreviewCard(null)}
-          className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-bg-surface text-font-secondary hover:text-font-primary"
-        >
-          <X size={16} />
-        </button>
         {previewCard.image_normal ? (
           <img
             src={previewCard.image_normal}
