@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Search,
   Layers,
+  Swords,
   User,
   LogOut,
   Sparkles,
@@ -16,6 +17,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/cards", label: "Cards", icon: Search },
   { href: "/decks", label: "Decks", icon: Layers },
+  { href: "/play", label: "Play", icon: Swords },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
