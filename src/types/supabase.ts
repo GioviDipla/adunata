@@ -233,6 +233,8 @@ export interface Database {
           format: string
           status: string
           max_players: number
+          winner_id: string | null
+          started_at: string | null
           created_at: string
           updated_at: string
         }
@@ -243,6 +245,8 @@ export interface Database {
           format: string
           status?: string
           max_players?: number
+          winner_id?: string | null
+          started_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -253,6 +257,8 @@ export interface Database {
           format?: string
           status?: string
           max_players?: number
+          winner_id?: string | null
+          started_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -266,6 +272,8 @@ export interface Database {
           deck_id: string
           seat_position: number
           life_total: number
+          ready: boolean
+          is_first: boolean | null
           joined_at: string
         }
         Insert: {
@@ -275,6 +283,8 @@ export interface Database {
           deck_id: string
           seat_position: number
           life_total?: number
+          ready?: boolean
+          is_first?: boolean | null
           joined_at?: string
         }
         Update: {
@@ -284,6 +294,8 @@ export interface Database {
           deck_id?: string
           seat_position?: number
           life_total?: number
+          ready?: boolean
+          is_first?: boolean | null
           joined_at?: string
         }
         Relationships: []
@@ -315,6 +327,39 @@ export interface Database {
           active_player_id?: string
           phase?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      game_log: {
+        Row: {
+          id: string
+          lobby_id: string
+          seq: number
+          player_id: string | null
+          action: string
+          data: Json | null
+          text: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          lobby_id: string
+          seq: number
+          player_id?: string | null
+          action: string
+          data?: Json | null
+          text: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          lobby_id?: string
+          seq?: number
+          player_id?: string | null
+          action?: string
+          data?: Json | null
+          text?: string
+          created_at?: string
         }
         Relationships: []
       }
