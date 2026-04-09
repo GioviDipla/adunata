@@ -80,7 +80,7 @@ export default function DeckCard({
 
   return (
     <div
-      className={`group relative flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-bg-hover ${
+      className={`group relative flex items-center gap-1.5 sm:gap-2 rounded-lg border px-2 py-1.5 sm:px-3 sm:py-2 transition-colors hover:bg-bg-hover ${
         isCommander
           ? 'border-bg-yellow/50 bg-bg-yellow/5'
           : 'border-border bg-bg-card'
@@ -89,45 +89,52 @@ export default function DeckCard({
       onMouseLeave={() => setShowPreview(false)}
     >
       {/* Quantity controls */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 sm:gap-1">
         <button
           onClick={() => onQuantityChange(card.id, quantity - 1, board)}
-          className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+          className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
           aria-label="Decrease quantity"
         >
-          <Minus className="h-3 w-3" />
+          <Minus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
         </button>
-        <span className="w-6 text-center text-sm font-medium text-font-primary">
+        <span className="w-4 sm:w-6 text-center text-xs sm:text-sm font-medium text-font-primary">
           {quantity}
         </span>
         <button
           onClick={() => onQuantityChange(card.id, quantity + 1, board)}
-          className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+          className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
           aria-label="Increase quantity"
         >
-          <Plus className="h-3 w-3" />
+          <Plus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
         </button>
       </div>
 
       {/* Card info */}
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <button
           onClick={() => onCardClick?.(card)}
-          className="truncate text-sm font-medium text-font-primary hover:text-font-accent transition-colors text-left"
+          className="truncate text-xs sm:text-sm font-medium text-font-primary hover:text-font-accent transition-colors text-left"
         >
           {card.name}
         </button>
-        <ManaCostDisplay manaCost={card.mana_cost} />
+        <div className="hidden sm:flex">
+          <ManaCostDisplay manaCost={card.mana_cost} />
+        </div>
       </div>
 
+      {/* Compact mana cost on mobile */}
+      <span className="shrink-0 text-[10px] text-font-muted sm:hidden">
+        {card.mana_cost?.replace(/[{}]/g, '') || ''}
+      </span>
+
       {/* Type line */}
-      <span className="hidden text-xs text-font-muted md:inline">
+      <span className="hidden text-xs text-font-muted lg:inline">
         {card.type_line?.split('—')[0]?.trim()}
       </span>
 
       {/* Price */}
       {card.prices_usd && (
-        <span className="text-xs text-font-secondary">
+        <span className="hidden text-xs text-font-secondary sm:inline">
           ${(card.prices_usd * quantity).toFixed(2)}
         </span>
       )}
@@ -136,7 +143,7 @@ export default function DeckCard({
       {onToggleCommander && (
         <button
           onClick={() => onToggleCommander(card.id, board)}
-          className={`flex h-6 w-6 items-center justify-center rounded transition-all ${
+          className={`flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded transition-all shrink-0 ${
             isCommander
               ? 'text-bg-yellow hover:bg-bg-yellow/20'
               : 'text-font-muted opacity-0 hover:bg-bg-yellow/20 hover:text-bg-yellow group-hover:opacity-100'
@@ -144,17 +151,17 @@ export default function DeckCard({
           aria-label={isCommander ? 'Remove Commander' : 'Set as Commander'}
           title={isCommander ? 'Remove Commander' : 'Set as Commander'}
         >
-          <Crown className="h-3.5 w-3.5" />
+          <Crown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </button>
       )}
 
       {/* Remove button */}
       <button
         onClick={() => onRemove(card.id, board)}
-        className="flex h-6 w-6 items-center justify-center rounded text-font-muted opacity-0 transition-all hover:bg-bg-red/20 hover:text-bg-red group-hover:opacity-100"
+        className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded text-font-muted opacity-0 transition-all hover:bg-bg-red/20 hover:text-bg-red group-hover:opacity-100"
         aria-label="Remove card"
       >
-        <X className="h-3.5 w-3.5" />
+        <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
       </button>
 
       {/* Card image preview on hover */}

@@ -306,10 +306,10 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   ]
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 sm:gap-3">
           {isEditingName ? (
             <div className="flex items-center gap-2">
               <input
@@ -317,7 +317,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                 value={editingName}
                 onChange={(e) => setEditingName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && saveName()}
-                className="rounded-lg border border-border bg-bg-card px-3 py-1.5 text-xl font-bold text-font-primary focus:border-bg-accent focus:outline-none focus:ring-2 focus:ring-bg-accent/20"
+                className="rounded-lg border border-border bg-bg-card px-3 py-1.5 text-lg font-bold text-font-primary focus:border-bg-accent focus:outline-none focus:ring-2 focus:ring-bg-accent/20"
                 autoFocus
               />
               <button
@@ -341,23 +341,23 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
               onClick={() => setIsEditingName(true)}
               className="group flex items-center gap-2"
             >
-              <h1 className="text-2xl font-bold text-font-primary">
+              <h1 className="text-xl sm:text-2xl font-bold text-font-primary">
                 {deckName}
               </h1>
               <Pencil className="h-4 w-4 text-font-muted opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           )}
-          <span className="rounded-full bg-bg-cell px-3 py-1 text-xs font-medium text-font-secondary">
+          <span className="shrink-0 rounded-full bg-bg-cell px-2 py-0.5 text-[10px] sm:px-3 sm:py-1 sm:text-xs font-medium text-font-secondary">
             {deck.format}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Link
             href={`/decks/${deck.id}/goldfish`}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-bg-accent px-3 py-1.5 text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark"
+            className="inline-flex items-center gap-1 rounded-lg bg-bg-accent px-2.5 py-1.5 text-xs sm:text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark"
           >
-            <Fish className="h-4 w-4" />
+            <Fish className="h-3.5 w-3.5" />
             Goldfish
           </Link>
           <Button
@@ -365,34 +365,37 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             size="sm"
             onClick={() => setShowImport(true)}
           >
-            <FileText className="h-4 w-4" />
-            Import
+            <FileText className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Import</span>
+            <span className="sm:hidden">Imp</span>
           </Button>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setShowExport(true)}
           >
-            <Download className="h-4 w-4" />
-            Export
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export</span>
+            <span className="sm:hidden">Exp</span>
           </Button>
           <Button
             variant="danger"
             size="sm"
             onClick={() => setShowDeleteConfirm(true)}
           >
-            <Trash2 className="h-4 w-4" />
-            Delete
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Delete</span>
+            <span className="sm:hidden">Del</span>
           </Button>
         </div>
       </div>
 
       {/* Two-panel layout */}
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
         {/* Left panel: Card list */}
         <div className="flex-1">
           {/* Search bar */}
-          <div className="mb-4">
+          <div className="mb-3 sm:mb-4">
             <AddCardSearch
               deckId={deck.id}
               onCardAdded={handleCardAdded}
@@ -401,25 +404,26 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           </div>
 
           {/* Board tabs + View mode toggle */}
-          <div className="mb-4 flex flex-col gap-2">
+          <div className="mb-3 flex flex-col gap-2">
             <div className="flex gap-1 rounded-lg bg-bg-cell p-1">
               {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map(
                 (tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
                       activeTab === tab
                         ? 'bg-bg-surface text-font-primary shadow-sm'
                         : 'text-font-secondary hover:text-font-primary'
                     }`}
                   >
-                    {tab === 'main'
-                      ? 'Main Deck'
-                      : tab === 'sideboard'
-                        ? 'Sideboard'
-                        : 'Maybeboard'}
-                    <span className="ml-1.5 text-xs text-font-muted">
+                    <span className="sm:hidden">
+                      {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
+                    </span>
+                    <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
                       ({tabCounts[tab]})
                     </span>
                   </button>
