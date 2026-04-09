@@ -12,6 +12,7 @@ export interface HandCardEntry {
 interface HandAreaProps {
   cards: HandCardEntry[]
   onPlayCard: (instanceId: string) => void
+  onCardPreview?: (card: CardRow) => void
   selectable?: boolean
   selectedIds?: Set<string>
   onToggleSelect?: (instanceId: string) => void
@@ -20,6 +21,7 @@ interface HandAreaProps {
 export default function HandArea({
   cards,
   onPlayCard,
+  onCardPreview,
   selectable = false,
   selectedIds,
   onToggleSelect,
@@ -42,6 +44,10 @@ export default function HandArea({
                   onPlayCard(hc.instanceId)
                 }
               }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                onCardPreview?.(hc.card)
+              }}
               className={`relative shrink-0 overflow-hidden rounded-lg border transition-all hover:-translate-y-1 ${
                 isSelected
                   ? 'border-bg-red ring-2 ring-bg-red/40'
@@ -53,7 +59,7 @@ export default function HandArea({
                 marginLeft: index > 0 ? -8 : 0,
                 zIndex: index,
               }}
-              title={`${hc.card.name} — click to ${selectable ? 'select to bottom' : 'play'}`}
+              title={`${hc.card.name} — click to ${selectable ? 'select to bottom' : 'play'}, right-click to preview`}
             >
               {hc.card.image_small ? (
                 <img

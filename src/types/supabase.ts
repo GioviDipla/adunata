@@ -104,7 +104,7 @@ export interface Database {
       }
       sync_log: {
         Row: {
-          id: number
+          id: string
           started_at: string
           completed_at: string | null
           cards_added: number
@@ -314,6 +314,24 @@ export interface Database {
           turn_number?: number
           active_player_id?: string
           phase?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sync_metadata: {
+        Row: {
+          key: string
+          value: string
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value: string
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: string
           updated_at?: string
         }
         Relationships: []

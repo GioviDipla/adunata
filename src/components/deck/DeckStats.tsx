@@ -1,5 +1,6 @@
 'use client'
 
+import { getCardTypeCategory } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -12,19 +13,6 @@ interface DeckCardEntry {
 
 interface DeckStatsProps {
   cards: DeckCardEntry[]
-}
-
-function getCardTypeCategory(typeLine: string): string {
-  const t = typeLine.toLowerCase()
-  if (t.includes('creature')) return 'Creatures'
-  if (t.includes('instant')) return 'Instants'
-  if (t.includes('sorcery')) return 'Sorceries'
-  if (t.includes('enchantment')) return 'Enchantments'
-  if (t.includes('artifact')) return 'Artifacts'
-  if (t.includes('planeswalker')) return 'Planeswalkers'
-  if (t.includes('land')) return 'Lands'
-  if (t.includes('battle')) return 'Battles'
-  return 'Other'
 }
 
 function getColorForMana(color: string): string {

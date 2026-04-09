@@ -1,6 +1,6 @@
 'use client'
 
-import { RotateCcw, Trash2, Ban, Hand } from 'lucide-react'
+import { RotateCcw, Trash2, Ban, Hand, Eye } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import type { Database } from '@/types/supabase'
 
@@ -19,6 +19,7 @@ interface BattlefieldZoneProps {
   onSendToGraveyard: (instanceId: string) => void
   onExile: (instanceId: string) => void
   onReturnToHand: (instanceId: string) => void
+  onCardPreview?: (card: CardRow) => void
 }
 
 export default function BattlefieldZone({
@@ -28,6 +29,7 @@ export default function BattlefieldZone({
   onSendToGraveyard,
   onExile,
   onReturnToHand,
+  onCardPreview,
 }: BattlefieldZoneProps) {
   const [contextMenu, setContextMenu] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -96,6 +98,18 @@ export default function BattlefieldZone({
                 ref={menuRef}
                 className="absolute left-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xl"
               >
+                {onCardPreview && (
+                  <button
+                    onClick={() => {
+                      onCardPreview(bc.card)
+                      setContextMenu(null)
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-font-primary hover:bg-bg-hover"
+                  >
+                    <Eye size={12} />
+                    View Card
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     onTapToggle(bc.instanceId)

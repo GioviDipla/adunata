@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Heart,
@@ -13,11 +13,13 @@ import {
   RotateCcw,
   ArrowLeft,
   Shuffle,
+  X,
 } from 'lucide-react'
 import PhaseTracker, { PHASES, type Phase } from './PhaseTracker'
 import BattlefieldZone, { type BattlefieldCard } from './BattlefieldZone'
 import HandArea, { type HandCardEntry } from './HandArea'
 import CardZoneViewer from './CardZoneViewer'
+import { getCardZone } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -33,7 +35,6 @@ interface CardInstance {
   card: CardRow
 }
 
-// Fisher-Yates shuffle
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
   for (let i = a.length - 1; i > 0; i--) {
@@ -48,28 +49,17 @@ function makeInstance(card: CardRow): CardInstance {
   return { instanceId: `ci-${++instanceCounter}`, card }
 }
 
-function getCardZone(typeLine: string): 'lands' | 'creatures' | 'other' {
-  const t = typeLine.toLowerCase()
-  if (t.includes('land')) return 'lands'
-  if (t.includes('creature')) return 'creatures'
-  return 'other'
-}
-
 type GameStage = 'mulligan' | 'bottomCards' | 'playing'
 
 export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGameProps) {
   const router = useRouter()
 
-  // Build initial shuffled library
   const initialLibrary = useMemo(() => {
     return shuffle(fullDeck.map(makeInstance))
   }, [fullDeck])
 
-  // Core game state
   const [library, setLibrary] = useState<CardInstance[]>(() => initialLibrary.slice(7))
-  const [hand, setHand] = useState<HandCardEntry[]>(() =>
-    initialLibrary.slice(0, 7)
-  )
+  const [hand, setHand] = useState<HandCardEntry[]>(() => initialLibrary.slice(0, 7))
   const [battlefield, setBattlefield] = useState<BattlefieldCard[]>([])
   const [graveyard, setGraveyard] = useState<CardInstance[]>([])
   const [exile, setExile] = useState<CardInstance[]>([])
@@ -81,9 +71,13 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
 
   const [stage, setStage] = useState<GameStage>('mulligan')
   const [bottomSelectIds, setBottomSelectIds] = useState<Set<string>>(new Set())
-
-  // Zone viewer
   const [viewingZone, setViewingZone] = useState<'graveyard' | 'exile' | null>(null)
+
+  // Card preview state
+  const [previewCard, setPreviewCard] = useState<CardRow | null>(null)
+
+  // Ref to track pending draw to avoid StrictMode double-fire
+  const drawPendingRef = useRef(false)
 
   // Derived battlefield zones
   const lands = useMemo(
@@ -121,7 +115,6 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
   }, [mulliganCount])
 
   const confirmBottomCards = useCallback(() => {
-    // Move selected cards to bottom of library
     const toBottom = hand.filter((c) => bottomSelectIds.has(c.instanceId))
     const remaining = hand.filter((c) => !bottomSelectIds.has(c.instanceId))
     setHand(remaining)
@@ -143,24 +136,38 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
   }, [])
 
   // -- Game actions --
-  const drawCard = useCallback(() => {
-    if (library.length === 0) return
-    setLibrary((prev) => {
-      const drawn = prev[0]
-      setHand((h) => [...h, { instanceId: drawn.instanceId, card: drawn.card }])
-      return prev.slice(1)
+  const drawOneCard = useCallback(() => {
+    if (drawPendingRef.current) return
+    drawPendingRef.current = true
+
+    setLibrary((prevLib) => {
+      if (prevLib.length === 0) {
+        drawPendingRef.current = false
+        return prevLib
+      }
+      const drawn = prevLib[0]
+      queueMicrotask(() => {
+        setHand((prevHand) => [...prevHand, { instanceId: drawn.instanceId, card: drawn.card }])
+        drawPendingRef.current = false
+      })
+      return prevLib.slice(1)
     })
-  }, [library.length])
+  }, [])
 
   const playCard = useCallback((instanceId: string) => {
+    let played: HandCardEntry | undefined
     setHand((prev) => {
-      const cardEntry = prev.find((c) => c.instanceId === instanceId)
-      if (!cardEntry) return prev
-      setBattlefield((bf) => [
-        ...bf,
-        { instanceId: cardEntry.instanceId, card: cardEntry.card, tapped: false },
-      ])
+      played = prev.find((c) => c.instanceId === instanceId)
       return prev.filter((c) => c.instanceId !== instanceId)
+    })
+    // Use microtask to avoid nested setState
+    queueMicrotask(() => {
+      if (played) {
+        setBattlefield((bf) => [
+          ...bf,
+          { instanceId: played!.instanceId, card: played!.card, tapped: false },
+        ])
+      }
     })
   }, [])
 
@@ -173,66 +180,83 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
   }, [])
 
   const sendToGraveyard = useCallback((instanceId: string) => {
+    let removed: BattlefieldCard | undefined
     setBattlefield((prev) => {
-      const card = prev.find((c) => c.instanceId === instanceId)
-      if (card) {
-        setGraveyard((g) => [...g, { instanceId: card.instanceId, card: card.card }])
-      }
+      removed = prev.find((c) => c.instanceId === instanceId)
       return prev.filter((c) => c.instanceId !== instanceId)
+    })
+    queueMicrotask(() => {
+      if (removed) {
+        setGraveyard((g) => [...g, { instanceId: removed!.instanceId, card: removed!.card }])
+      }
     })
   }, [])
 
   const exileCard = useCallback((instanceId: string) => {
+    let removed: BattlefieldCard | undefined
     setBattlefield((prev) => {
-      const card = prev.find((c) => c.instanceId === instanceId)
-      if (card) {
-        setExile((e) => [...e, { instanceId: card.instanceId, card: card.card }])
-      }
+      removed = prev.find((c) => c.instanceId === instanceId)
       return prev.filter((c) => c.instanceId !== instanceId)
+    })
+    queueMicrotask(() => {
+      if (removed) {
+        setExile((e) => [...e, { instanceId: removed!.instanceId, card: removed!.card }])
+      }
     })
   }, [])
 
   const returnToHand = useCallback((instanceId: string) => {
+    let removed: BattlefieldCard | undefined
     setBattlefield((prev) => {
-      const card = prev.find((c) => c.instanceId === instanceId)
-      if (card) {
-        setHand((h) => [...h, { instanceId: card.instanceId, card: card.card }])
-      }
+      removed = prev.find((c) => c.instanceId === instanceId)
       return prev.filter((c) => c.instanceId !== instanceId)
+    })
+    queueMicrotask(() => {
+      if (removed) {
+        setHand((h) => [...h, { instanceId: removed!.instanceId, card: removed!.card }])
+      }
     })
   }, [])
 
-  // Zone viewer actions
   const returnFromGraveyardToHand = useCallback((instanceId: string) => {
+    let removed: CardInstance | undefined
     setGraveyard((prev) => {
-      const card = prev.find((c) => c.instanceId === instanceId)
-      if (card) {
-        setHand((h) => [...h, { instanceId: card.instanceId, card: card.card }])
-      }
+      removed = prev.find((c) => c.instanceId === instanceId)
       return prev.filter((c) => c.instanceId !== instanceId)
+    })
+    queueMicrotask(() => {
+      if (removed) {
+        setHand((h) => [...h, { instanceId: removed!.instanceId, card: removed!.card }])
+      }
     })
   }, [])
 
   const returnFromExileToHand = useCallback((instanceId: string) => {
+    let removed: CardInstance | undefined
     setExile((prev) => {
-      const card = prev.find((c) => c.instanceId === instanceId)
-      if (card) {
-        setHand((h) => [...h, { instanceId: card.instanceId, card: card.card }])
-      }
+      removed = prev.find((c) => c.instanceId === instanceId)
       return prev.filter((c) => c.instanceId !== instanceId)
+    })
+    queueMicrotask(() => {
+      if (removed) {
+        setHand((h) => [...h, { instanceId: removed!.instanceId, card: removed!.card }])
+      }
     })
   }, [])
 
   const returnFromGraveyardToBattlefield = useCallback((instanceId: string) => {
+    let removed: CardInstance | undefined
     setGraveyard((prev) => {
-      const card = prev.find((c) => c.instanceId === instanceId)
-      if (card) {
+      removed = prev.find((c) => c.instanceId === instanceId)
+      return prev.filter((c) => c.instanceId !== instanceId)
+    })
+    queueMicrotask(() => {
+      if (removed) {
         setBattlefield((bf) => [
           ...bf,
-          { instanceId: card.instanceId, card: card.card, tapped: false },
+          { instanceId: removed!.instanceId, card: removed!.card, tapped: false },
         ])
       }
-      return prev.filter((c) => c.instanceId !== instanceId)
     })
   }, [])
 
@@ -244,15 +268,14 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
       const next = phaseKeys[idx + 1]
       setPhase(next)
       if (next === 'draw') {
-        drawCard()
+        drawOneCard()
       }
     }
-  }, [phase, drawCard])
+  }, [phase, drawOneCard])
 
   const nextTurn = useCallback(() => {
     setTurn((t) => t + 1)
     setPhase('untap')
-    // Untap all
     setBattlefield((prev) => prev.map((c) => ({ ...c, tapped: false })))
   }, [])
 
@@ -271,13 +294,61 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
     setStage('mulligan')
     setBottomSelectIds(new Set())
     setViewingZone(null)
+    setPreviewCard(null)
   }, [fullDeck])
+
+  // -- Card preview overlay --
+  const CardPreviewOverlay = previewCard ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg-dark/80 backdrop-blur-sm"
+      onClick={() => setPreviewCard(null)}
+    >
+      <div
+        className="relative flex max-h-[90vh] max-w-md flex-col items-center gap-4 p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={() => setPreviewCard(null)}
+          className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-bg-surface text-font-secondary hover:text-font-primary"
+        >
+          <X size={16} />
+        </button>
+        {previewCard.image_normal ? (
+          <img
+            src={previewCard.image_normal}
+            alt={previewCard.name}
+            className="max-h-[70vh] rounded-xl"
+          />
+        ) : previewCard.image_small ? (
+          <img
+            src={previewCard.image_small}
+            alt={previewCard.name}
+            className="max-h-[70vh] rounded-xl"
+          />
+        ) : (
+          <div className="flex h-64 w-48 flex-col items-center justify-center gap-2 rounded-xl bg-bg-surface p-4">
+            <span className="text-xs text-font-secondary">{previewCard.type_line}</span>
+            <span className="text-center text-lg font-bold text-font-primary">{previewCard.name}</span>
+            {previewCard.oracle_text && (
+              <p className="text-center text-xs text-font-secondary">{previewCard.oracle_text}</p>
+            )}
+          </div>
+        )}
+        <div className="text-center">
+          <h3 className="text-sm font-bold text-font-primary">{previewCard.name}</h3>
+          <p className="text-xs text-font-secondary">{previewCard.type_line}</p>
+          {previewCard.oracle_text && (
+            <p className="mt-2 max-w-xs text-xs text-font-muted">{previewCard.oracle_text}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null
 
   // -- Mulligan overlay --
   if (stage === 'mulligan') {
     return (
       <div className="flex min-h-screen flex-col bg-bg-dark">
-        {/* Top bar */}
         <div className="flex items-center justify-between border-b border-border bg-bg-surface px-4 py-3">
           <button
             onClick={() => router.push(`/decks/${deckId}`)}
@@ -294,9 +365,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
 
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
           <h2 className="text-lg font-bold text-font-primary">
-            {mulliganCount === 0
-              ? 'Opening Hand'
-              : `Mulligan ${mulliganCount} — Draw 7`}
+            {mulliganCount === 0 ? 'Opening Hand' : `Mulligan ${mulliganCount} — Draw 7`}
           </h2>
           <p className="text-sm text-font-secondary">
             {mulliganCount > 0
@@ -304,40 +373,29 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
               : 'Keep this hand or mulligan?'}
           </p>
 
-          {/* Show hand cards */}
           <div className="flex flex-wrap justify-center gap-2">
             {hand.map((hc) => (
-              <div
+              <button
                 key={hc.instanceId}
-                className="overflow-hidden rounded-lg border border-border-light"
+                onClick={() => setPreviewCard(hc.card)}
+                className="overflow-hidden rounded-lg border border-border-light transition-transform hover:scale-105"
                 style={{ width: 90, height: 126 }}
               >
                 {hc.card.image_small ? (
-                  <img
-                    src={hc.card.image_small}
-                    alt={hc.card.name}
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={hc.card.image_small} alt={hc.card.name} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-bg-surface p-2">
-                    <span className="text-[8px] text-font-secondary">
-                      {hc.card.type_line.split('—')[0].trim()}
-                    </span>
-                    <span className="text-center text-[10px] font-semibold text-font-primary">
-                      {hc.card.name}
-                    </span>
+                    <span className="text-[8px] text-font-secondary">{hc.card.type_line?.split('—')[0].trim()}</span>
+                    <span className="text-center text-[10px] font-semibold text-font-primary">{hc.card.name}</span>
                     {hc.card.mana_cost && (
-                      <span className="text-[9px] font-bold text-font-accent">
-                        {hc.card.mana_cost}
-                      </span>
+                      <span className="text-[9px] font-bold text-font-accent">{hc.card.mana_cost}</span>
                     )}
                   </div>
                 )}
-              </div>
+              </button>
             ))}
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3">
             <button
               onClick={keepHand}
@@ -353,6 +411,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
             </button>
           </div>
         </div>
+        {CardPreviewOverlay}
       </div>
     )
   }
@@ -394,19 +453,11 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
                   style={{ width: 90, height: 126 }}
                 >
                   {hc.card.image_small ? (
-                    <img
-                      src={hc.card.image_small}
-                      alt={hc.card.name}
-                      className="h-full w-full object-cover"
-                    />
+                    <img src={hc.card.image_small} alt={hc.card.name} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-bg-surface p-2">
-                      <span className="text-[8px] text-font-secondary">
-                        {hc.card.type_line.split('—')[0].trim()}
-                      </span>
-                      <span className="text-center text-[10px] font-semibold text-font-primary">
-                        {hc.card.name}
-                      </span>
+                      <span className="text-[8px] text-font-secondary">{hc.card.type_line?.split('—')[0].trim()}</span>
+                      <span className="text-center text-[10px] font-semibold text-font-primary">{hc.card.name}</span>
                     </div>
                   )}
                   {isSelected && (
@@ -422,7 +473,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
           <button
             onClick={confirmBottomCards}
             disabled={bottomSelectIds.size !== mulliganCount}
-            className="rounded-xl bg-bg-green px-6 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-green/80 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-xl bg-bg-green px-6 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-green/80 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Confirm ({bottomSelectIds.size}/{mulliganCount})
           </button>
@@ -458,15 +509,13 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
         <PhaseTracker currentPhase={phase} onPhaseClick={setPhase} />
       </div>
 
-      {/* Info bar: turn, life, zone counts */}
+      {/* Info bar */}
       <div className="flex items-center justify-between border-b border-border bg-bg-surface px-3 py-2">
-        {/* Turn */}
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold tracking-wider text-font-muted">TURN</span>
           <span className="text-sm font-bold text-font-primary">{turn}</span>
         </div>
 
-        {/* Life */}
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setLife((l) => l - 1)}
@@ -476,9 +525,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
           </button>
           <div className="flex items-center gap-1">
             <Heart size={14} className="text-bg-red" />
-            <span className="min-w-[24px] text-center text-sm font-bold text-font-primary">
-              {life}
-            </span>
+            <span className="min-w-[24px] text-center text-sm font-bold text-font-primary">{life}</span>
           </div>
           <button
             onClick={() => setLife((l) => l + 1)}
@@ -488,7 +535,6 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
           </button>
         </div>
 
-        {/* Zone counts */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setViewingZone('graveyard')}
@@ -523,6 +569,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
             onSendToGraveyard={sendToGraveyard}
             onExile={exileCard}
             onReturnToHand={returnToHand}
+            onCardPreview={setPreviewCard}
           />
           <BattlefieldZone
             title="CREATURES"
@@ -531,6 +578,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
             onSendToGraveyard={sendToGraveyard}
             onExile={exileCard}
             onReturnToHand={returnToHand}
+            onCardPreview={setPreviewCard}
           />
           <BattlefieldZone
             title="OTHER PERMANENTS"
@@ -539,19 +587,20 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
             onSendToGraveyard={sendToGraveyard}
             onExile={exileCard}
             onReturnToHand={returnToHand}
+            onCardPreview={setPreviewCard}
           />
         </div>
       </div>
 
       {/* Hand area */}
       <div className="border-t border-border bg-bg-card px-3 py-2">
-        <HandArea cards={hand} onPlayCard={playCard} />
+        <HandArea cards={hand} onPlayCard={playCard} onCardPreview={setPreviewCard} />
       </div>
 
       {/* Action bar */}
       <div className="flex items-center gap-2 border-t border-border bg-bg-surface px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <button
-          onClick={drawCard}
+          onClick={drawOneCard}
           disabled={library.length === 0}
           className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-cell py-2 text-font-secondary transition-colors hover:bg-bg-hover disabled:opacity-40"
         >
@@ -592,6 +641,9 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
           onReturnToHand={returnFromExileToHand}
         />
       )}
+
+      {/* Card preview overlay */}
+      {CardPreviewOverlay}
     </div>
   )
 }

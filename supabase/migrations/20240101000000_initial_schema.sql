@@ -181,11 +181,17 @@ create trigger trg_game_states_updated_at
 -- ============================================================
 
 -- Enable RLS
+alter table public.cards         enable row level security;
 alter table public.decks         enable row level security;
 alter table public.deck_cards    enable row level security;
 alter table public.game_lobbies  enable row level security;
 alter table public.game_players  enable row level security;
 alter table public.game_states   enable row level security;
+
+-- ----- cards policies -----
+create policy "Cards are publicly readable"
+  on public.cards for select
+  using (true);
 
 -- ----- decks policies -----
 create policy "Users can view their own decks"

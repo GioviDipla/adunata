@@ -58,14 +58,14 @@ export default async function DeckDetailPage({
     `)
     .eq('deck_id', id)
 
-  const formattedCards = ((deckCards ?? []) as unknown as DeckCardFromDB[]).map(
-    (dc) => ({
+  const formattedCards = ((deckCards ?? []) as unknown as DeckCardFromDB[])
+    .filter((dc) => dc.card != null)
+    .map((dc) => ({
       id: dc.id,
       card: dc.card,
       quantity: dc.quantity,
       board: dc.board,
-    })
-  )
+    }))
 
   return <DeckEditor deck={deck} initialCards={formattedCards} />
 }

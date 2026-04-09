@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Search, Plus } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -35,18 +34,17 @@ export default function AddCardSearch({
     }
 
     setLoading(true)
-    const supabase = createClient()
-
-    const { data, error } = await supabase
-      .from('cards')
-      .select('*')
-      .ilike('name', `%${searchQuery}%`)
-      .limit(10)
-
-    if (!error && data) {
-      setResults(data)
-      setIsOpen(data.length > 0)
-      setSelectedIndex(0)
+    try {
+      const res = await fetch(`/api/cards/search?q=${encodeURIComponent(searchQuery)}`)
+      if (res.ok) {
+        const data = await res.json()
+        const cards = data.cards ?? []
+        setResults(cards)
+        setIsOpen(cards.length > 0)
+        setSelectedIndex(0)
+      }
+    } catch {
+      // silently fail
     }
     setLoading(false)
   }, [])
@@ -127,9 +125,9 @@ export default function AddCardSearch({
         )}
       </div>
 
-      {/* Dropdown results */}
+      {/* Dropdown results — opens downward */}
       {isOpen && (
-        <div className="absolute bottom-full left-0 z-50 mb-1 max-h-80 w-full overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-xl">
+        <div className="absolute top-full left-0 z-50 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-xl">
           {results.map((card, i) => (
             <button
               key={card.id}

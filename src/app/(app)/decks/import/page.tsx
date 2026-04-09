@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { parseDeckList } from '@/lib/utils/deckParser'
 
 const FORMATS = [
   'Standard',
@@ -22,61 +23,10 @@ const FORMATS = [
   'Casual',
 ]
 
-interface ParsedCard {
-  name: string
-  quantity: number
-  board: 'main' | 'sideboard'
-  setCode?: string
-}
-
 interface ImportResult {
   name: string
   status: 'success' | 'error' | 'pending'
   message?: string
-}
-
-function parseDeckList(text: string): ParsedCard[] {
-  const lines = text.split('\n')
-  const cards: ParsedCard[] = []
-  let currentBoard: 'main' | 'sideboard' = 'main'
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim()
-
-    // Skip empty lines and comments
-    if (!line || line.startsWith('//')) continue
-
-    // Check for sideboard section markers
-    if (/^sideboard\s*$/i.test(line) || /^SB:\s*$/i.test(line)) {
-      currentBoard = 'sideboard'
-      continue
-    }
-
-    // Handle "SB: 4 Card Name" inline prefix
-    let workingLine = line
-    let board = currentBoard
-    if (/^SB:\s*/i.test(workingLine)) {
-      board = 'sideboard'
-      workingLine = workingLine.replace(/^SB:\s*/i, '')
-    }
-
-    // Parse card line: "4 Lightning Bolt" or "4x Lightning Bolt" or "4 Lightning Bolt (M21)" or "4 Lightning Bolt (M21) 123"
-    const match = workingLine.match(
-      /^(\d+)\s*x?\s+(.+?)(?:\s+\(([A-Za-z0-9]+)\))?(?:\s+\d+)?$/
-    )
-
-    if (match) {
-      const quantity = parseInt(match[1], 10)
-      const name = match[2].trim()
-      const setCode = match[3] || undefined
-
-      if (quantity > 0 && name) {
-        cards.push({ name, quantity, board, setCode })
-      }
-    }
-  }
-
-  return cards
 }
 
 export default function ImportDeckPage() {

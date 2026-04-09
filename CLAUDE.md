@@ -43,6 +43,14 @@ Quando senti che hai completato una macro-sezione del progetto, aggiorna `CHECKP
 
 Se la sessione dovesse interrompersi, al prossimo avvio leggi `CHECKPOINT.md` per riprendere esattamente da dove ti eri fermato.
 
+## Lezioni apprese (sessione 2026-04-07)
+
+- **Supabase RLS**: Quando si abilita RLS su una tabella, aggiungere sempre esplicitamente una policy `FOR SELECT USING (true)` sulle tabelle che devono essere leggibili pubblicamente (es. `cards`). Senza policy = nessun accesso, anche con anon key.
+- **Null-guard sui join Supabase**: I risultati di join come `card:cards!card_id(*)` possono restituire `null`. Filtrare sempre con `.filter(dc => dc.card != null)` prima di usare i dati.
+- **Next.js Script**: Usare sempre `import Script from 'next/script'` con `strategy="afterInteractive"` invece di `<script dangerouslySetInnerHTML>` nel layout.
+- **Sync pesanti**: Non lanciare operazioni bulk (es. download 500MB da Scryfall) sul dev server locale — blocca tutto. Usare un processo separato o farlo in produzione con timeout adeguati.
+- **Tipi generati da agent multipli**: Quando più agent generano codice interdipendente (schema SQL ↔ TypeScript types), verificare la coerenza dei tipi (es. uuid → string, non number) con un build check dopo l'integrazione.
+
 ## Ordine di priorità
 
 1. Leggere questo file e `CHECKPOINT.md` prima di fare qualsiasi cosa

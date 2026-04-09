@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Minus, Plus, X } from 'lucide-react'
+import { Crown, Minus, Plus, X } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -10,8 +10,11 @@ interface DeckCardProps {
   card: CardRow
   quantity: number
   board: string
+  isCommander?: boolean
   onQuantityChange: (cardId: number, quantity: number, board: string) => void
   onRemove: (cardId: number, board: string) => void
+  onToggleCommander?: (cardId: number, board: string) => void
+  onCardClick?: (card: CardRow) => void
 }
 
 function ManaCostDisplay({ manaCost }: { manaCost: string | null }) {
@@ -67,14 +70,21 @@ export default function DeckCard({
   card,
   quantity,
   board,
+  isCommander = false,
   onQuantityChange,
   onRemove,
+  onToggleCommander,
+  onCardClick,
 }: DeckCardProps) {
   const [showPreview, setShowPreview] = useState(false)
 
   return (
     <div
-      className="group relative flex items-center gap-2 rounded-lg border border-border bg-bg-card px-3 py-2 transition-colors hover:bg-bg-hover"
+      className={`group relative flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors hover:bg-bg-hover ${
+        isCommander
+          ? 'border-bg-yellow/50 bg-bg-yellow/5'
+          : 'border-border bg-bg-card'
+      }`}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
     >
@@ -101,9 +111,12 @@ export default function DeckCard({
 
       {/* Card info */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <span className="truncate text-sm font-medium text-font-primary">
+        <button
+          onClick={() => onCardClick?.(card)}
+          className="truncate text-sm font-medium text-font-primary hover:text-font-accent transition-colors text-left"
+        >
           {card.name}
-        </span>
+        </button>
         <ManaCostDisplay manaCost={card.mana_cost} />
       </div>
 
@@ -117,6 +130,22 @@ export default function DeckCard({
         <span className="text-xs text-font-secondary">
           ${(card.prices_usd * quantity).toFixed(2)}
         </span>
+      )}
+
+      {/* Commander toggle button */}
+      {onToggleCommander && (
+        <button
+          onClick={() => onToggleCommander(card.id, board)}
+          className={`flex h-6 w-6 items-center justify-center rounded transition-all ${
+            isCommander
+              ? 'text-bg-yellow hover:bg-bg-yellow/20'
+              : 'text-font-muted opacity-0 hover:bg-bg-yellow/20 hover:text-bg-yellow group-hover:opacity-100'
+          }`}
+          aria-label={isCommander ? 'Remove Commander' : 'Set as Commander'}
+          title={isCommander ? 'Remove Commander' : 'Set as Commander'}
+        >
+          <Crown className="h-3.5 w-3.5" />
+        </button>
       )}
 
       {/* Remove button */}

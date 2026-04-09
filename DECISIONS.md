@@ -8,7 +8,7 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 ## Architettura
 
 - **Next.js 15 App Router** — Framework principale. App Router per Server Components, streaming, e layout nesting. Deploy nativo su Vercel con zero config.
-- **Supabase** — Auth (email/password), PostgreSQL database, Storage (immagini carte), Edge Functions (cron sync). Free tier copre la fase iniziale.
+- **Supabase** — Auth (email/password), PostgreSQL database, Storage (immagini carte). Free tier copre la fase iniziale.
 - **Tailwind CSS v4** — Già usato nei mockup Pencil. Design system dark-themed con CSS variables.
 - **PWA con next-pwa** — Service worker per offline support e installabilità su iOS/Android. Architettura compatibile con future build native (Capacitor).
 - **Lucide React** — Iconografia già presente nei mockup.
@@ -16,9 +16,9 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 
 ## Database
 
-- **Carte MTG in Supabase PostgreSQL** — Tabella `cards` con full-text search via `tsvector`. Immagini small scaricate in Supabase Storage.
-- **Sync mensile via Vercel Cron** — API route `/api/cron/sync-cards` triggerata da Vercel Cron ogni mese. Usa bulk data di Scryfall.
-- **RLS (Row Level Security)** — Ogni utente vede solo i propri deck. Policy Supabase native.
+- **Carte MTG in Supabase PostgreSQL** — Tabella `cards` con full-text search via `tsvector`. Immagini referenziate da URL Scryfall.
+- **Popolamento on-demand** — Le carte vengono scaricate da Scryfall solo quando servono (import decklist, ricerca). Nessun bulk sync. Il DB si riempie progressivamente con l'uso.
+- **RLS (Row Level Security)** — Ogni utente vede solo i propri deck. Tabella `cards` leggibile pubblicamente. Policy Supabase native.
 
 ## Gestione Deck
 

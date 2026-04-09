@@ -1,6 +1,7 @@
 'use client'
 
-import { X, Plus } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Plus, ChevronDown, Loader2 } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
 
@@ -26,12 +27,51 @@ const LEGALITY_COLORS: Record<string, string> = {
 interface CardDetailProps {
   card: Card
   onClose: () => void
+  onPrintingSelect?: (printing: Card) => void
 }
 
-export default function CardDetail({ card, onClose }: CardDetailProps) {
-  const legalities = card.legalities as Record<string, string> | null
-  const cardFaces = card.card_faces as CardFace[] | null
+export default function CardDetail({ card, onClose, onPrintingSelect }: CardDetailProps) {
+  const [displayCard, setDisplayCard] = useState<Card>(card)
+  const [printings, setPrintings] = useState<Card[]>([])
+  const [loadingPrintings, setLoadingPrintings] = useState(false)
+  const [showPrintings, setShowPrintings] = useState(false)
+
+  const legalities = displayCard.legalities as Record<string, string> | null
+  const cardFaces = displayCard.card_faces as CardFace[] | null
   const isDoubleFaced = cardFaces && cardFaces.length > 1
+
+  // Reset when card prop changes
+  useEffect(() => {
+    setDisplayCard(card)
+    setPrintings([])
+    setShowPrintings(false)
+  }, [card])
+
+  async function loadPrintings() {
+    if (printings.length > 0) {
+      setShowPrintings(!showPrintings)
+      return
+    }
+
+    setLoadingPrintings(true)
+    try {
+      const res = await fetch(`/api/cards/printings?name=${encodeURIComponent(card.name)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPrintings(data.printings ?? [])
+        setShowPrintings(true)
+      }
+    } catch {
+      // silently fail
+    }
+    setLoadingPrintings(false)
+  }
+
+  function selectPrinting(printing: Card) {
+    setDisplayCard(printing)
+    setShowPrintings(false)
+    onPrintingSelect?.(printing)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -46,8 +86,8 @@ export default function CardDetail({ card, onClose }: CardDetailProps) {
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-bg-surface border-b border-border">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-font-primary">{card.name}</h2>
-            <ManaCost manaCost={card.mana_cost} size="md" />
+            <h2 className="text-xl font-bold text-font-primary">{displayCard.name}</h2>
+            <ManaCost manaCost={displayCard.mana_cost} size="md" />
           </div>
           <button
             onClick={onClose}
@@ -60,22 +100,66 @@ export default function CardDetail({ card, onClose }: CardDetailProps) {
         <div className="p-6">
           <div className="flex flex-col md:flex-row gap-6">
             {/* Image(s) */}
-            <div className="shrink-0 flex gap-3">
-              {isDoubleFaced ? (
-                cardFaces.map((face, i) => (
+            <div className="shrink-0 flex flex-col gap-3">
+              <div className="flex gap-3">
+                {isDoubleFaced ? (
+                  cardFaces.map((face, i) => (
+                    <img
+                      key={i}
+                      src={face.image_normal || displayCard.image_normal || ''}
+                      alt={face.name || displayCard.name}
+                      className="w-56 rounded-lg shadow-lg"
+                    />
+                  ))
+                ) : (
                   <img
-                    key={i}
-                    src={face.image_normal || card.image_normal || ''}
-                    alt={face.name || card.name}
+                    src={displayCard.image_normal || displayCard.image_small || ''}
+                    alt={displayCard.name}
                     className="w-56 rounded-lg shadow-lg"
                   />
-                ))
-              ) : (
-                <img
-                  src={card.image_normal || card.image_small || ''}
-                  alt={card.name}
-                  className="w-56 rounded-lg shadow-lg"
-                />
+                )}
+              </div>
+
+              {/* Printings selector button */}
+              <button
+                onClick={loadPrintings}
+                disabled={loadingPrintings}
+                className="flex items-center justify-center gap-2 rounded-lg border border-border bg-bg-card px-3 py-2 text-sm text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+              >
+                {loadingPrintings ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showPrintings ? 'rotate-180' : ''}`} />
+                )}
+                {displayCard.set_name} ({displayCard.set_code?.toUpperCase()})
+              </button>
+
+              {/* Printings dropdown */}
+              {showPrintings && printings.length > 0 && (
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-bg-card">
+                  {printings.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => selectPrinting(p)}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-bg-hover ${
+                        p.id === displayCard.id ? 'bg-bg-accent/10 text-font-accent' : 'text-font-secondary'
+                      }`}
+                    >
+                      {p.image_small && (
+                        <img src={p.image_small} alt={p.set_name ?? ''} className="h-8 w-auto rounded" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-medium">
+                          {p.set_name}
+                        </div>
+                        <div className="text-xs text-font-muted">
+                          {p.set_code?.toUpperCase()} #{p.collector_number} · {p.rarity}
+                          {p.prices_usd != null && ` · $${Number(p.prices_usd).toFixed(2)}`}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -84,25 +168,25 @@ export default function CardDetail({ card, onClose }: CardDetailProps) {
               {/* Type */}
               <div>
                 <p className="text-sm text-font-muted mb-1">Type</p>
-                <p className="text-font-primary">{card.type_line}</p>
+                <p className="text-font-primary">{displayCard.type_line}</p>
               </div>
 
               {/* Oracle Text */}
-              {card.oracle_text && (
+              {displayCard.oracle_text && (
                 <div>
                   <p className="text-sm text-font-muted mb-1">Oracle Text</p>
                   <p className="text-font-secondary whitespace-pre-line text-sm leading-relaxed">
-                    {card.oracle_text}
+                    {displayCard.oracle_text}
                   </p>
                 </div>
               )}
 
               {/* Power / Toughness */}
-              {card.power != null && card.toughness != null && (
+              {displayCard.power != null && displayCard.toughness != null && (
                 <div>
                   <p className="text-sm text-font-muted mb-1">P/T</p>
                   <p className="text-font-primary font-bold">
-                    {card.power}/{card.toughness}
+                    {displayCard.power}/{displayCard.toughness}
                   </p>
                 </div>
               )}
@@ -112,34 +196,34 @@ export default function CardDetail({ card, onClose }: CardDetailProps) {
                 <div>
                   <p className="text-sm text-font-muted mb-1">Set</p>
                   <p className="text-font-primary">
-                    {card.set_name}{' '}
-                    <span className="text-font-muted uppercase">({card.set_code})</span>
+                    {displayCard.set_name}{' '}
+                    <span className="text-font-muted uppercase">({displayCard.set_code})</span>
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-font-muted mb-1">Rarity</p>
-                  <p className="text-font-primary capitalize">{card.rarity}</p>
+                  <p className="text-font-primary capitalize">{displayCard.rarity}</p>
                 </div>
                 <div>
                   <p className="text-sm text-font-muted mb-1">Collector #</p>
-                  <p className="text-font-primary">{card.collector_number}</p>
+                  <p className="text-font-primary">{displayCard.collector_number}</p>
                 </div>
               </div>
 
               {/* Prices */}
-              {(card.prices_usd != null || card.prices_usd_foil != null) && (
+              {(displayCard.prices_usd != null || displayCard.prices_usd_foil != null) && (
                 <div>
                   <p className="text-sm text-font-muted mb-1">Prices</p>
                   <div className="flex gap-4">
-                    {card.prices_usd != null && (
+                    {displayCard.prices_usd != null && (
                       <span className="text-font-primary">
-                        ${Number(card.prices_usd).toFixed(2)}{' '}
+                        ${Number(displayCard.prices_usd).toFixed(2)}{' '}
                         <span className="text-font-muted text-xs">USD</span>
                       </span>
                     )}
-                    {card.prices_usd_foil != null && (
+                    {displayCard.prices_usd_foil != null && (
                       <span className="text-font-accent">
-                        ${Number(card.prices_usd_foil).toFixed(2)}{' '}
+                        ${Number(displayCard.prices_usd_foil).toFixed(2)}{' '}
                         <span className="text-font-muted text-xs">Foil</span>
                       </span>
                     )}
