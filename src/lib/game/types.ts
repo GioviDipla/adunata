@@ -43,6 +43,7 @@ export interface GameState {
   combat: CombatState
   players: Record<string, PlayerState>
   lastActionSeq: number
+  apPassedFirst?: boolean
 }
 
 export type GameActionType =

@@ -67,6 +67,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [viewingZone, setViewingZone] = useState<'graveyard' | 'exile' | 'library' | null>(null)
   const [loading, setLoading] = useState(true)
   const [gameOver, setGameOver] = useState<{ winnerId: string } | null>(null)
+  const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
 
   // Fetch initial state
   useEffect(() => {
@@ -76,6 +77,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         const data = await res.json()
         setGameState(data.gameState)
         setCardMap(data.cardMap)
+        if (data.playerNames) setPlayerNames(data.playerNames)
         setLog(data.log.map((l: Record<string, unknown>) => ({
           id: l.id as string,
           seq: l.seq as number,
@@ -153,6 +155,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const opponentState = opponentId ? gameState?.players[opponentId] : null
   const hasPriority = gameState?.priorityPlayerId === userId
   const isActivePlayer = gameState?.activePlayerId === userId
+  const myName = playerNames[userId] ?? 'Player'
 
   // Resolve hand cards for HandArea component
   const myHandCards = useMemo((): HandCardEntry[] => {
@@ -222,16 +225,16 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
     const name = data?.name ?? 'card'
     if (card.tapped) {
-      sendAction(createUntap(userId, 'You', instanceId, name))
+      sendAction(createUntap(userId, myName, instanceId, name))
     } else {
-      sendAction(createTap(userId, 'You', instanceId, name))
+      sendAction(createTap(userId, myName, instanceId, name))
     }
   }, [myState, cardMap, sendAction, userId])
 
   const handlePlayCard = useCallback((instanceId: string) => {
     const data = cardMap[instanceId]
     if (!data) return
-    sendAction(createPlayCard(userId, 'You', instanceId, data.cardId, data.name, 'hand', 'battlefield'))
+    sendAction(createPlayCard(userId, myName, instanceId, data.cardId, data.name, 'hand', 'battlefield'))
   }, [cardMap, sendAction, userId])
 
   const handleSendToGraveyard = useCallback((instanceId: string) => {
@@ -239,7 +242,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     const card = myState.battlefield.find((c) => c.instanceId === instanceId)
     if (!card) return
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
-    sendAction(createMoveZone(userId, 'You', instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'graveyard'))
+    sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'graveyard'))
   }, [myState, cardMap, sendAction, userId])
 
   const handleExile = useCallback((instanceId: string) => {
@@ -247,7 +250,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     const card = myState.battlefield.find((c) => c.instanceId === instanceId)
     if (!card) return
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
-    sendAction(createMoveZone(userId, 'You', instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'exile'))
+    sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'exile'))
   }, [myState, cardMap, sendAction, userId])
 
   const handleReturnToHand = useCallback((instanceId: string) => {
@@ -255,31 +258,31 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     const card = myState.battlefield.find((c) => c.instanceId === instanceId)
     if (!card) return
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
-    sendAction(createMoveZone(userId, 'You', instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'hand'))
+    sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'hand'))
   }, [myState, cardMap, sendAction, userId])
 
   // Combat: declare attackers
   const handleDeclareAttackers = useCallback((attackerIds: string[], attackerNames: string[]) => {
-    sendAction(createDeclareAttackers(userId, 'You', attackerIds, attackerNames))
+    sendAction(createDeclareAttackers(userId, myName, attackerIds, attackerNames))
   }, [sendAction, userId])
 
   const handleSkipAttackers = useCallback(() => {
-    sendAction(createDeclareAttackers(userId, 'You', [], []))
+    sendAction(createDeclareAttackers(userId, myName, [], []))
   }, [sendAction, userId])
 
   // Combat: declare blockers
   const handleDeclareBlockers = useCallback((assignments: { blockerId: string; attackerId: string; blockerName: string; attackerName: string }[]) => {
-    sendAction(createDeclareBlockers(userId, 'You', assignments))
+    sendAction(createDeclareBlockers(userId, myName, assignments))
   }, [sendAction, userId])
 
   const handleSkipBlockers = useCallback(() => {
-    sendAction(createDeclareBlockers(userId, 'You', []))
+    sendAction(createDeclareBlockers(userId, myName, []))
   }, [sendAction, userId])
 
   // Discard to 7
   const handleDiscard = useCallback((discards: { instanceId: string; cardId: number; cardName: string }[]) => {
     for (const d of discards) {
-      sendAction(createDiscard(userId, 'You', d.instanceId, d.cardId, d.cardName))
+      sendAction(createDiscard(userId, myName, d.instanceId, d.cardId, d.cardName))
     }
   }, [sendAction, userId])
 
@@ -416,7 +419,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
                     key={c.instanceId}
                     onClick={() => {
                       if (!data) return
-                      sendAction(createPlayCard(userId, 'You', c.instanceId, c.cardId, data.name, 'commandZone', 'battlefield'))
+                      sendAction(createPlayCard(userId, myName, c.instanceId, c.cardId, data.name, 'commandZone', 'battlefield'))
                     }}
                     className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card"
                     style={{ width: 68, height: 95 }}
@@ -494,12 +497,12 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         exileCount={myState.exile.length}
         hasPriority={hasPriority}
         isActivePlayer={isActivePlayer}
-        onPassPriority={() => sendAction(createPassPriority(userId, 'You'))}
-        onLifeChange={(amount) => sendAction(createLifeChange(userId, 'You', userId, 'You', amount))}
-        onDraw={() => sendAction(createDraw(userId, 'You'))}
+        onPassPriority={() => sendAction(createPassPriority(userId, myName))}
+        onLifeChange={(amount) => sendAction(createLifeChange(userId, myName, userId, myName, amount))}
+        onDraw={() => sendAction(createDraw(userId, myName))}
         onViewZone={setViewingZone}
-        onConcede={() => sendAction(createConcede(userId, 'You'))}
-        onConfirmUntap={() => sendAction(createConfirmUntap(userId, 'You'))}
+        onConcede={() => sendAction(createConcede(userId, myName))}
+        onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
       />
 
       {/* Zone viewers */}
@@ -512,14 +515,14 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             const c = myState.graveyard.find((g) => g.instanceId === instanceId)
             if (!c) return
             const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, 'You', instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'hand'))
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'hand'))
             setViewingZone(null)
           }}
           onReturnToBattlefield={(instanceId) => {
             const c = myState.graveyard.find((g) => g.instanceId === instanceId)
             if (!c) return
             const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, 'You', instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'battlefield'))
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'battlefield'))
             setViewingZone(null)
           }}
           groupByType
@@ -534,7 +537,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             const c = myState.exile.find((e) => e.instanceId === instanceId)
             if (!c) return
             const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, 'You', instanceId, c.cardId, data?.name ?? 'card', 'exile', 'battlefield'))
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'battlefield'))
             setViewingZone(null)
           }}
           groupByType

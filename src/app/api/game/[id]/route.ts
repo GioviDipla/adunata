@@ -136,11 +136,20 @@ export async function GET(
     createdAt: row.created_at,
   }))
 
-  // Build players info for client
+  // Build players info with display names
+  const playerNames: Record<string, string> = {}
+  for (const p of players) {
+    const { data: userData } = await admin.auth.admin.getUserById(p.user_id)
+    const email = userData?.user?.email ?? 'Player'
+    // Use part before @ as display name
+    playerNames[p.user_id] = email.split('@')[0]
+  }
+
   const playersInfo = players.map((p) => ({
     userId: p.user_id,
     seatPosition: p.seat_position,
     isFirst: p.is_first,
+    displayName: playerNames[p.user_id],
   }))
 
   return NextResponse.json({
@@ -149,5 +158,6 @@ export async function GET(
     cardMap,
     log,
     myUserId: user.id,
+    playerNames,
   })
 }

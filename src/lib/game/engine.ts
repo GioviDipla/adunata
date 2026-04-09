@@ -45,14 +45,24 @@ function handlePassPriority(s: GameState, action: GameAction): GameState {
   // If the person passing is NOT the one with priority, ignore
   if (s.priorityPlayerId !== action.playerId) return s
 
-  // If priority was with AP and AP passes, give to NAP
   if (s.priorityPlayerId === s.activePlayerId) {
+    // AP passes → give priority to NAP
     s.priorityPlayerId = opponentId
+    s.apPassedFirst = true
     return s
   }
 
-  // NAP is passing — both have now passed. Advance phase.
-  return advancePhase(s)
+  // NAP is passing
+  if (s.apPassedFirst) {
+    // Both passed in sequence (AP then NAP) → advance phase
+    s.apPassedFirst = false
+    return advancePhase(s)
+  }
+
+  // NAP passes after responding to an action → return priority to AP
+  // (AP played a card, NAP got priority, NAP says OK → back to AP)
+  s.priorityPlayerId = s.activePlayerId
+  return s
 }
 
 function advancePhase(s: GameState): GameState {
@@ -175,8 +185,9 @@ function handlePlayCard(s: GameState, action: GameAction): GameState {
     })
   }
 
-  // After playing a card, opponent gets priority
+  // After playing a card, opponent gets priority (reset pass chain)
   s.priorityPlayerId = getOpponentId(s, action.playerId)
+  s.apPassedFirst = false
   return s
 }
 
