@@ -401,8 +401,8 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           </div>
 
           {/* Board tabs + View mode toggle */}
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex flex-1 gap-1 rounded-lg bg-bg-cell p-1">
+          <div className="mb-4 flex flex-col gap-2">
+            <div className="flex gap-1 rounded-lg bg-bg-cell p-1">
               {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map(
                 (tab) => (
                   <button
@@ -428,7 +428,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             </div>
 
             {/* View mode toggle */}
-            <div className="flex gap-0.5 rounded-lg bg-bg-cell p-1">
+            <div className="flex gap-0.5 rounded-lg bg-bg-cell p-1 self-start">
               {VIEW_MODE_OPTIONS.map(({ mode, icon: Icon, label }) => (
                 <button
                   key={mode}

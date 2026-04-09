@@ -1,7 +1,8 @@
 'use client'
 
 import { RotateCcw, Trash2, Ban, Hand, Eye } from 'lucide-react'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -20,6 +21,69 @@ interface BattlefieldZoneProps {
   onExile: (instanceId: string) => void
   onReturnToHand: (instanceId: string) => void
   onCardPreview?: (card: CardRow) => void
+}
+
+function BattlefieldCardButton({
+  bc,
+  onTapToggle,
+  onContextOpen,
+  onCardPreview,
+}: {
+  bc: BattlefieldCard
+  onTapToggle: (id: string) => void
+  onContextOpen: (id: string) => void
+  onCardPreview?: (card: CardRow) => void
+}) {
+  const longPress = useLongPress({
+    onLongPress: () => onCardPreview?.(bc.card),
+    delay: 400,
+  })
+
+  const handleClick = useCallback(() => {
+    if (longPress.wasLongPress()) return
+    onTapToggle(bc.instanceId)
+  }, [longPress, onTapToggle, bc.instanceId])
+
+  return (
+    <button
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onContextOpen(bc.instanceId)
+      }}
+      {...longPress}
+      className={`relative overflow-hidden rounded-lg border transition-transform select-none ${
+        bc.tapped
+          ? 'rotate-90 border-font-muted'
+          : 'border-border hover:border-bg-accent'
+      }`}
+      style={{ width: 68, height: 95 }}
+      title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''} — hold to preview, right-click for options`}
+    >
+      {bc.card.image_small ? (
+        <img
+          src={bc.card.image_small}
+          alt={bc.card.name}
+          className="h-full w-full object-cover pointer-events-none"
+          draggable={false}
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-bg-cell p-1">
+          <span className="text-[7px] font-medium text-font-secondary">
+            {bc.card.type_line.split('—')[0].trim()}
+          </span>
+          <span className="text-center text-[8px] font-semibold leading-tight text-font-primary">
+            {bc.card.name}
+          </span>
+          {bc.card.power && bc.card.toughness && (
+            <span className="text-[9px] font-bold text-font-primary">
+              {bc.card.power}/{bc.card.toughness}
+            </span>
+          )}
+        </div>
+      )}
+    </button>
+  )
 }
 
 export default function BattlefieldZone({
@@ -54,43 +118,12 @@ export default function BattlefieldZone({
       <div className="flex flex-wrap gap-1.5">
         {cards.map((bc) => (
           <div key={bc.instanceId} className="relative">
-            <button
-              onClick={() => onTapToggle(bc.instanceId)}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                setContextMenu(bc.instanceId)
-              }}
-              className={`relative overflow-hidden rounded-lg border transition-transform ${
-                bc.tapped
-                  ? 'rotate-90 border-font-muted'
-                  : 'border-border hover:border-bg-accent'
-              }`}
-              style={{ width: 68, height: 95 }}
-              title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''} — right-click for options`}
-            >
-              {bc.card.image_small ? (
-                <img
-                  src={bc.card.image_small}
-                  alt={bc.card.name}
-                  className="h-full w-full object-cover"
-                  draggable={false}
-                />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-bg-cell p-1">
-                  <span className="text-[7px] font-medium text-font-secondary">
-                    {bc.card.type_line.split('—')[0].trim()}
-                  </span>
-                  <span className="text-center text-[8px] font-semibold leading-tight text-font-primary">
-                    {bc.card.name}
-                  </span>
-                  {bc.card.power && bc.card.toughness && (
-                    <span className="text-[9px] font-bold text-font-primary">
-                      {bc.card.power}/{bc.card.toughness}
-                    </span>
-                  )}
-                </div>
-              )}
-            </button>
+            <BattlefieldCardButton
+              bc={bc}
+              onTapToggle={onTapToggle}
+              onContextOpen={setContextMenu}
+              onCardPreview={onCardPreview}
+            />
 
             {/* Context menu */}
             {contextMenu === bc.instanceId && (
