@@ -45,7 +45,7 @@ export default async function GoldfishPage({
     redirect('/decks')
   }
 
-  // Fetch deck cards with card data (mainboard only for goldfish)
+  // Fetch deck cards with card data (main + commander)
   const { data: deckCards } = await supabase
     .from('deck_cards')
     .select(`
@@ -57,19 +57,25 @@ export default async function GoldfishPage({
       card:cards!card_id(*)
     `)
     .eq('deck_id', id)
-    .eq('board', 'main')
+    .in('board', ['main', 'commander'])
 
-  // Expand quantity: 4x Lightning Bolt = 4 entries in the array
+  // Separate commander from main deck
+  const commanders: CardRow[] = []
   const fullDeck: CardRow[] = []
   for (const dc of (deckCards ?? []) as unknown as DeckCardFromDB[]) {
-    for (let i = 0; i < dc.quantity; i++) {
-      fullDeck.push(dc.card)
+    if (!dc.card) continue
+    if (dc.board === 'commander') {
+      commanders.push(dc.card)
+    } else {
+      for (let i = 0; i < dc.quantity; i++) {
+        fullDeck.push(dc.card)
+      }
     }
   }
 
-  if (fullDeck.length === 0) {
+  if (fullDeck.length === 0 && commanders.length === 0) {
     redirect(`/decks/${id}`)
   }
 
-  return <GoldfishGame deckName={deck.name} deckId={id} fullDeck={fullDeck} />
+  return <GoldfishGame deckName={deck.name} deckId={id} fullDeck={fullDeck} commanders={commanders} />
 }
