@@ -14,6 +14,8 @@ import {
   ArrowLeft,
   Shuffle,
   X,
+  Hand,
+  Trash2,
 } from 'lucide-react'
 import PhaseTracker, { PHASES, type Phase } from './PhaseTracker'
 import BattlefieldZone, { type BattlefieldCard } from './BattlefieldZone'
@@ -73,8 +75,20 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
   const [bottomSelectIds, setBottomSelectIds] = useState<Set<string>>(new Set())
   const [viewingZone, setViewingZone] = useState<'graveyard' | 'exile' | null>(null)
 
-  // Card preview state
-  const [previewCard, setPreviewCard] = useState<CardRow | null>(null)
+  // Card preview state — includes zone context for action buttons
+  interface PreviewState {
+    card: CardRow
+    zone?: 'hand' | 'battlefield'
+    instanceId?: string
+    tapped?: boolean
+  }
+  const [preview, setPreview] = useState<PreviewState | null>(null)
+
+  // Legacy compat — simple card preview without context
+  const setPreviewCard = useCallback((card: CardRow | null) => {
+    if (card) setPreview({ card })
+    else setPreview(null)
+  }, [])
 
   // Ref to track pending draw to avoid StrictMode double-fire
   const drawPendingRef = useRef(false)
@@ -294,46 +308,101 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
     setStage('mulligan')
     setBottomSelectIds(new Set())
     setViewingZone(null)
-    setPreviewCard(null)
+    setPreview(null)
   }, [fullDeck])
 
-  // -- Card preview overlay --
-  const CardPreviewOverlay = previewCard ? (
+  function closePreview() { setPreview(null) }
+
+  function previewAction(fn: () => void) {
+    fn()
+    setPreview(null)
+  }
+
+  // -- Card preview overlay with action buttons --
+  const CardPreviewOverlay = preview ? (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg-dark/80 backdrop-blur-sm"
-      onClick={() => setPreviewCard(null)}
+      onClick={closePreview}
     >
-      <div
-        className="relative flex max-h-[90vh] max-w-md flex-col items-center gap-4 p-4"
-      >
-        {previewCard.image_normal ? (
+      <div className="relative flex max-h-[90vh] max-w-sm flex-col items-center gap-3 p-4">
+        {/* Card image */}
+        {preview.card.image_normal ? (
           <img
-            src={previewCard.image_normal}
-            alt={previewCard.name}
-            className="max-h-[70vh] rounded-xl"
+            src={preview.card.image_normal}
+            alt={preview.card.name}
+            className="max-h-[50vh] rounded-xl"
           />
-        ) : previewCard.image_small ? (
+        ) : preview.card.image_small ? (
           <img
-            src={previewCard.image_small}
-            alt={previewCard.name}
-            className="max-h-[70vh] rounded-xl"
+            src={preview.card.image_small}
+            alt={preview.card.name}
+            className="max-h-[50vh] rounded-xl"
           />
         ) : (
-          <div className="flex h-64 w-48 flex-col items-center justify-center gap-2 rounded-xl bg-bg-surface p-4">
-            <span className="text-xs text-font-secondary">{previewCard.type_line}</span>
-            <span className="text-center text-lg font-bold text-font-primary">{previewCard.name}</span>
-            {previewCard.oracle_text && (
-              <p className="text-center text-xs text-font-secondary">{previewCard.oracle_text}</p>
+          <div className="flex h-48 w-40 flex-col items-center justify-center gap-2 rounded-xl bg-bg-surface p-4">
+            <span className="text-xs text-font-secondary">{preview.card.type_line}</span>
+            <span className="text-center text-base font-bold text-font-primary">{preview.card.name}</span>
+            {preview.card.oracle_text && (
+              <p className="text-center text-xs text-font-secondary">{preview.card.oracle_text}</p>
             )}
           </div>
         )}
-        <div className="text-center">
-          <h3 className="text-sm font-bold text-font-primary">{previewCard.name}</h3>
-          <p className="text-xs text-font-secondary">{previewCard.type_line}</p>
-          {previewCard.oracle_text && (
-            <p className="mt-2 max-w-xs text-xs text-font-muted">{previewCard.oracle_text}</p>
-          )}
-        </div>
+
+        {/* Card name */}
+        <h3 className="text-sm font-bold text-font-primary">{preview.card.name}</h3>
+
+        {/* Action buttons — battlefield cards */}
+        {preview.zone === 'battlefield' && preview.instanceId && (
+          <div
+            className="flex w-full flex-col gap-1.5 rounded-xl bg-bg-surface p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => previewAction(() => tapToggle(preview.instanceId!))}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-font-primary hover:bg-bg-hover active:bg-bg-cell"
+            >
+              <RotateCcw size={16} />
+              {preview.tapped ? 'Untap' : 'Tap'}
+            </button>
+            <button
+              onClick={() => previewAction(() => returnToHand(preview.instanceId!))}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-font-primary hover:bg-bg-hover active:bg-bg-cell"
+            >
+              <Hand size={16} />
+              Return to Hand
+            </button>
+            <button
+              onClick={() => previewAction(() => sendToGraveyard(preview.instanceId!))}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-bg-red hover:bg-bg-red/10 active:bg-bg-red/20"
+            >
+              <Trash2 size={16} />
+              Send to Graveyard
+            </button>
+            <button
+              onClick={() => previewAction(() => exileCard(preview.instanceId!))}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-font-secondary hover:bg-bg-hover active:bg-bg-cell"
+            >
+              <Ban size={16} />
+              Exile
+            </button>
+          </div>
+        )}
+
+        {/* Action buttons — hand cards */}
+        {preview.zone === 'hand' && preview.instanceId && (
+          <div
+            className="flex w-full flex-col gap-1.5 rounded-xl bg-bg-surface p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => previewAction(() => playCard(preview.instanceId!))}
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-font-accent hover:bg-bg-accent/10 active:bg-bg-accent/20"
+            >
+              <Plus size={16} />
+              Play Card
+            </button>
+          </div>
+        )}
       </div>
     </div>
   ) : null
@@ -562,7 +631,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
             onSendToGraveyard={sendToGraveyard}
             onExile={exileCard}
             onReturnToHand={returnToHand}
-            onCardPreview={setPreviewCard}
+            onCardPreview={(card, instanceId, tapped) => setPreview({ card, zone: 'battlefield', instanceId, tapped })}
           />
           <BattlefieldZone
             title="CREATURES"
@@ -571,7 +640,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
             onSendToGraveyard={sendToGraveyard}
             onExile={exileCard}
             onReturnToHand={returnToHand}
-            onCardPreview={setPreviewCard}
+            onCardPreview={(card, instanceId, tapped) => setPreview({ card, zone: 'battlefield', instanceId, tapped })}
           />
           <BattlefieldZone
             title="OTHER PERMANENTS"
@@ -580,14 +649,18 @@ export default function GoldfishGame({ deckName, deckId, fullDeck }: GoldfishGam
             onSendToGraveyard={sendToGraveyard}
             onExile={exileCard}
             onReturnToHand={returnToHand}
-            onCardPreview={setPreviewCard}
+            onCardPreview={(card, instanceId, tapped) => setPreview({ card, zone: 'battlefield', instanceId, tapped })}
           />
         </div>
       </div>
 
       {/* Hand area */}
       <div className="border-t border-border bg-bg-card px-3 py-2">
-        <HandArea cards={hand} onPlayCard={playCard} onCardPreview={setPreviewCard} />
+        <HandArea
+          cards={hand}
+          onPlayCard={playCard}
+          onCardPreview={(card, instanceId) => setPreview({ card, zone: 'hand', instanceId })}
+        />
       </div>
 
       {/* Action bar */}

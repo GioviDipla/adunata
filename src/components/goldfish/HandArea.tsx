@@ -14,7 +14,7 @@ export interface HandCardEntry {
 interface HandAreaProps {
   cards: HandCardEntry[]
   onPlayCard: (instanceId: string) => void
-  onCardPreview?: (card: CardRow) => void
+  onCardPreview?: (card: CardRow, instanceId?: string) => void
   selectable?: boolean
   selectedIds?: Set<string>
   onToggleSelect?: (instanceId: string) => void
@@ -32,13 +32,13 @@ function HandCardButton({
   hc: HandCardEntry
   index: number
   onPlayCard: (id: string) => void
-  onCardPreview?: (card: CardRow) => void
+  onCardPreview?: (card: CardRow, instanceId?: string) => void
   selectable: boolean
   isSelected: boolean
   onToggleSelect?: (id: string) => void
 }) {
   const longPress = useLongPress({
-    onLongPress: () => onCardPreview?.(hc.card),
+    onLongPress: () => onCardPreview?.(hc.card, hc.instanceId),
     delay: 400,
   })
 

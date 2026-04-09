@@ -20,7 +20,7 @@ interface BattlefieldZoneProps {
   onSendToGraveyard: (instanceId: string) => void
   onExile: (instanceId: string) => void
   onReturnToHand: (instanceId: string) => void
-  onCardPreview?: (card: CardRow) => void
+  onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
 }
 
 function BattlefieldCardButton({
@@ -32,10 +32,10 @@ function BattlefieldCardButton({
   bc: BattlefieldCard
   onTapToggle: (id: string) => void
   onContextOpen: (id: string) => void
-  onCardPreview?: (card: CardRow) => void
+  onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
 }) {
   const longPress = useLongPress({
-    onLongPress: () => onCardPreview?.(bc.card),
+    onLongPress: () => onCardPreview?.(bc.card, bc.instanceId, bc.tapped),
     delay: 400,
   })
 
@@ -134,7 +134,7 @@ export default function BattlefieldZone({
                 {onCardPreview && (
                   <button
                     onClick={() => {
-                      onCardPreview(bc.card)
+                      onCardPreview(bc.card, bc.instanceId, bc.tapped)
                       setContextMenu(null)
                     }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-font-primary hover:bg-bg-hover"
