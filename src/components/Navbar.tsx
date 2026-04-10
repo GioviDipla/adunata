@@ -8,6 +8,7 @@ import {
   Layers,
   Swords,
   User,
+  Users,
   LogOut,
   Sparkles,
 } from "lucide-react";
@@ -18,6 +19,7 @@ const navItems = [
   { href: "/cards", label: "Cards", icon: Search },
   { href: "/decks", label: "Decks", icon: Layers },
   { href: "/play", label: "Play", icon: Swords },
+  { href: "/users", label: "Community", icon: Users },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
