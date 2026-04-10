@@ -139,6 +139,7 @@ export interface Database {
           name: string
           description: string | null
           format: string
+          visibility: string
           cover_card_id: number | null
           is_public: boolean
           created_at: string
@@ -150,6 +151,7 @@ export interface Database {
           name: string
           description?: string | null
           format: string
+          visibility?: string
           cover_card_id?: number | null
           is_public?: boolean
           created_at?: string
@@ -161,6 +163,7 @@ export interface Database {
           name?: string
           description?: string | null
           format?: string
+          visibility?: string
           cover_card_id?: number | null
           is_public?: boolean
           created_at?: string
@@ -330,6 +333,36 @@ export interface Database {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          id: string
+          username: string
+          display_name: string
+          bio: string | null
+          username_changed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          username: string
+          display_name: string
+          bio?: string | null
+          username_changed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          username?: string
+          display_name?: string
+          bio?: string | null
+          username_changed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       game_log: {
         Row: {
           id: string
@@ -399,6 +432,37 @@ export interface Database {
           image_small: string | null
           image_normal: string | null
           image_art_crop: string | null
+        }[]
+      }
+      get_profile_stats: {
+        Args: { p_username: string }
+        Returns: {
+          public_deck_count: number
+          total_deck_count: number
+          favorite_format: string | null
+          color_frequencies: Record<string, number>
+          latest_commander: { id: string; name: string; image_small: string | null; image_normal: string | null } | null
+          most_used_card: { id: string; name: string; image_small: string | null } | null
+          unique_cards_count: number
+        }[]
+      }
+      search_users: {
+        Args: { p_query: string; p_limit?: number }
+        Returns: {
+          id: string
+          username: string
+          display_name: string
+          bio: string | null
+          public_deck_count: number
+        }[]
+      }
+      get_latest_users: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+          username: string
+          display_name: string
+          public_deck_count: number
         }[]
       }
     }
