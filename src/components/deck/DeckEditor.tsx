@@ -19,6 +19,7 @@ import AddCardSearch from './AddCardSearch'
 import CardDetail from '@/components/cards/CardDetail'
 import ImportCardsModal from './ImportCardsModal'
 import DeckContent from './DeckContent'
+import VisibilityToggle from './VisibilityToggle'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -327,6 +328,10 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             <Fish className="h-3.5 w-3.5" />
             Goldfish
           </Link>
+          <VisibilityToggle
+            deckId={deck.id}
+            initialVisibility={(deck.visibility as 'private' | 'public') ?? 'private'}
+          />
           <Button
             variant="secondary"
             size="sm"
