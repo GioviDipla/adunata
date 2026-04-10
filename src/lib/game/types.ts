@@ -81,4 +81,4 @@ export interface LogEntry {
 }
 
 // Card map: instanceId → card data (built at game start, kept client-side)
-export type CardMap = Record<string, { cardId: number; name: string; imageSmall: string | null; imageNormal: string | null; typeLine: string; manaCost: string | null; power: string | null; toughness: string | null; oracleText: string | null }>
+export type CardMap = Record<string, { cardId: number; name: string; imageSmall: string | null; imageNormal: string | null; typeLine: string; manaCost: string | null; power: string | null; toughness: string | null; oracleText: string | null; isCommander: boolean }>

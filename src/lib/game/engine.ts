@@ -230,6 +230,9 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
     player.graveyard = player.graveyard.filter((c) => c.instanceId !== instanceId)
   } else if (from === 'exile') {
     player.exile = player.exile.filter((c) => c.instanceId !== instanceId)
+  } else if (from === 'library') {
+    player.library = player.library.filter((id) => id !== instanceId)
+    player.libraryCount = player.library.length
   }
 
   // Add to target
@@ -262,17 +265,30 @@ function handleDeclareAttackers(s: GameState, action: GameAction): GameState {
 
   s.combat.attackers = attackerIds.map((id) => ({ instanceId: id, targetPlayerId: opponentId }))
 
-  // Mark attackers on battlefield + auto-tap (player could have untapped for vigilance before)
+  // Mark attackers on battlefield + auto-tap
   for (const card of player.battlefield) {
     if (attackerIds.includes(card.instanceId)) {
       card.attacking = true
-      // Auto-tap attackers (player can manually untap for vigilance via separate action before confirming)
       card.tapped = true
     }
   }
 
-  // After declaring, AP gets priority, then NAP
-  s.priorityPlayerId = action.playerId
+  // Auto-advance: if no attackers were declared, skip combat entirely to main2.
+  // The CombatAttackers overlay is shown while phase === 'declare_attackers',
+  // so we MUST advance the phase here or the overlay stays stuck on screen.
+  if (attackerIds.length === 0) {
+    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false }
+    s.phase = 'main2'
+    s.priorityPlayerId = s.activePlayerId
+    s.apPassedFirst = false
+    return s
+  }
+
+  // Attackers declared → advance to declare_blockers, NAP gets priority
+  s.phase = 'declare_blockers'
+  s.combat.phase = 'declare_blockers'
+  s.priorityPlayerId = opponentId
+  s.apPassedFirst = false
   return s
 }
 
@@ -292,8 +308,12 @@ function handleDeclareBlockers(s: GameState, action: GameAction): GameState {
     }
   }
 
-  // After declaring blockers, AP gets priority
+  // Auto-advance to combat_damage; AP's client will auto-calculate damage
+  // via the useEffect in PlayGame as soon as it sees phase === 'combat_damage'.
+  s.phase = 'combat_damage'
+  s.combat.phase = 'damage'
   s.priorityPlayerId = s.activePlayerId
+  s.apPassedFirst = false
   return s
 }
 
@@ -302,8 +322,7 @@ function handleCombatDamage(s: GameState, _action: GameAction): GameState {
   const nap = s.players[napId]
 
   // Combat damage is calculated client-side and sent via action.data
-  // because the engine doesn't have the card stats. The action includes:
-  // { damageToPlayer: number, creaturesDamaged: [{ instanceId, damage }] }
+  // because the engine doesn't have the card stats.
   const { damageToPlayer, creaturesDamaged } = _action.data as {
     damageToPlayer: number
     creaturesDamaged: { instanceId: string; playerId: string; damage: number; lethal: boolean }[]
@@ -322,8 +341,33 @@ function handleCombatDamage(s: GameState, _action: GameAction): GameState {
     }
   }
 
-  s.combat.damageAssigned = true
+  // Auto-advance: move dead creatures to graveyard, clear combat state,
+  // and jump to main2. Otherwise AP would be stuck in combat_damage with
+  // priority but no way to move forward.
+  for (const pid of Object.keys(s.players)) {
+    const player = s.players[pid]
+    const dead: BattlefieldCardState[] = []
+    const alive: BattlefieldCardState[] = []
+    for (const c of player.battlefield) {
+      if (c.highlighted === 'red') dead.push(c)
+      else alive.push(c)
+    }
+    player.battlefield = alive.map((c) => ({
+      ...c,
+      attacking: false,
+      blocking: null,
+      damageMarked: 0,
+      highlighted: null,
+    }))
+    for (const c of dead) {
+      player.graveyard.push({ instanceId: c.instanceId, cardId: c.cardId })
+    }
+  }
+
+  s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: true }
+  s.phase = 'main2'
   s.priorityPlayerId = s.activePlayerId
+  s.apPassedFirst = false
   return s
 }
 

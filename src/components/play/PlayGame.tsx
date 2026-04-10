@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import Link from 'next/link'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 import { createClient } from '@/lib/supabase/client'
 import {
   createPassPriority, createPlayCard, createTap, createUntap,
@@ -20,6 +22,7 @@ import type { HandCardEntry } from '@/components/goldfish/HandArea'
 import GameLog from './GameLog'
 import GameActionBar from './GameActionBar'
 import CardZoneViewer from '@/components/goldfish/CardZoneViewer'
+import CardPreviewOverlay, { type PreviewState } from '@/components/game/CardPreviewOverlay'
 import CombatAttackers from './CombatAttackers'
 import CombatBlockers from './CombatBlockers'
 import DiscardSelector from './DiscardSelector'
@@ -60,6 +63,58 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
   }
 }
 
+/** Command zone card button — long-press or tap opens preview, where the user can Cast. */
+function CommandZoneCard({
+  cardId,
+  data,
+  onOpenPreview,
+}: {
+  cardId: number
+  data: CardMap[string] | undefined
+  onOpenPreview: (card: CardRow) => void
+}) {
+  const longPress = useLongPress({
+    onLongPress: () => {
+      if (data) onOpenPreview(toCardRow(cardId, data))
+    },
+    delay: 400,
+  })
+
+  const handleClick = () => {
+    if (longPress.wasLongPress()) return
+    if (data) onOpenPreview(toCardRow(cardId, data))
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        if (data) onOpenPreview(toCardRow(cardId, data))
+      }}
+      {...longPress}
+      className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card select-none"
+      style={{ width: 68, height: 95 }}
+      title={`${data?.name ?? '?'} — tap to preview & cast`}
+    >
+      {data?.imageSmall ? (
+        <img
+          src={data.imageSmall}
+          alt={data.name}
+          className="h-full w-full object-cover pointer-events-none"
+          draggable={false}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center p-1">
+          <span className="text-center text-[8px] font-semibold text-font-primary">
+            {data?.name ?? '?'}
+          </span>
+        </div>
+      )}
+    </button>
+  )
+}
+
 export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId: string }) {
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [cardMap, setCardMap] = useState<CardMap>({})
@@ -68,6 +123,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [loading, setLoading] = useState(true)
   const [gameOver, setGameOver] = useState<{ winnerId: string } | null>(null)
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
+  const [preview, setPreview] = useState<PreviewState | null>(null)
 
   // Fetch initial state
   useEffect(() => {
@@ -217,6 +273,31 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
   }, [myState, cardMap])
 
+  // Library cards (viewable by owner for scry/tutor/search effects).
+  // Library is ordered from top of deck (index 0) to bottom.
+  const libraryCards = useMemo(() => {
+    if (!myState) return []
+    return myState.library
+      .map((instanceId) => {
+        const data = cardMap[instanceId]
+        if (!data) return null
+        return { instanceId, card: toCardRow(data.cardId, data) }
+      })
+      .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
+  }, [myState, cardMap])
+
+  // Check if a card is one of the player's commanders (by cardId)
+  const isCommanderCard = useCallback(
+    (card: CardRow) => {
+      for (const instanceId of Object.keys(cardMap)) {
+        const data = cardMap[instanceId]
+        if (data.cardId === card.id && data.isCommander) return true
+      }
+      return false
+    },
+    [cardMap],
+  )
+
   // Action handlers
   const handleTapToggle = useCallback((instanceId: string) => {
     if (!myState) return
@@ -261,6 +342,36 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'hand'))
   }, [myState, cardMap, sendAction, userId])
 
+  const handleReturnToCommandZone = useCallback((instanceId: string) => {
+    if (!myState) return
+    const card = myState.battlefield.find((c) => c.instanceId === instanceId)
+    if (!card) return
+    const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
+    sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'commandZone'))
+  }, [myState, cardMap, sendAction, userId, myName])
+
+  const handleDiscardFromHand = useCallback((instanceId: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createDiscard(userId, myName, instanceId, data.cardId, data.name))
+  }, [cardMap, sendAction, userId, myName])
+
+  const handleExileFromHand = useCallback((instanceId: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'hand', 'exile'))
+  }, [cardMap, sendAction, userId, myName])
+
+  const handlePlayFromCommandZone = useCallback((instanceId: string) => {
+    if (!myState) return
+    const card = myState.commandZone.find((c) => c.instanceId === instanceId)
+    if (!card) return
+    const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
+    sendAction(createPlayCard(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'commandZone', 'battlefield'))
+  }, [myState, cardMap, sendAction, userId, myName])
+
+  const closePreview = useCallback(() => setPreview(null), [])
+
   // Combat: declare attackers
   const handleDeclareAttackers = useCallback((attackerIds: string[], attackerNames: string[]) => {
     sendAction(createDeclareAttackers(userId, myName, attackerIds, attackerNames))
@@ -279,12 +390,14 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     sendAction(createDeclareBlockers(userId, myName, []))
   }, [sendAction, userId])
 
-  // Discard to 7
-  const handleDiscard = useCallback((discards: { instanceId: string; cardId: number; cardName: string }[]) => {
+  // Discard to 7.
+  // Must await each action sequentially: concurrent writes to game_states
+  // would race (both read, both write, second overwrites first) and drop discards.
+  const handleDiscard = useCallback(async (discards: { instanceId: string; cardId: number; cardName: string }[]) => {
     for (const d of discards) {
-      sendAction(createDiscard(userId, myName, d.instanceId, d.cardId, d.cardName))
+      await sendAction(createDiscard(userId, myName, d.instanceId, d.cardId, d.cardName))
     }
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   // Auto combat damage calculation
   const combatDamageSentRef = useRef(false)
@@ -393,9 +506,9 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         <span className={`text-3xl font-bold ${won ? 'text-bg-green' : 'text-bg-red'}`}>
           {won ? 'You Win!' : 'You Lose'}
         </span>
-        <a href="/play" className="rounded-xl bg-bg-accent px-6 py-2 text-sm font-bold text-font-white">
+        <Link href="/play" className="rounded-xl bg-bg-accent px-6 py-2 text-sm font-bold text-font-white">
           Back to Lobby
-        </a>
+        </Link>
       </div>
     )
   }
@@ -415,24 +528,14 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
               {myState.commandZone.map((c) => {
                 const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
                 return (
-                  <button
+                  <CommandZoneCard
                     key={c.instanceId}
-                    onClick={() => {
-                      if (!data) return
-                      sendAction(createPlayCard(userId, myName, c.instanceId, c.cardId, data.name, 'commandZone', 'battlefield'))
-                    }}
-                    className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card"
-                    style={{ width: 68, height: 95 }}
-                    title={`${data?.name ?? '?'} -- tap to cast`}
-                  >
-                    {data?.imageSmall ? (
-                      <img src={data.imageSmall} alt={data.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center p-1">
-                        <span className="text-center text-[8px] font-semibold text-font-primary">{data?.name ?? '?'}</span>
-                      </div>
-                    )}
-                  </button>
+                    cardId={c.cardId}
+                    data={data}
+                    onOpenPreview={(row) =>
+                      setPreview({ card: row, zone: 'commandZone', instanceId: c.instanceId })
+                    }
+                  />
                 )
               })}
             </div>
@@ -447,6 +550,9 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           onSendToGraveyard={handleSendToGraveyard}
           onExile={handleExile}
           onReturnToHand={handleReturnToHand}
+          onCardPreview={(card, id, tapped) =>
+            setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
+          }
         />
 
         {/* Other permanents */}
@@ -459,6 +565,9 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
               onSendToGraveyard={handleSendToGraveyard}
               onExile={handleExile}
               onReturnToHand={handleReturnToHand}
+              onCardPreview={(card, id, tapped) =>
+                setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
+              }
             />
           </div>
         )}
@@ -472,6 +581,9 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             onSendToGraveyard={handleSendToGraveyard}
             onExile={handleExile}
             onReturnToHand={handleReturnToHand}
+            onCardPreview={(card, id, tapped) =>
+              setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
+            }
           />
         </div>
       </div>
@@ -481,6 +593,9 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         <HandArea
           cards={myHandCards}
           onPlayCard={handlePlayCard}
+          onCardPreview={(card, instanceId) =>
+            setPreview({ card, zone: 'hand', instanceId })
+          }
         />
       </div>
 
@@ -525,6 +640,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'battlefield'))
             setViewingZone(null)
           }}
+          onCardPreview={(card) => setPreview({ card })}
           groupByType
         />
       )}
@@ -540,9 +656,42 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'battlefield'))
             setViewingZone(null)
           }}
+          onCardPreview={(card) => setPreview({ card })}
           groupByType
         />
       )}
+      {viewingZone === 'library' && (
+        <CardZoneViewer
+          title="Library (top to bottom)"
+          cards={libraryCards}
+          onClose={() => setViewingZone(null)}
+          onReturnToHand={(instanceId) => {
+            const idx = myState.library.findIndex((id) => id === instanceId)
+            if (idx === -1) return
+            const data = cardMap[instanceId]
+            if (!data) return
+            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'hand'))
+            setViewingZone(null)
+          }}
+          onCardPreview={(card) => setPreview({ card })}
+        />
+      )}
+
+      {/* Card preview overlay (long-press/right-click) */}
+      <CardPreviewOverlay
+        preview={preview}
+        onClose={closePreview}
+        isCommanderCard={isCommanderCard}
+        onTapToggle={handleTapToggle}
+        onReturnToHand={handleReturnToHand}
+        onReturnToCommandZone={handleReturnToCommandZone}
+        onSendToGraveyard={handleSendToGraveyard}
+        onExile={handleExile}
+        onPlayCard={handlePlayCard}
+        onDiscardFromHand={handleDiscardFromHand}
+        onExileFromHand={handleExileFromHand}
+        onPlayFromCommandZone={handlePlayFromCommandZone}
+      />
 
       {/* Combat & discard overlays */}
       {showAttackerUI && (

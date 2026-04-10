@@ -4,13 +4,13 @@ import { useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Heart, Minus, Plus, Layers, Archive, Ban, SkipForward,
-  RotateCcw, ArrowLeft, Shuffle, X, Hand, Trash2, Crown,
-  BookOpen, Play,
+  RotateCcw, ArrowLeft, Shuffle, Crown, BookOpen,
 } from 'lucide-react'
 import PhaseTracker, { PHASES, type Phase } from './PhaseTracker'
 import BattlefieldZone, { type BattlefieldCard } from './BattlefieldZone'
 import HandArea, { type HandCardEntry } from './HandArea'
 import CardZoneViewer from './CardZoneViewer'
+import CardPreviewOverlay, { type PreviewState } from '@/components/game/CardPreviewOverlay'
 import { getCardZone } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
@@ -41,13 +41,6 @@ function makeInstance(card: CardRow): CardInstance {
 
 type GameStage = 'mulligan' | 'bottomCards' | 'playing'
 type ViewingZone = 'graveyard' | 'exile' | 'library' | null
-
-interface PreviewState {
-  card: CardRow
-  zone?: 'hand' | 'battlefield' | 'commandZone'
-  instanceId?: string
-  tapped?: boolean
-}
 
 export default function GoldfishGame({ deckName, deckId, fullDeck, commanders = [] }: GoldfishGameProps) {
   const router = useRouter()
@@ -233,79 +226,29 @@ export default function GoldfishGame({ deckName, deckId, fullDeck, commanders = 
     setBottomSelectIds(new Set()); setViewingZone(null); setPreview(null)
   }, [fullDeck, commanders])
 
-  function closePreview() { setPreview(null) }
-  function previewAction(fn: () => void) { fn(); setPreview(null) }
+  const closePreview = useCallback(() => setPreview(null), [])
 
   // Check if a card is a commander (for return to command zone option)
   const isCommanderCard = useCallback((card: CardRow) => {
     return commanders.some((c) => c.id === card.id)
   }, [commanders])
 
-  // -- Card preview overlay --
-  const CardPreviewOverlay = preview ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-dark/80 backdrop-blur-sm" onClick={closePreview}>
-      <div className="relative flex max-h-[90vh] max-w-sm flex-col items-center gap-3 p-4 overflow-y-auto">
-        {preview.card.image_normal ? (
-          <img src={preview.card.image_normal} alt={preview.card.name} className="max-h-[45vh] rounded-xl" />
-        ) : preview.card.image_small ? (
-          <img src={preview.card.image_small} alt={preview.card.name} className="max-h-[45vh] rounded-xl" />
-        ) : (
-          <div className="flex h-48 w-40 flex-col items-center justify-center gap-2 rounded-xl bg-bg-surface p-4">
-            <span className="text-xs text-font-secondary">{preview.card.type_line}</span>
-            <span className="text-center text-base font-bold text-font-primary">{preview.card.name}</span>
-            {preview.card.oracle_text && <p className="text-center text-xs text-font-secondary">{preview.card.oracle_text}</p>}
-          </div>
-        )}
-        <h3 className="text-sm font-bold text-font-primary">{preview.card.name}</h3>
-
-        {/* Actions — always show when instanceId is present */}
-        {preview.instanceId && (
-          <div className="flex w-full flex-col gap-1 rounded-xl bg-bg-surface p-2" onClick={(e) => e.stopPropagation()}>
-            {/* Battlefield actions */}
-            {preview.zone === 'battlefield' && (<>
-              <button onClick={() => previewAction(() => tapToggle(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-primary active:bg-bg-cell">
-                <RotateCcw size={16} /> {preview.tapped ? 'Untap' : 'Tap'}
-              </button>
-              <button onClick={() => previewAction(() => returnToHand(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-primary active:bg-bg-cell">
-                <Hand size={16} /> Return to Hand
-              </button>
-              {isCommanderCard(preview.card) && (
-                <button onClick={() => previewAction(() => returnToCommandZone(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-bg-yellow active:bg-bg-yellow/20">
-                  <Crown size={16} /> Return to Command Zone
-                </button>
-              )}
-              <button onClick={() => previewAction(() => sendToGraveyard(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-bg-red active:bg-bg-red/20">
-                <Trash2 size={16} /> Send to Graveyard
-              </button>
-              <button onClick={() => previewAction(() => exileCard(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-secondary active:bg-bg-cell">
-                <Ban size={16} /> Exile
-              </button>
-            </>)}
-
-            {/* Hand actions */}
-            {preview.zone === 'hand' && (<>
-              <button onClick={() => previewAction(() => playCard(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-accent active:bg-bg-accent/20">
-                <Play size={16} /> Play
-              </button>
-              <button onClick={() => previewAction(() => sendFromHandToGraveyard(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-bg-red active:bg-bg-red/20">
-                <Trash2 size={16} /> Discard
-              </button>
-              <button onClick={() => previewAction(() => exileFromHand(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-secondary active:bg-bg-cell">
-                <Ban size={16} /> Exile
-              </button>
-            </>)}
-
-            {/* Command zone actions */}
-            {preview.zone === 'commandZone' && (<>
-              <button onClick={() => previewAction(() => playFromCommandZone(preview.instanceId!))} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-accent active:bg-bg-accent/20">
-                <Play size={16} /> Cast Commander
-              </button>
-            </>)}
-          </div>
-        )}
-      </div>
-    </div>
-  ) : null
+  const cardPreviewOverlay = (
+    <CardPreviewOverlay
+      preview={preview}
+      onClose={closePreview}
+      isCommanderCard={isCommanderCard}
+      onTapToggle={tapToggle}
+      onReturnToHand={returnToHand}
+      onReturnToCommandZone={returnToCommandZone}
+      onSendToGraveyard={sendToGraveyard}
+      onExile={exileCard}
+      onPlayCard={playCard}
+      onDiscardFromHand={sendFromHandToGraveyard}
+      onExileFromHand={exileFromHand}
+      onPlayFromCommandZone={playFromCommandZone}
+    />
+  )
 
   // -- Mulligan overlay --
   if (stage === 'mulligan') {
@@ -343,7 +286,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck, commanders = 
             <button onClick={doMulligan} className="rounded-xl bg-bg-accent px-6 py-2.5 text-sm font-bold text-font-white hover:bg-bg-accent-dark">Mulligan</button>
           </div>
         </div>
-        {CardPreviewOverlay}
+        {cardPreviewOverlay}
       </div>
     )
   }
@@ -516,7 +459,7 @@ export default function GoldfishGame({ deckName, deckId, fullDeck, commanders = 
           onClose={() => setViewingZone(null)} onCardPreview={setPreviewCard} />
       )}
 
-      {CardPreviewOverlay}
+      {cardPreviewOverlay}
     </div>
   )
 }

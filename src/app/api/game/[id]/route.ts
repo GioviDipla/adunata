@@ -75,6 +75,9 @@ export async function GET(
       oracleText: string | null
     }> = {}
 
+    // Track which cardIds are commanders for this player
+    const commanderCardIds = new Set<number>()
+
     for (const dc of deckCards) {
       if (!dc.card) continue
       const card = dc.card as unknown as {
@@ -98,6 +101,7 @@ export async function GET(
         toughness: card.toughness,
         oracleText: card.oracle_text,
       }
+      if (dc.board === 'commander') commanderCardIds.add(card.id)
     }
 
     // Replicate start route's instanceId assignment to map every instanceId → cardId
@@ -107,13 +111,15 @@ export async function GET(
       const data = cardDataById[card.id]
       if (!data) continue
 
+      const isCommander = commanderCardIds.has(card.id)
+
       if (dc.board === 'commander') {
         const iid = `ci-${++globalCounter}`
-        cardMap[iid] = { cardId: card.id, ...data }
+        cardMap[iid] = { cardId: card.id, isCommander: true, ...data }
       } else if (dc.board === 'main') {
         for (let i = 0; i < dc.quantity; i++) {
           const iid = `ci-${++globalCounter}`
-          cardMap[iid] = { cardId: card.id, ...data }
+          cardMap[iid] = { cardId: card.id, isCommander, ...data }
         }
       }
     }
