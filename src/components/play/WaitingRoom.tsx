@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Copy, Check, Crown, Loader2 } from 'lucide-react'
+import { Copy, Check, Crown, Loader2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 
@@ -16,6 +16,7 @@ export default function WaitingRoom({ lobby, players: initialPlayers, userId, is
   const [players, setPlayers] = useState(initialPlayers)
   const [copied, setCopied] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   const myPlayer = players.find((p) => p.user_id === userId)
   const allReady = players.length === 2 && players.every((p) => p.ready)
@@ -64,6 +65,21 @@ export default function WaitingRoom({ lobby, players: initialPlayers, userId, is
     setStarting(false)
   }
 
+  async function leaveLobby() {
+    const confirmMsg = isHost
+      ? 'Cancel this lobby? The other player will be kicked out.'
+      : 'Leave this lobby?'
+    if (!window.confirm(confirmMsg)) return
+
+    setLeaving(true)
+    const res = await fetch(`/api/lobbies/${lobby.id}`, { method: 'DELETE' })
+    if (res.ok) {
+      router.push('/play')
+    } else {
+      setLeaving(false)
+    }
+  }
+
   function copyCode() {
     navigator.clipboard.writeText(lobby.lobby_code)
     setCopied(true)
@@ -72,7 +88,19 @@ export default function WaitingRoom({ lobby, players: initialPlayers, userId, is
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-6 px-4 py-12">
-      <h1 className="text-xl font-bold text-font-primary">Waiting Room</h1>
+      <div className="flex w-full items-center justify-between">
+        <div className="w-9" />
+        <h1 className="text-xl font-bold text-font-primary">Waiting Room</h1>
+        <button
+          onClick={leaveLobby}
+          disabled={leaving}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-font-muted transition-colors hover:bg-bg-red/10 hover:text-bg-red disabled:opacity-40"
+          title={isHost ? 'Cancel lobby' : 'Leave lobby'}
+          aria-label={isHost ? 'Cancel lobby' : 'Leave lobby'}
+        >
+          {leaving ? <Loader2 size={16} className="animate-spin" /> : <X size={18} />}
+        </button>
+      </div>
 
       {/* Lobby code */}
       <div className="flex items-center gap-3 rounded-xl bg-bg-card px-6 py-4">
