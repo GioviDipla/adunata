@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { Layers } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
+import { initialColor, initialsOf } from '@/lib/utils/user'
 import ProfileStats from '@/components/users/ProfileStats'
 
 interface ProfileStatsRow {
@@ -13,22 +14,6 @@ interface ProfileStatsRow {
   latest_commander: { id: string; name: string; image_small: string | null; image_normal: string | null } | null
   most_used_card: { id: string; name: string; image_small: string | null } | null
   unique_cards_count: number
-}
-
-function initialColor(username: string): string {
-  let hash = 0
-  for (let i = 0; i < username.length; i++) {
-    hash = (hash * 31 + username.charCodeAt(i)) >>> 0
-  }
-  const hue = hash % 360
-  return `hsl(${hue}, 60%, 45%)`
-}
-
-function initialsOf(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 export default async function PublicProfilePage({

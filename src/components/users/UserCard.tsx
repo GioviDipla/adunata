@@ -2,28 +2,13 @@
 
 import Link from 'next/link'
 import { Layers } from 'lucide-react'
+import { initialColor, initialsOf } from '@/lib/utils/user'
 
 interface UserCardProps {
   username: string
   displayName: string
   bio?: string | null
   publicDeckCount: number
-}
-
-function initialColor(username: string): string {
-  let hash = 0
-  for (let i = 0; i < username.length; i++) {
-    hash = (hash * 31 + username.charCodeAt(i)) >>> 0
-  }
-  const hue = hash % 360
-  return `hsl(${hue}, 60%, 45%)`
-}
-
-function initialsOf(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return '?'
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 export default function UserCard({
