@@ -141,7 +141,6 @@ export interface Database {
           format: string
           visibility: string
           cover_card_id: number | null
-          is_public: boolean
           created_at: string
           updated_at: string
         }
@@ -153,7 +152,6 @@ export interface Database {
           format: string
           visibility?: string
           cover_card_id?: number | null
-          is_public?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -165,7 +163,6 @@ export interface Database {
           format?: string
           visibility?: string
           cover_card_id?: number | null
-          is_public?: boolean
           created_at?: string
           updated_at?: string
         }

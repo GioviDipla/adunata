@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Search, Loader2 } from 'lucide-react'
 import UserCard from './UserCard'
 
@@ -30,41 +30,57 @@ export default function UserSearch({ initialUsers }: UserSearchProps) {
 
   useEffect(() => {
     const trimmed = query.trim()
-    if (trimmed.length === 0) {
+    // Require at least 2 characters before hitting the DB — protects against
+    // full-table trigram scans on single-character queries and keeps the
+    // "Latest joiners" empty state visible while the user is still typing.
+    if (trimmed.length < 2) {
       setResults(null)
       setLoading(false)
       return
     }
 
     setLoading(true)
+    const controller = new AbortController()
     const handle = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/users/search?q=${encodeURIComponent(trimmed)}`)
+        const res = await fetch(
+          `/api/users/search?q=${encodeURIComponent(trimmed)}`,
+          { signal: controller.signal },
+        )
+        if (controller.signal.aborted) return
         if (res.ok) {
           const data = await res.json()
           setResults(data.users ?? [])
         } else {
           setResults([])
         }
-      } catch {
-        setResults([])
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          setResults([])
+        }
       }
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }, 300)
 
-    return () => clearTimeout(handle)
+    return () => {
+      clearTimeout(handle)
+      controller.abort()
+    }
   }, [query])
 
   const showEmptyState = results === null
-  const usersToRender = showEmptyState
-    ? initialUsers.map((u) => ({
+  const usersToRender = useMemo(() => {
+    if (showEmptyState) {
+      return initialUsers.map((u) => ({
         id: u.id,
         username: u.username,
         display_name: u.display_name,
-        bio: null,
+        bio: null as string | null,
         public_deck_count: u.public_deck_count,
       }))
-    : results
+    }
+    return results ?? []
+  }, [showEmptyState, initialUsers, results])
 
   return (
     <div className="flex flex-col gap-4">

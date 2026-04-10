@@ -38,12 +38,41 @@ export default function ProfileStats({
 
   const hasStats = publicDeckCount > 0 || (isSelf && totalDeckCount > 0)
 
+  // Self-view on a profile with zero public decks: even if the RPC returned
+  // commander/most-used-card/colors derived from private decks, we suppress
+  // the tiles that could leak identifiable cards. This keeps the "public
+  // profile" preview honest — it shows what visitors would actually see.
+  const hidePrivateDerivedTiles = isSelf && publicDeckCount === 0
+
   if (!hasStats) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-bg-card p-8 text-center">
         <p className="text-sm text-font-muted">
           {isSelf ? 'No decks yet. Create one to see your stats.' : 'No public decks yet.'}
         </p>
+      </div>
+    )
+  }
+
+  if (hidePrivateDerivedTiles) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="rounded-xl border border-border bg-bg-surface p-4">
+          <div className="flex items-center gap-2 text-xs text-font-muted">
+            <Layers className="h-3.5 w-3.5" /> Public decks
+          </div>
+          <p className="mt-2 text-2xl font-bold text-font-primary">0</p>
+          {totalDeckCount > 0 && (
+            <p className="text-[11px] text-font-muted">
+              {totalDeckCount} private (only you can see)
+            </p>
+          )}
+        </div>
+        <div className="rounded-xl border border-dashed border-border bg-bg-card p-6 text-center">
+          <p className="text-sm text-font-muted">
+            Toggle a deck to public to populate the rest of your public profile.
+          </p>
+        </div>
       </div>
     )
   }

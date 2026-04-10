@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { Crown, Copy, Check, Lock, Globe } from 'lucide-react'
+import { Copy, Check, Globe } from 'lucide-react'
 import DeckContent, { type DeckCardEntry } from './DeckContent'
 import DeckStats from './DeckStats'
 import CardDetail from '@/components/cards/CardDetail'
@@ -26,6 +26,7 @@ export default function DeckView({
 }: DeckViewProps) {
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
 
   const commanderCards = useMemo(
     () => cards.filter((c) => c.board === 'commander'),
@@ -52,12 +53,11 @@ export default function DeckView({
       await navigator.clipboard.writeText(lines)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // silently fail
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : 'Clipboard blocked')
+      setTimeout(() => setCopyError(null), 3000)
     }
   }
-
-  const visibility = (deck.visibility as 'private' | 'public') ?? 'private'
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
@@ -70,15 +70,12 @@ export default function DeckView({
           <span className="shrink-0 rounded-full bg-bg-cell px-2 py-0.5 text-[10px] sm:px-3 sm:py-1 sm:text-xs font-medium text-font-secondary">
             {deck.format}
           </span>
-          {visibility === 'public' ? (
-            <span className="flex items-center gap-1 rounded-full bg-bg-green/20 px-2 py-0.5 text-[10px] font-bold text-bg-green">
-              <Globe className="h-3 w-3" /> Public
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 rounded-full bg-bg-cell px-2 py-0.5 text-[10px] font-bold text-font-muted">
-              <Lock className="h-3 w-3" /> Private
-            </span>
-          )}
+          {/* DeckView is only reached for public decks — the deck page branches
+              to notFound() for non-owners of private decks. So we always show
+              the Public badge here. */}
+          <span className="flex items-center gap-1 rounded-full bg-bg-green/20 px-2 py-0.5 text-[10px] font-bold text-bg-green">
+            <Globe className="h-3 w-3" /> Public
+          </span>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -106,19 +103,15 @@ export default function DeckView({
               </>
             )}
           </button>
+          {copyError && (
+            <span className="text-[11px] text-bg-red">{copyError}</span>
+          )}
         </div>
       </div>
 
       {/* Two-panel layout */}
       <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
         <div className="flex-1">
-          {commanderCards.length > 0 && (
-            <div className="mb-4">
-              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-bg-yellow">
-                <Crown className="h-4 w-4" /> Commander
-              </h3>
-            </div>
-          )}
           <DeckContent
             cards={mainCards}
             commanderCards={commanderCards}
