@@ -1,7 +1,8 @@
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import DeckEditor from '@/components/deck/DeckEditor'
+import DeckView from '@/components/deck/DeckView'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -26,8 +27,6 @@ export default async function DeckDetailPage({
 
   const supabase = await createClient()
 
-  // Fetch deck metadata and deck_cards in parallel — neither depends on the other.
-  // We still check ownership after the deck query returns.
   const [{ data: deck, error: deckError }, { data: deckCards }] = await Promise.all([
     supabase.from('decks').select('*').eq('id', id).single(),
     supabase
@@ -43,8 +42,12 @@ export default async function DeckDetailPage({
       .eq('deck_id', id),
   ])
 
-  if (deckError || !deck) redirect('/decks')
-  if (deck.user_id !== user.id) redirect('/decks')
+  if (deckError || !deck) notFound()
+
+  const isOwner = deck.user_id === user.id
+  const visibility = (deck.visibility as 'private' | 'public') ?? 'private'
+
+  if (!isOwner && visibility !== 'public') notFound()
 
   const formattedCards = ((deckCards ?? []) as unknown as DeckCardFromDB[])
     .filter((dc) => dc.card != null)
@@ -55,5 +58,25 @@ export default async function DeckDetailPage({
       board: dc.board,
     }))
 
-  return <DeckEditor deck={deck} initialCards={formattedCards} />
+  if (isOwner) {
+    return <DeckEditor deck={deck} initialCards={formattedCards} />
+  }
+
+  // Visitor path: fetch the owner's profile for the "by @username" pill
+  const { data: ownerProfile } = await supabase
+    .from('profiles')
+    .select('username, display_name')
+    .eq('id', deck.user_id)
+    .single()
+
+  if (!ownerProfile) notFound()
+
+  return (
+    <DeckView
+      deck={deck}
+      cards={formattedCards}
+      ownerUsername={ownerProfile.username}
+      ownerDisplayName={ownerProfile.display_name}
+    />
+  )
 }
