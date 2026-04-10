@@ -5,28 +5,53 @@ import { Plus, Upload, Clock, Layers } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 
+interface DeckCover {
+  card_id: string | null
+  card_name: string | null
+  image_small: string | null
+  image_normal: string | null
+  image_art_crop: string | null
+}
+
 export default async function DecksPage() {
   const user = await getAuthenticatedUser()
   if (!user) redirect('/login')
 
   const supabase = await createClient()
 
-  const { data: decks } = await supabase
-    .from('decks')
-    .select(`
-      *,
-      cover_card:cards!cover_card_id(id, name, image_small, image_normal, image_art_crop),
-      deck_cards(quantity)
-    `)
-    .eq('user_id', user.id)
-    .order('updated_at', { ascending: false })
+  // Fetch the deck list and the auto-derived thumbnails in parallel.
+  // `get_deck_covers(p_user_id)` returns one row per deck: the commander
+  // if present, otherwise the first main-deck card by created_at.
+  const [{ data: decks }, { data: covers }] = await Promise.all([
+    supabase
+      .from('decks')
+      .select(`
+        id, name, format, updated_at,
+        deck_cards(quantity)
+      `)
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false }),
+    supabase.rpc('get_deck_covers', { p_user_id: user.id }),
+  ])
+
+  const coverByDeckId = new Map<string, DeckCover>()
+  for (const row of covers ?? []) {
+    coverByDeckId.set(row.deck_id, {
+      card_id: row.card_id,
+      card_name: row.card_name,
+      image_small: row.image_small,
+      image_normal: row.image_normal,
+      image_art_crop: row.image_art_crop,
+    })
+  }
 
   const decksWithCount = (decks ?? []).map((deck) => ({
     ...deck,
     card_count: (deck.deck_cards as { quantity: number }[])?.reduce(
       (sum: number, dc: { quantity: number }) => sum + dc.quantity,
-      0
+      0,
     ) ?? 0,
+    cover: coverByDeckId.get(deck.id) ?? null,
   }))
 
   return (
@@ -82,13 +107,9 @@ export default async function DecksPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {decksWithCount.map((deck) => {
-            const coverCard = deck.cover_card as {
-              id: number
-              name: string
-              image_small: string | null
-              image_normal: string | null
-              image_art_crop: string | null
-            } | null
+            const cover = deck.cover
+            const coverSrc = cover?.image_art_crop ?? cover?.image_normal ?? null
+            const coverAlt = cover?.card_name ?? deck.name
 
             return (
               <Link
@@ -98,18 +119,10 @@ export default async function DecksPage() {
               >
                 {/* Cover image */}
                 <div className="relative aspect-[5/3] w-full overflow-hidden bg-bg-cell">
-                  {coverCard?.image_art_crop ? (
+                  {coverSrc ? (
                     <Image
-                      src={coverCard.image_art_crop}
-                      alt={coverCard.name}
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
-                      className="object-cover transition-transform group-hover:scale-105"
-                    />
-                  ) : coverCard?.image_normal ? (
-                    <Image
-                      src={coverCard.image_normal}
-                      alt={coverCard.name}
+                      src={coverSrc}
+                      alt={coverAlt}
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                       className="object-cover transition-transform group-hover:scale-105"

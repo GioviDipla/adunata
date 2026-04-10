@@ -390,6 +390,17 @@ export interface Database {
         Args: { card_names: string[] }
         Returns: Database['public']['Tables']['cards']['Row'][]
       }
+      get_deck_covers: {
+        Args: { p_user_id: string }
+        Returns: {
+          deck_id: string
+          card_id: string | null
+          card_name: string | null
+          image_small: string | null
+          image_normal: string | null
+          image_art_crop: string | null
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
