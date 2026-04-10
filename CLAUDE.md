@@ -6,6 +6,36 @@ Lavora in modo completamente autonomo, senza mai fermarti per chiedere conferme,
 
 L'unico momento in cui puoi fermarti è quando l'intero progetto è completato, testato e funzionante.
 
+## Strumenti obbligatori
+
+Usa SEMPRE questi strumenti proattivamente, senza aspettare che l'utente te li richieda. Non sono opzionali.
+
+### 1. Plugin `superpowers` e le sue skill
+Il plugin `superpowers` espone skill strutturate per le fasi ricorrenti del lavoro. All'inizio di ogni task, decidi quale skill si applica e invocala con il `Skill` tool. La regola di `superpowers:using-superpowers` si applica: **se c'è anche solo l'1% di possibilità che una skill sia pertinente, invocala**.
+
+Skill rilevanti per questo progetto:
+- **brainstorming** → creative work / nuove feature / modifiche di comportamento *quando i requisiti non sono già fissati*. Se l'utente ha già specificato cosa fare, salta brainstorming e vai a writing-plans.
+- **writing-plans** → implementazioni multi-step. Prima del codice, sempre.
+- **subagent-driven-development** / **executing-plans** → per eseguire un piano esistente con review gates.
+- **systematic-debugging** → bug, test failure, comportamento inatteso. Non iniziare a "provare fix" senza prima invocarla.
+- **verification-before-completion** → prima di dichiarare che qualcosa è fatto/funziona.
+- **dispatching-parallel-agents** → quando hai 2+ task indipendenti senza stato condiviso.
+- **test-driven-development** → scrittura di nuovo codice con test (non applicabile a questo progetto finché non c'è un test runner).
+- **requesting-code-review** → al completamento di feature di taglia rilevante (>5 commit).
+- **finishing-a-development-branch** → prima di un merge / PR finale.
+- **using-git-worktrees** → per lavori che richiedono isolamento dal workspace corrente.
+
+Nota sulla tensione con "lavora autonomamente": brainstorming *fa domande*, il che sembra in conflitto con la regola "non chiedere conferme". La risoluzione: brainstorming è per *ambiguità di requisiti*, non per conferme di implementazione. Se l'utente dice "aggiungi feature X e fammi domande", invoca brainstorming fino in fondo. Se l'utente dice "sistema il bug Y", invoca systematic-debugging e procedi autonomamente. Le skill sono strumenti, non interrogatori.
+
+### 2. `mcp__sequential-thinking__sequentialthinking`
+Usa il tool sequential-thinking per:
+- Bug complessi con più ipotesi da esplorare (sostituisce il "provo e vedo")
+- Decisioni architetturali con trade-off multipli
+- Pianificazione di sequenze dipendenti (quando writing-plans è overkill ma serve comunque ordine)
+- Qualunque situazione in cui ti trovi a "pensare in loop" internamente
+
+Il sequential-thinking rende il ragionamento visibile, riduce errori di sequenza e produce decisioni più solide. Mai skipparlo pensando "è solo riflessione interna" — è richiesto.
+
 ## Gestione delle decisioni tecniche
 
 Ogni volta che devi fare una scelta tecnica — libreria, struttura, approccio architetturale — prendila autonomamente scegliendo la soluzione più solida, manutenibile e adatta agli obiettivi del progetto. Documenta ogni scelta non ovvia in `DECISIONS.md` con una riga sintetica che spiega cosa hai scelto e perché.
