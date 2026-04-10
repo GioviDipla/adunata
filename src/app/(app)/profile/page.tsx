@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -26,6 +26,15 @@ export default function ProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Public profile
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [usernameChangedAt, setUsernameChangedAt] = useState<string | null>(null);
+  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [usernameDirty, setUsernameDirty] = useState(false);
+
   useEffect(() => {
     async function loadProfile() {
       const {
@@ -50,6 +59,19 @@ export default function ProfilePage() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
       setDeckCount(count ?? 0);
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, display_name, bio, username_changed_at')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        setUsername(profile.username);
+        setDisplayName(profile.display_name);
+        setBio(profile.bio ?? '');
+        setUsernameChangedAt(profile.username_changed_at);
+      }
     }
     loadProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,6 +133,48 @@ export default function ProfilePage() {
     router.push('/login');
   };
 
+  const cooldownDaysLeft = useMemo(() => {
+    if (!usernameChangedAt) return 0;
+    const last = new Date(usernameChangedAt).getTime();
+    const days = (Date.now() - last) / (1000 * 60 * 60 * 24);
+    return Math.max(0, Math.ceil(15 - days));
+  }, [usernameChangedAt]);
+
+  const canChangeUsername = cooldownDaysLeft === 0;
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileMsg(null);
+    setProfileLoading(true);
+
+    const body: Record<string, string | null> = {
+      display_name: displayName,
+      bio: bio.length > 0 ? bio : null,
+    };
+    if (usernameDirty) {
+      body.username = username;
+    }
+
+    const res = await fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setProfileMsg({ type: 'error', text: data.error ?? 'Update failed' });
+    } else {
+      setProfileMsg({ type: 'success', text: 'Profile updated' });
+      setUsernameDirty(false);
+      if (data.profile?.username_changed_at) {
+        setUsernameChangedAt(data.profile.username_changed_at);
+      }
+    }
+    setProfileLoading(false);
+  };
+
   const handleDeleteAccount = async () => {
     setDeleteLoading(true);
     // Call an API route to delete the account (requires admin/service key)
@@ -147,6 +211,80 @@ export default function ProfilePage() {
             <p className="text-font-primary">{deckCount}</p>
           </div>
         </div>
+      </section>
+
+      {/* Public Profile */}
+      <section className="rounded-xl border border-border bg-bg-surface p-5">
+        <h2 className="mb-4 text-lg font-semibold text-font-primary">
+          Public Profile
+        </h2>
+        <form onSubmit={handleSaveProfile} className="space-y-3">
+          <div>
+            <label className="mb-1 block text-sm text-font-secondary">Username</label>
+            <div className="flex items-center gap-2">
+              <span className="text-font-muted">@</span>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                  setUsernameDirty(true);
+                }}
+                disabled={!canChangeUsername}
+                pattern="^[a-z0-9_]{3,24}$"
+                className="w-full rounded-lg border border-border bg-bg-card px-3 py-2 text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none disabled:opacity-60"
+              />
+            </div>
+            {!canChangeUsername && (
+              <p className="mt-1 text-xs text-font-muted">
+                You can change your username again in {cooldownDaysLeft} day{cooldownDaysLeft === 1 ? '' : 's'}.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-font-secondary">Display name</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={40}
+              className="w-full rounded-lg border border-border bg-bg-card px-3 py-2 text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-font-secondary">Bio</label>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={240}
+              rows={3}
+              className="w-full resize-none rounded-lg border border-border bg-bg-card px-3 py-2 text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+            />
+            <p className="mt-1 text-right text-xs text-font-muted">
+              {bio.length}/240
+            </p>
+          </div>
+
+          {profileMsg && (
+            <p
+              className={`text-sm ${
+                profileMsg.type === 'error' ? 'text-bg-red' : 'text-bg-green'
+              }`}
+            >
+              {profileMsg.text}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={profileLoading}
+            className="w-full rounded-lg bg-bg-accent px-4 py-2.5 text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark disabled:opacity-50"
+          >
+            {profileLoading ? 'Saving...' : 'Save'}
+          </button>
+        </form>
       </section>
 
       {/* Change Password */}
