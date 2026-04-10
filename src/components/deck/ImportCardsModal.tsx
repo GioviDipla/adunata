@@ -1,18 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { X, Upload, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { parseDeckList } from '@/lib/utils/deckParser'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
-
-interface ImportResult {
-  name: string
-  status: 'success' | 'error' | 'pending'
-  message?: string
-}
 
 interface ImportCardsModalProps {
   deckId: string
@@ -29,8 +23,8 @@ export default function ImportCardsModal({
 }: ImportCardsModalProps) {
   const [text, setText] = useState('')
   const [importing, setImporting] = useState(false)
-  const [progress, setProgress] = useState<ImportResult[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [failures, setFailures] = useState<string[]>([])
 
   async function handleImport() {
     if (!text.trim()) {
@@ -46,98 +40,51 @@ export default function ImportCardsModal({
 
     setImporting(true)
     setError(null)
-    setProgress(
-      parsed.map((c) => ({
-        name: `${c.quantity}x ${c.name}`,
-        status: 'pending' as const,
-      }))
-    )
+    setFailures([])
 
-    const importedCards: { card: CardRow; board: string }[] = []
-    const errors: string[] = []
+    try {
+      const res = await fetch(`/api/decks/${deckId}/cards/bulk-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: parsed.map((p) => ({
+            name: p.name,
+            quantity: p.quantity,
+            board: p.board,
+          })),
+        }),
+      })
 
-    for (let i = 0; i < parsed.length; i++) {
-      const entry = parsed[i]
-
-      setProgress((prev) =>
-        prev.map((p, idx) =>
-          idx === i ? { ...p, message: 'Looking up...' } : p
-        )
-      )
-
-      try {
-        const lookupRes = await fetch(
-          `/api/cards/lookup?name=${encodeURIComponent(entry.name)}`
-        )
-
-        if (!lookupRes.ok) {
-          setProgress((prev) =>
-            prev.map((p, idx) =>
-              idx === i
-                ? { ...p, status: 'error' as const, message: 'Card not found' }
-                : p
-            )
-          )
-          errors.push(entry.name)
-          continue
-        }
-
-        const { card } = await lookupRes.json()
-
-        const addRes = await fetch(`/api/decks/${deckId}/cards`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            card_id: card.id,
-            quantity: entry.quantity,
-            board: entry.board,
-          }),
-        })
-
-        if (addRes.ok) {
-          setProgress((prev) =>
-            prev.map((p, idx) =>
-              idx === i
-                ? { ...p, status: 'success' as const, message: 'Added' }
-                : p
-            )
-          )
-          importedCards.push({ card, board: entry.board })
-        } else {
-          setProgress((prev) =>
-            prev.map((p, idx) =>
-              idx === i
-                ? { ...p, status: 'error' as const, message: 'Failed to add' }
-                : p
-            )
-          )
-          errors.push(entry.name)
-        }
-      } catch {
-        setProgress((prev) =>
-          prev.map((p, idx) =>
-            idx === i
-              ? { ...p, status: 'error' as const, message: 'Lookup failed' }
-              : p
-          )
-        )
-        errors.push(entry.name)
+      const data = await res.json() as {
+        imported?: { card: CardRow; board: string }[]
+        failures?: { name: string; reason: string }[]
+        error?: string
       }
 
-      await new Promise((r) => setTimeout(r, 120))
+      if (!res.ok) {
+        setError(data.error ?? 'Import failed')
+        setImporting(false)
+        return
+      }
+
+      const imported = data.imported ?? []
+      const failed = data.failures ?? []
+
+      if (imported.length > 0) {
+        onCardsImported(imported.map((i) => ({ card: i.card, board: i.board })))
+      }
+
+      if (failed.length === 0) {
+        onClose()
+      } else {
+        setFailures(failed.map((f) => f.name))
+        setError(`${failed.length} card(s) could not be imported.`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed')
     }
 
     setImporting(false)
-
-    if (importedCards.length > 0) {
-      onCardsImported(importedCards)
-    }
-
-    if (errors.length === 0) {
-      onClose()
-    } else {
-      setError(`${errors.length} card(s) could not be imported.`)
-    }
   }
 
   return (
@@ -173,41 +120,23 @@ export default function ImportCardsModal({
           {error && (
             <div className="mt-3 flex items-start gap-2 rounded-lg bg-bg-red/10 px-3 py-2 text-xs text-bg-red">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              {error}
+              <div className="flex flex-col gap-1">
+                <span>{error}</span>
+                {failures.length > 0 && (
+                  <ul className="list-disc pl-4 text-[11px] text-bg-red/80">
+                    {failures.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           )}
 
-          {progress.length > 0 && (
-            <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-border bg-bg-card p-3">
-              <div className="flex flex-col gap-1">
-                {progress.map((item, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    {item.status === 'pending' && (
-                      <Loader2 className="h-3 w-3 animate-spin text-font-muted" />
-                    )}
-                    {item.status === 'success' && (
-                      <CheckCircle2 className="h-3 w-3 text-bg-green" />
-                    )}
-                    {item.status === 'error' && (
-                      <AlertCircle className="h-3 w-3 text-bg-red" />
-                    )}
-                    <span
-                      className={
-                        item.status === 'error'
-                          ? 'text-bg-red'
-                          : item.status === 'success'
-                            ? 'text-font-primary'
-                            : 'text-font-muted'
-                      }
-                    >
-                      {item.name}
-                    </span>
-                    {item.message && (
-                      <span className="text-font-muted">— {item.message}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {importing && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-bg-card px-3 py-2 text-xs text-font-muted">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Importing {parseDeckList(text, currentBoard).length} cards...
             </div>
           )}
 

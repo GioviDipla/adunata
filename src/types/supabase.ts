@@ -386,7 +386,10 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      lookup_cards_by_names: {
+        Args: { card_names: string[] }
+        Returns: Database['public']['Tables']['cards']['Row'][]
+      }
     }
     Enums: {
       [_ in never]: never

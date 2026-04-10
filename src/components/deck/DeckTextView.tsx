@@ -15,6 +15,8 @@ interface DeckCardEntry {
 
 interface DeckTextViewProps {
   cards: DeckCardEntry[]
+  /** Pre-grouped and sorted cards. If provided, `cards` is ignored and these groups are rendered as-is. */
+  groups?: [string, DeckCardEntry[]][]
   isCommander?: (cardId: number) => boolean
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
@@ -22,11 +24,12 @@ interface DeckTextViewProps {
 
 export default function DeckTextView({
   cards,
+  groups: groupsProp,
   isCommander,
   onToggleCommander,
   onCardClick,
 }: DeckTextViewProps) {
-  if (cards.length === 0) {
+  if (cards.length === 0 && (!groupsProp || groupsProp.length === 0)) {
     return (
       <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
         <p className="text-font-muted">No cards in this section.</p>
@@ -34,21 +37,25 @@ export default function DeckTextView({
     )
   }
 
-  // Group by type
-  const groups: Record<string, DeckCardEntry[]> = {}
-  cards.forEach((entry) => {
-    if (!entry.card) return
-    const cat = getCardTypeCategory(entry.card.type_line)
-    if (!groups[cat]) groups[cat] = []
-    groups[cat].push(entry)
-  })
-
-  const sorted: [string, DeckCardEntry[]][] = []
-  TYPE_ORDER.forEach((type) => {
-    if (groups[type]) {
-      sorted.push([type, groups[type].sort((a, b) => a.card.name.localeCompare(b.card.name))])
-    }
-  })
+  let sorted: [string, DeckCardEntry[]][]
+  if (groupsProp) {
+    sorted = groupsProp
+  } else {
+    // Fallback: group by type, sort by name within (used by commander section)
+    const groups: Record<string, DeckCardEntry[]> = {}
+    cards.forEach((entry) => {
+      if (!entry.card) return
+      const cat = getCardTypeCategory(entry.card.type_line)
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(entry)
+    })
+    sorted = []
+    TYPE_ORDER.forEach((type) => {
+      if (groups[type]) {
+        sorted.push([type, groups[type].sort((a, b) => a.card.name.localeCompare(b.card.name))])
+      }
+    })
+  }
 
   return (
     <div className="rounded-xl border border-border bg-bg-surface p-4">
