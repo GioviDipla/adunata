@@ -1,17 +1,15 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { Plus, Upload, Clock, Layers } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 
 export default async function DecksPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
+  if (!user) redirect('/login')
 
-  if (!user) {
-    redirect('/login')
-  }
+  const supabase = await createClient()
 
   const { data: decks } = await supabase
     .from('decks')
@@ -101,16 +99,20 @@ export default async function DecksPage() {
                 {/* Cover image */}
                 <div className="relative aspect-[5/3] w-full overflow-hidden bg-bg-cell">
                   {coverCard?.image_art_crop ? (
-                    <img
+                    <Image
                       src={coverCard.image_art_crop}
                       alt={coverCard.name}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                      className="object-cover transition-transform group-hover:scale-105"
                     />
                   ) : coverCard?.image_normal ? (
-                    <img
+                    <Image
                       src={coverCard.image_normal}
                       alt={coverCard.name}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                      className="object-cover transition-transform group-hover:scale-105"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
 
@@ -24,9 +25,12 @@ export default function CardItem({ card, onSelect }: CardItemProps) {
       {/* Card image */}
       <div className="relative overflow-hidden rounded-lg bg-bg-card border border-border transition-all duration-200 group-hover:scale-[1.03] group-hover:shadow-xl group-hover:border-border-light">
         {card.image_small ? (
-          <img
+          <Image
             src={card.image_small}
             alt={card.name}
+            width={146}
+            height={204}
+            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 20vw"
             className="w-full aspect-[5/7] object-cover"
             loading="lazy"
           />
@@ -58,10 +62,13 @@ export default function CardItem({ card, onSelect }: CardItemProps) {
       {/* Hover preview tooltip */}
       {showPreview && card.image_normal && (
         <div className="hidden lg:block absolute z-50 left-full ml-3 top-0 pointer-events-none">
-          <img
+          <Image
             src={card.image_normal}
             alt={card.name}
+            width={256}
+            height={358}
             className="w-64 rounded-lg shadow-2xl border border-border-light"
+            unoptimized
           />
         </div>
       )}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { X, Plus, ChevronDown, Loader2 } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
@@ -103,20 +104,31 @@ export default function CardDetail({ card, onClose, onPrintingSelect }: CardDeta
             <div className="shrink-0 flex flex-col gap-3">
               <div className="flex gap-3">
                 {isDoubleFaced ? (
-                  cardFaces.map((face, i) => (
-                    <img
-                      key={i}
-                      src={face.image_normal || displayCard.image_normal || ''}
-                      alt={face.name || displayCard.name}
-                      className="w-56 rounded-lg shadow-lg"
-                    />
-                  ))
+                  cardFaces.map((face, i) => {
+                    const src = face.image_normal || displayCard.image_normal || ''
+                    return src ? (
+                      <Image
+                        key={i}
+                        src={src}
+                        alt={face.name || displayCard.name}
+                        width={224}
+                        height={312}
+                        className="w-56 h-auto rounded-lg shadow-lg"
+                        priority
+                      />
+                    ) : null
+                  })
                 ) : (
-                  <img
-                    src={displayCard.image_normal || displayCard.image_small || ''}
-                    alt={displayCard.name}
-                    className="w-56 rounded-lg shadow-lg"
-                  />
+                  (displayCard.image_normal || displayCard.image_small) && (
+                    <Image
+                      src={displayCard.image_normal || displayCard.image_small || ''}
+                      alt={displayCard.name}
+                      width={224}
+                      height={312}
+                      className="w-56 h-auto rounded-lg shadow-lg"
+                      priority
+                    />
+                  )
                 )}
               </div>
 
@@ -146,7 +158,14 @@ export default function CardDetail({ card, onClose, onPrintingSelect }: CardDeta
                       }`}
                     >
                       {p.image_small && (
-                        <img src={p.image_small} alt={p.set_name ?? ''} className="h-8 w-auto rounded" />
+                        <Image
+                          src={p.image_small}
+                          alt={p.set_name ?? ''}
+                          width={29}
+                          height={40}
+                          className="h-8 w-auto rounded"
+                          unoptimized
+                        />
                       )}
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-xs font-medium">

@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedUser } from "@/lib/supabase/get-user";
+import { redirect } from "next/navigation";
 import {
   Search,
   Plus,
@@ -10,46 +12,36 @@ import {
 import Link from "next/link";
 
 export default async function DashboardPage() {
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login");
+
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // All queries run in parallel. RLS on `deck_cards` already restricts to
+  // the current user's decks, so we don't need a user_id filter or an extra
+  // query to fetch deck_ids first.
+  const [
+    { count: deckCount },
+    { data: allDeckCards },
+    { data: recentDecks },
+  ] = await Promise.all([
+    supabase
+      .from("decks")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id),
+    supabase.from("deck_cards").select("quantity"),
+    supabase
+      .from("decks")
+      .select("id, name, format, updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(5),
+  ]);
 
-  // Fetch deck count
-  const { count: deckCount } = await supabase
-    .from("decks")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user!.id);
-
-  // Fetch total cards across all decks
-  const { data: deckIds } = await supabase
-    .from("decks")
-    .select("id")
-    .eq("user_id", user!.id);
-
-  let totalCards = 0;
-  if (deckIds && deckIds.length > 0) {
-    const { data: cardCounts } = await supabase
-      .from("deck_cards")
-      .select("quantity")
-      .in(
-        "deck_id",
-        deckIds.map((d) => d.id)
-      );
-
-    if (cardCounts) {
-      totalCards = cardCounts.reduce((sum, c) => sum + c.quantity, 0);
-    }
-  }
-
-  // Fetch recent decks
-  const { data: recentDecks } = await supabase
-    .from("decks")
-    .select("id, name, format, updated_at")
-    .eq("user_id", user!.id)
-    .order("updated_at", { ascending: false })
-    .limit(5);
+  const totalCards = (allDeckCards ?? []).reduce(
+    (sum, c) => sum + (c.quantity ?? 0),
+    0,
+  );
 
   const quickActions = [
     {
@@ -79,7 +71,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold text-font-primary">
           Welcome back
         </h1>
-        <p className="mt-1 text-sm text-font-secondary">{user!.email}</p>
+        <p className="mt-1 text-sm text-font-secondary">{user.email}</p>
       </div>
 
       {/* Stats */}

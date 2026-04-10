@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedUser } from "@/lib/supabase/get-user";
 import { Navbar } from "@/components/Navbar";
 
 export default async function AppLayout({
@@ -7,14 +7,10 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  // Cached via React.cache() — child server components reuse this result
+  // instead of triggering additional Supabase auth round-trips.
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login");
 
   return (
     <div className="min-h-screen bg-bg-dark">

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import GoldfishGame from '@/components/goldfish/GoldfishGame'
 import type { Database } from '@/types/supabase'
 
@@ -20,44 +21,30 @@ export default async function GoldfishPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const user = await getAuthenticatedUser()
+  if (!user) redirect('/login')
+
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/login')
-  }
+  // Fetch deck metadata and deck_cards in parallel
+  const [{ data: deck, error: deckError }, { data: deckCards }] = await Promise.all([
+    supabase.from('decks').select('*').eq('id', id).single(),
+    supabase
+      .from('deck_cards')
+      .select(`
+        id,
+        card_id,
+        quantity,
+        board,
+        created_at,
+        card:cards!card_id(*)
+      `)
+      .eq('deck_id', id)
+      .in('board', ['main', 'commander']),
+  ])
 
-  // Fetch deck
-  const { data: deck, error: deckError } = await supabase
-    .from('decks')
-    .select('*')
-    .eq('id', id)
-    .single()
-
-  if (deckError || !deck) {
-    redirect('/decks')
-  }
-
-  // Check ownership
-  if (deck.user_id !== user.id) {
-    redirect('/decks')
-  }
-
-  // Fetch deck cards with card data (main + commander)
-  const { data: deckCards } = await supabase
-    .from('deck_cards')
-    .select(`
-      id,
-      card_id,
-      quantity,
-      board,
-      created_at,
-      card:cards!card_id(*)
-    `)
-    .eq('deck_id', id)
-    .in('board', ['main', 'commander'])
+  if (deckError || !deck) redirect('/decks')
+  if (deck.user_id !== user.id) redirect('/decks')
 
   // Separate commander from main deck
   const commanders: CardRow[] = []

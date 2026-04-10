@@ -1,25 +1,29 @@
-import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import CreateLobby from '@/components/play/CreateLobby'
 import JoinLobby from '@/components/play/JoinLobby'
 
 export default async function PlayPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthenticatedUser()
   if (!user) redirect('/login')
 
-  // Get user's decks for deck selection
-  const { data: decks } = await supabase
-    .from('decks')
-    .select('id, name, format')
-    .eq('user_id', user.id)
-    .order('updated_at', { ascending: false })
+  const supabase = await createClient()
 
-  // Get active lobbies the user is in (two queries — types lack FK relationship)
-  const { data: myPlayers } = await supabase
-    .from('game_players')
-    .select('lobby_id')
-    .eq('user_id', user.id)
+  // Decks and game_players can be fetched in parallel — independent queries.
+  // The final active-lobbies query depends on myPlayers, so it waits.
+  const [{ data: decks }, { data: myPlayers }] = await Promise.all([
+    supabase
+      .from('decks')
+      .select('id, name, format')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false }),
+    supabase
+      .from('game_players')
+      .select('lobby_id')
+      .eq('user_id', user.id),
+  ])
 
   const lobbyIds = myPlayers?.map((p) => p.lobby_id) ?? []
 
@@ -43,7 +47,7 @@ export default async function PlayPage() {
           <h2 className="mb-3 text-sm font-semibold text-font-secondary">Active Games</h2>
           <div className="flex flex-col gap-2">
             {activeLobbies.map((lobby) => (
-              <a
+              <Link
                 key={lobby.id}
                 href={lobby.status === 'playing' ? `/play/${lobby.id}/game` : `/play/${lobby.id}`}
                 className="flex items-center justify-between rounded-xl border border-border bg-bg-card px-4 py-3 transition-colors hover:bg-bg-hover"
@@ -57,7 +61,7 @@ export default async function PlayPage() {
                 }`}>
                   {lobby.status === 'playing' ? 'In Game' : 'Waiting'}
                 </span>
-              </a>
+              </Link>
             ))}
           </div>
         </div>
