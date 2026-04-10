@@ -11,8 +11,8 @@ interface DeckCardProps {
   quantity: number
   board: string
   isCommander?: boolean
-  onQuantityChange: (cardId: number, quantity: number, board: string) => void
-  onRemove: (cardId: number, board: string) => void
+  onQuantityChange?: (cardId: number, quantity: number, board: string) => void
+  onRemove?: (cardId: number, board: string) => void
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
 }
@@ -90,23 +90,27 @@ export default function DeckCard({
     >
       {/* Quantity controls */}
       <div className="flex items-center gap-0.5 sm:gap-1">
-        <button
-          onClick={() => onQuantityChange(card.id, quantity - 1, board)}
-          className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
-          aria-label="Decrease quantity"
-        >
-          <Minus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-        </button>
+        {onQuantityChange && (
+          <button
+            onClick={() => onQuantityChange(card.id, quantity - 1, board)}
+            className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+            aria-label="Decrease quantity"
+          >
+            <Minus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+          </button>
+        )}
         <span className="w-4 sm:w-6 text-center text-xs sm:text-sm font-medium text-font-primary">
           {quantity}
         </span>
-        <button
-          onClick={() => onQuantityChange(card.id, quantity + 1, board)}
-          className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
-          aria-label="Increase quantity"
-        >
-          <Plus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-        </button>
+        {onQuantityChange && (
+          <button
+            onClick={() => onQuantityChange(card.id, quantity + 1, board)}
+            className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+            aria-label="Increase quantity"
+          >
+            <Plus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+          </button>
+        )}
       </div>
 
       {/* Card info */}
@@ -156,13 +160,15 @@ export default function DeckCard({
       )}
 
       {/* Remove button */}
-      <button
-        onClick={() => onRemove(card.id, board)}
-        className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded text-font-muted opacity-0 transition-all hover:bg-bg-red/20 hover:text-bg-red group-hover:opacity-100"
-        aria-label="Remove card"
-      >
-        <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-      </button>
+      {onRemove && (
+        <button
+          onClick={() => onRemove(card.id, board)}
+          className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded text-font-muted opacity-0 transition-all hover:bg-bg-red/20 hover:text-bg-red group-hover:opacity-100"
+          aria-label="Remove card"
+        >
+          <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        </button>
+      )}
 
       {/* Card image preview on hover */}
       {showPreview && card.image_normal && (

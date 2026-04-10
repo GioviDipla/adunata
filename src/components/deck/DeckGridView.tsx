@@ -14,11 +14,12 @@ interface DeckCardEntry {
 
 interface DeckGridViewProps {
   cards: DeckCardEntry[]
-  onQuantityChange: (cardId: number, quantity: number, board: string) => void
-  onRemove: (cardId: number, board: string) => void
+  onQuantityChange?: (cardId: number, quantity: number, board: string) => void
+  onRemove?: (cardId: number, board: string) => void
   isCommander?: (cardId: number) => boolean
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
+  readOnly?: boolean
 }
 
 export default function DeckGridView({
@@ -28,6 +29,7 @@ export default function DeckGridView({
   isCommander,
   onToggleCommander,
   onCardClick,
+  readOnly = false,
 }: DeckGridViewProps) {
   if (cards.length === 0) {
     return (
@@ -83,48 +85,56 @@ export default function DeckGridView({
             )}
 
             {/* Hover overlay with actions */}
-            <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-bg-dark/90 via-bg-dark/60 to-transparent p-2 pt-8 opacity-0 transition-opacity group-hover:opacity-100">
-              <span className="mb-1 truncate text-xs font-medium text-font-primary">
-                {entry.card.name}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() =>
-                    onQuantityChange(entry.card.id, entry.quantity - 1, entry.board)
-                  }
-                  className="flex h-6 flex-1 items-center justify-center rounded bg-bg-cell/80 text-xs font-medium text-font-primary hover:bg-bg-hover"
-                >
-                  -
-                </button>
-                <button
-                  onClick={() =>
-                    onQuantityChange(entry.card.id, entry.quantity + 1, entry.board)
-                  }
-                  className="flex h-6 flex-1 items-center justify-center rounded bg-bg-cell/80 text-xs font-medium text-font-primary hover:bg-bg-hover"
-                >
-                  +
-                </button>
-                <button
-                  onClick={() => onRemove(entry.card.id, entry.board)}
-                  className="flex h-6 flex-1 items-center justify-center rounded bg-bg-red/30 text-xs font-medium text-bg-red hover:bg-bg-red/50"
-                >
-                  Del
-                </button>
-                {onToggleCommander && (
-                  <button
-                    onClick={() => onToggleCommander(entry.card.id, entry.board)}
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
-                      commander
-                        ? 'bg-bg-yellow/30 text-bg-yellow'
-                        : 'bg-bg-cell/80 text-font-muted hover:text-bg-yellow'
-                    }`}
-                    title={commander ? 'Remove Commander' : 'Set as Commander'}
-                  >
-                    <Crown className="h-3 w-3" />
-                  </button>
-                )}
+            {!readOnly && (
+              <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-bg-dark/90 via-bg-dark/60 to-transparent p-2 pt-8 opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="mb-1 truncate text-xs font-medium text-font-primary">
+                  {entry.card.name}
+                </span>
+                <div className="flex items-center gap-1">
+                  {onQuantityChange && (
+                    <button
+                      onClick={() =>
+                        onQuantityChange(entry.card.id, entry.quantity - 1, entry.board)
+                      }
+                      className="flex h-6 flex-1 items-center justify-center rounded bg-bg-cell/80 text-xs font-medium text-font-primary hover:bg-bg-hover"
+                    >
+                      -
+                    </button>
+                  )}
+                  {onQuantityChange && (
+                    <button
+                      onClick={() =>
+                        onQuantityChange(entry.card.id, entry.quantity + 1, entry.board)
+                      }
+                      className="flex h-6 flex-1 items-center justify-center rounded bg-bg-cell/80 text-xs font-medium text-font-primary hover:bg-bg-hover"
+                    >
+                      +
+                    </button>
+                  )}
+                  {onRemove && (
+                    <button
+                      onClick={() => onRemove(entry.card.id, entry.board)}
+                      className="flex h-6 flex-1 items-center justify-center rounded bg-bg-red/30 text-xs font-medium text-bg-red hover:bg-bg-red/50"
+                    >
+                      Del
+                    </button>
+                  )}
+                  {onToggleCommander && (
+                    <button
+                      onClick={() => onToggleCommander(entry.card.id, entry.board)}
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
+                        commander
+                          ? 'bg-bg-yellow/30 text-bg-yellow'
+                          : 'bg-bg-cell/80 text-font-muted hover:text-bg-yellow'
+                      }`}
+                      title={commander ? 'Remove Commander' : 'Set as Commander'}
+                    >
+                      <Crown className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )
       })}
