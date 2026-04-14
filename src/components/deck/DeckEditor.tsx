@@ -386,36 +386,36 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         </div>
       </div>
 
-      {/* Compact stats bar */}
-      <div className="mb-3">
-        <DeckStatsBar
-          cards={statsCards}
-          format={deck.format}
-          expanded={showExpandedStats}
-          onToggleExpand={() => setShowExpandedStats((p) => !p)}
-        />
-      </div>
-
-      {/* Expanded stats on mobile (hidden on lg where right panel shows) */}
-      {showExpandedStats && (
-        <div className="mb-3 lg:hidden rounded-xl border border-border bg-bg-surface p-4">
-          <DeckStats cards={statsCards} />
-        </div>
-      )}
-
-      {/* Search bar */}
-      <div className="mb-3">
-        <AddCardSearch
-          deckId={deck.id}
-          onCardAdded={handleCardAdded}
-          currentBoard={activeTab}
-        />
-      </div>
-
-      {/* Two-panel layout: cards left, stats right on lg */}
-      <div className="flex gap-6">
+      {/* Two-panel layout */}
+      <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
         {/* Left panel: Card list */}
         <div className="flex-1 min-w-0">
+          {/* Compact stats bar */}
+          <div className="mb-3 sm:mb-4">
+            <DeckStatsBar
+              cards={statsCards}
+              format={deck.format}
+              expanded={showExpandedStats}
+              onToggleExpand={() => setShowExpandedStats((p) => !p)}
+            />
+          </div>
+
+          {/* Expanded stats on mobile (hidden on lg where right panel shows) */}
+          {showExpandedStats && (
+            <div className="mb-3 sm:mb-4 lg:hidden rounded-xl border border-border bg-bg-surface p-4">
+              <DeckStats cards={statsCards} />
+            </div>
+          )}
+
+          {/* Search bar */}
+          <div className="mb-3 sm:mb-4">
+            <AddCardSearch
+              deckId={deck.id}
+              onCardAdded={handleCardAdded}
+              currentBoard={activeTab}
+            />
+          </div>
+
           {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
             {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (
