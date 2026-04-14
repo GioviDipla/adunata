@@ -102,6 +102,52 @@ export async function searchCardByName(
 }
 
 /**
+ * Batch lookup cards by name using Scryfall's /cards/collection endpoint.
+ * Accepts up to 75 identifiers per request. For larger batches, splits into
+ * multiple requests automatically.
+ */
+export async function lookupCardsByNames(
+  names: string[]
+): Promise<{ found: ScryfallCard[]; notFound: string[] }> {
+  const found: ScryfallCard[] = []
+  const notFound: string[] = []
+
+  // Scryfall /cards/collection accepts max 75 identifiers per request
+  const BATCH_SIZE = 75
+  for (let i = 0; i < names.length; i += BATCH_SIZE) {
+    const batch = names.slice(i, i + BATCH_SIZE)
+    const identifiers = batch.map((name) => ({ name }))
+
+    const res = await rateLimitedFetch(
+      'https://api.scryfall.com/cards/collection',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifiers }),
+      }
+    )
+
+    if (!res.ok) {
+      // If the batch endpoint fails, mark all as not found
+      notFound.push(...batch)
+      continue
+    }
+
+    const data = await res.json() as {
+      data: ScryfallCard[]
+      not_found: { name: string }[]
+    }
+
+    found.push(...(data.data ?? []))
+    for (const nf of data.not_found ?? []) {
+      notFound.push(nf.name)
+    }
+  }
+
+  return { found, notFound }
+}
+
+/**
  * Full-text search for cards via the Scryfall API.
  */
 export async function searchCards(

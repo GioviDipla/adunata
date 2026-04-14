@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { searchCardByName, mapScryfallCard } from '@/lib/scryfall'
+import { lookupCardsByNames, mapScryfallCard } from '@/lib/scryfall'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -89,21 +89,10 @@ export async function POST(
   )
 
   if (missing.length > 0) {
-    const scryfallResults = await Promise.all(
-      missing.map(async (name) => {
-        try {
-          const card = await searchCardByName(name)
-          return { name, card }
-        } catch {
-          return { name, card: null }
-        }
-      }),
-    )
+    // Batch lookup via Scryfall /cards/collection (up to 75 per request)
+    const { found } = await lookupCardsByNames(missing)
 
-    // Upsert any Scryfall hits into local DB, then add to the lookup map
-    const toUpsert = scryfallResults
-      .filter((r) => r.card !== null)
-      .map((r) => mapScryfallCard(r.card!))
+    const toUpsert = found.map(mapScryfallCard)
 
     if (toUpsert.length > 0) {
       const { data: upserted } = await admin
