@@ -66,7 +66,7 @@ export default function DeckContent({
   onToggleCommander,
   onMoveToBoard,
 }: DeckContentProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [sortMode, setSortMode] = useState<SortMode>('type')
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set())
   const [showFilterPanel, setShowFilterPanel] = useState(false)
@@ -169,7 +169,7 @@ export default function DeckContent({
           ))}
         </div>
 
-        <label className="flex items-center gap-1.5 rounded-lg bg-bg-cell px-2 py-1 text-xs text-font-secondary">
+        <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-2.5 text-xs text-font-secondary">
           <ArrowUpDown className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Sort:</span>
           <select
@@ -188,7 +188,7 @@ export default function DeckContent({
 
         <button
           onClick={() => setShowFilterPanel((prev) => !prev)}
-          className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors ${
+          className={`flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors ${
             typeFilter.size > 0 || showFilterPanel
               ? 'bg-bg-accent/20 text-font-accent'
               : 'bg-bg-cell text-font-secondary hover:text-font-primary'

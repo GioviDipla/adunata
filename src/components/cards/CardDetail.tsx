@@ -29,9 +29,10 @@ interface CardDetailProps {
   card: Card
   onClose: () => void
   onPrintingSelect?: (printing: Card) => void
+  onAddToDeck?: (card: Card) => void
 }
 
-export default function CardDetail({ card, onClose, onPrintingSelect }: CardDetailProps) {
+export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDeck }: CardDetailProps) {
   const [displayCard, setDisplayCard] = useState<Card>(card)
   const [printings, setPrintings] = useState<Card[]>([])
   const [loadingPrintings, setLoadingPrintings] = useState(false)
@@ -251,10 +252,15 @@ export default function CardDetail({ card, onClose, onPrintingSelect }: CardDeta
               )}
 
               {/* Add to Deck button */}
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-accent hover:bg-bg-accent-dark text-font-white font-medium transition-colors">
-                <Plus size={16} />
-                Add to Deck
-              </button>
+              {onAddToDeck && (
+                <button
+                  onClick={() => { onAddToDeck(displayCard); onClose() }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-accent hover:bg-bg-accent-dark text-font-white font-medium transition-colors"
+                >
+                  <Plus size={16} />
+                  Add to Deck
+                </button>
+              )}
             </div>
           </div>
 

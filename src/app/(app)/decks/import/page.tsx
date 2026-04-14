@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Upload, AlertCircle, Loader2 } from 'lucide-react'
@@ -30,6 +30,8 @@ export default function ImportDeckPage() {
   const [deckText, setDeckText] = useState('')
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failures, setFailures] = useState<string[]>([])
+  const deckIdRef = useRef<string>('')
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault()
@@ -71,6 +73,7 @@ export default function ImportDeckPage() {
       }
 
       const { deck } = await deckRes.json()
+      deckIdRef.current = deck.id
 
       // Step 2: Bulk import all cards in one request
       const res = await fetch(`/api/decks/${deck.id}/cards/bulk-import`, {
@@ -97,12 +100,9 @@ export default function ImportDeckPage() {
         return
       }
 
-      const failures = data.failures ?? []
-      if (failures.length > 0) {
-        setError(
-          `${failures.length} card(s) not found: ${failures.map((f) => f.name).join(', ')}. Redirecting...`
-        )
-        setTimeout(() => router.push(`/decks/${deck.id}`), 2000)
+      const importFailures = data.failures ?? []
+      if (importFailures.length > 0) {
+        setFailures(importFailures.map((f) => f.name))
       } else {
         router.push(`/decks/${deck.id}`)
       }
@@ -203,6 +203,28 @@ export default function ImportDeckPage() {
         <div className="mt-6 flex items-center gap-3 rounded-xl border border-border bg-bg-surface px-4 py-3">
           <Loader2 className="h-4 w-4 animate-spin text-bg-accent" />
           <span className="text-sm text-font-secondary">Importing cards...</span>
+        </div>
+      )}
+
+      {failures.length > 0 && (
+        <div className="mt-6 rounded-xl border border-border bg-bg-surface p-4">
+          <h3 className="mb-2 text-sm font-semibold text-bg-red">
+            {failures.length} card(s) not found
+          </h3>
+          <ul className="mb-4 flex flex-col gap-1 text-sm text-font-secondary">
+            {failures.map((name) => (
+              <li key={name} className="flex items-center gap-2">
+                <AlertCircle className="h-3 w-3 shrink-0 text-bg-red" />
+                {name}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={() => router.push(`/decks/${deckIdRef.current}`)}
+            className="rounded-lg bg-bg-accent px-4 py-2 text-sm font-medium text-font-white hover:bg-bg-accent-dark transition-colors"
+          >
+            Continue to Deck
+          </button>
         </div>
       )}
     </div>

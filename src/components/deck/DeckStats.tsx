@@ -27,7 +27,7 @@ function getColorForMana(color: string): string {
 }
 
 export default function DeckStats({ cards }: DeckStatsProps) {
-  const mainCards = cards.filter((c) => c.board === 'main')
+  const mainCards = cards.filter((c) => c.board === 'main' || c.board === 'commander')
   const sideboardCards = cards.filter((c) => c.board === 'sideboard')
 
   // Total cards
@@ -147,8 +147,13 @@ export default function DeckStats({ cards }: DeckStatsProps) {
       {/* Estimated value */}
       <div className="rounded-lg border border-border bg-bg-cell p-3">
         <div className="text-xs text-font-muted">Estimated Value</div>
-        <div className="text-lg font-bold text-font-accent">
-          ${totalValue.toFixed(2)}
+        <div className="flex items-baseline gap-3">
+          <span className="text-lg font-bold text-font-accent">
+            ${totalValue.toFixed(2)}
+          </span>
+          <span className="text-sm font-semibold text-font-secondary">
+            ~€{(totalValue * 0.92).toFixed(2)}
+          </span>
         </div>
       </div>
 

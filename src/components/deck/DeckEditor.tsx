@@ -37,7 +37,7 @@ interface DeckEditorProps {
   initialCards: DeckCardEntry[]
 }
 
-type BoardTab = 'main' | 'sideboard' | 'maybeboard'
+type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'stats'
 
 export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const router = useRouter()
@@ -384,22 +384,21 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         </div>
       </div>
 
-      {/* Two-panel layout */}
-      <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
-        {/* Left panel: Card list */}
-        <div className="flex-1">
+      {/* Main content */}
+      <div className="flex flex-col gap-4 sm:gap-6">
+        <div>
           {/* Search bar */}
           <div className="mb-3 sm:mb-4">
             <AddCardSearch
               deckId={deck.id}
               onCardAdded={handleCardAdded}
-              currentBoard={activeTab}
+              currentBoard={activeTab === 'stats' ? 'main' : activeTab}
             />
           </div>
 
           {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
-            {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (
+            {(['main', 'sideboard', 'maybeboard', 'stats'] as BoardTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -410,39 +409,35 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                 }`}
               >
                 <span className="sm:hidden">
-                  {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
+                  {tab === 'stats' ? 'Stats' : tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
                 </span>
                 <span className="hidden sm:inline">
-                  {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
+                  {tab === 'stats' ? 'Statistics' : tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
                 </span>
-                <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                  ({tabCounts[tab]})
-                </span>
+                {tab !== 'stats' && (
+                  <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                    ({tabCounts[tab as keyof typeof tabCounts]})
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
-          <DeckContent
-            cards={filteredCards}
-            commanderCards={commanderCards}
-            isCommander={isCommander}
-            onCardClick={setSelectedDetailCard}
-            onQuantityChange={handleQuantityChange}
-            onRemove={handleRemove}
-            onToggleCommander={handleToggleCommander}
-            onMoveToBoard={handleMoveToBoard}
-          />
-
-        </div>
-
-        {/* Right panel: Stats */}
-        <div className="w-full shrink-0 lg:w-80">
-          <div className="sticky top-6 rounded-xl border border-border bg-bg-surface p-4">
-            <h2 className="mb-4 text-sm font-semibold text-font-secondary">
-              Deck Statistics
-            </h2>
+          {activeTab === 'stats' ? (
             <DeckStats cards={statsCards} />
-          </div>
+          ) : (
+            <DeckContent
+              cards={filteredCards}
+              commanderCards={commanderCards}
+              isCommander={isCommander}
+              onCardClick={setSelectedDetailCard}
+              onQuantityChange={handleQuantityChange}
+              onRemove={handleRemove}
+              onToggleCommander={handleToggleCommander}
+              onMoveToBoard={handleMoveToBoard}
+            />
+          )}
+
         </div>
       </div>
 
@@ -494,13 +489,16 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           onPrintingSelect={(newPrinting) =>
             handlePrintingSelect(selectedDetailCard, newPrinting)
           }
+          onAddToDeck={(card) => {
+            handleCardAdded(card, activeTab === 'stats' ? 'main' : activeTab)
+          }}
         />
       )}
       {/* Import cards modal */}
       {showImport && (
         <ImportCardsModal
           deckId={deck.id}
-          currentBoard={activeTab}
+          currentBoard={activeTab === 'stats' ? 'main' : activeTab}
           onClose={() => setShowImport(false)}
           onCardsImported={(imported) => {
             for (const { card, board } of imported) {

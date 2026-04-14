@@ -110,7 +110,6 @@ export default function DeckCard({
       }}
       onPointerUp={onMoveToBoard ? longPress.onPointerUp : undefined}
       onPointerLeave={() => {
-        setShowPreview(false)
         if (onMoveToBoard) longPress.onPointerLeave()
       }}
       onPointerCancel={onMoveToBoard ? longPress.onPointerCancel : undefined}
