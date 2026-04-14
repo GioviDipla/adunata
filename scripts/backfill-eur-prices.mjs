@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Backfill prices_eur and prices_eur_foil for existing cards.
+ * Backfill prices_eur, prices_eur_foil, and released_at for existing cards.
  * Uses Scryfall /cards/collection endpoint (75 cards per batch).
  *
- * Usage: node scripts/backfill-eur-prices.mjs
+ * Uses cursor-based pagination (id > last_id) to avoid skipping rows
+ * when the filter condition changes during iteration.
  *
- * Requires .env.local with NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+ * Usage: node scripts/backfill-eur-prices.mjs
  */
-
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 
@@ -19,107 +19,75 @@ const supabase = createClient(
 )
 
 const BATCH_SIZE = 75
-const SCRYFALL_DELAY = 120 // ms between requests
+const DELAY = 100
 
-async function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms))
-}
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
 async function main() {
-  // Get all cards with scryfall_id that don't have EUR price yet
-  console.log('Fetching cards without EUR prices...')
-
-  let offset = 0
+  console.log('Backfilling prices_eur + released_at for ALL cards missing either...')
+  let lastId = '00000000-0000-0000-0000-000000000000'
   let totalUpdated = 0
-  let hasMore = true
+  let totalProcessed = 0
 
-  while (hasMore) {
+  while (true) {
+    // Cursor-based: get next 750 cards where EUR or released_at is missing
     const { data: cards, error } = await supabase
       .from('cards')
-      .select('id, scryfall_id, name')
-      .is('prices_eur', null)
+      .select('id, scryfall_id')
+      .or('prices_eur.is.null,released_at.is.null')
       .not('scryfall_id', 'is', null)
-      .order('id')
-      .range(offset, offset + 999)
+      .gt('id', lastId)
+      .order('id', { ascending: true })
+      .limit(750)
 
-    if (error) {
-      console.error('DB fetch error:', error.message)
-      break
-    }
+    if (error) { console.error('DB error:', error.message); break }
+    if (!cards || cards.length === 0) break
 
-    if (!cards || cards.length === 0) {
-      hasMore = false
-      break
-    }
+    lastId = cards[cards.length - 1].id
+    totalProcessed += cards.length
+    console.log(`Processing ${cards.length} cards (total processed: ${totalProcessed})...`)
 
-    console.log(`Processing batch starting at offset ${offset}, ${cards.length} cards...`)
-
-    // Process in Scryfall batches of 75
     for (let i = 0; i < cards.length; i += BATCH_SIZE) {
       const batch = cards.slice(i, i + BATCH_SIZE)
-      const identifiers = batch.map((c) => ({ id: c.scryfall_id }))
-
       try {
         const res = await fetch('https://api.scryfall.com/cards/collection', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifiers }),
+          body: JSON.stringify({ identifiers: batch.map(c => ({ id: c.scryfall_id })) }),
         })
-
-        if (!res.ok) {
-          console.error(`Scryfall error ${res.status} for batch at ${i}`)
-          await sleep(SCRYFALL_DELAY)
-          continue
-        }
+        if (!res.ok) { console.error(`Scryfall ${res.status}`); await sleep(DELAY); continue }
 
         const data = await res.json()
-        const scryfallCards = data.data || []
-
-        // Build scryfall_id -> prices map
-        const priceMap = new Map()
-        for (const sc of scryfallCards) {
-          priceMap.set(sc.id, {
+        const infoMap = new Map()
+        for (const sc of data.data || []) {
+          infoMap.set(sc.id, {
             eur: sc.prices?.eur ? parseFloat(sc.prices.eur) : null,
             eur_foil: sc.prices?.eur_foil ? parseFloat(sc.prices.eur_foil) : null,
+            released_at: sc.released_at || null,
           })
         }
 
-        // Update each card
         let batchUpdated = 0
         for (const card of batch) {
-          const prices = priceMap.get(card.scryfall_id)
-          if (prices && (prices.eur !== null || prices.eur_foil !== null)) {
-            const { error: updateErr } = await supabase
-              .from('cards')
-              .update({
-                prices_eur: prices.eur,
-                prices_eur_foil: prices.eur_foil,
-              })
-              .eq('id', card.id)
-
-            if (!updateErr) batchUpdated++
+          const info = infoMap.get(card.scryfall_id)
+          if (!info) continue
+          const update = {}
+          if (info.eur !== null) update.prices_eur = info.eur
+          if (info.eur_foil !== null) update.prices_eur_foil = info.eur_foil
+          if (info.released_at !== null) update.released_at = info.released_at
+          if (Object.keys(update).length > 0) {
+            const { error: ue } = await supabase.from('cards').update(update).eq('id', card.id)
+            if (!ue) batchUpdated++
           }
         }
-
         totalUpdated += batchUpdated
-        process.stdout.write(`  Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchUpdated}/${batch.length} updated (total: ${totalUpdated})\r`)
-      } catch (err) {
-        console.error(`Fetch error for batch at ${i}:`, err.message)
-      }
-
-      await sleep(SCRYFALL_DELAY)
+        process.stdout.write(`  ${totalUpdated} updated\r`)
+      } catch (err) { console.error('Error:', err.message) }
+      await sleep(DELAY)
     }
-
     console.log()
-    offset += cards.length
-
-    // If we got less than 1000, we're done
-    if (cards.length < 1000) {
-      hasMore = false
-    }
   }
-
-  console.log(`\nDone! Updated ${totalUpdated} cards with EUR prices.`)
+  console.log(`\nDone! Updated ${totalUpdated} cards total.`)
 }
 
 main().catch(console.error)
