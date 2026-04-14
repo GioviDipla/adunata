@@ -5,11 +5,14 @@ import Link from 'next/link'
 import { Copy, Check, Globe } from 'lucide-react'
 import DeckContent, { type DeckCardEntry } from './DeckContent'
 import DeckStats from './DeckStats'
+import DeckStatsBar from './DeckStatsBar'
 import CardDetail from '@/components/cards/CardDetail'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 type DeckRow = Database['public']['Tables']['decks']['Row']
+
+type BoardTab = 'main' | 'sideboard' | 'maybeboard'
 
 interface DeckViewProps {
   deck: DeckRow
@@ -27,14 +30,17 @@ export default function DeckView({
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<BoardTab>('main')
+  const [showExpandedStats, setShowExpandedStats] = useState(false)
 
   const commanderCards = useMemo(
     () => cards.filter((c) => c.board === 'commander'),
     [cards],
   )
-  const mainCards = useMemo(
-    () => cards.filter((c) => c.board === 'main'),
-    [cards],
+
+  const filteredCards = useMemo(
+    () => cards.filter((c) => c.board === activeTab),
+    [cards, activeTab],
   )
 
   const isCommander = useCallback(
@@ -47,10 +53,28 @@ export default function DeckView({
     [cards],
   )
 
+  const tabCounts = useMemo(
+    () => ({
+      main: cards.filter((c) => c.board === 'main').reduce((s, c) => s + c.quantity, 0),
+      sideboard: cards.filter((c) => c.board === 'sideboard').reduce((s, c) => s + c.quantity, 0),
+      maybeboard: cards.filter((c) => c.board === 'maybeboard').reduce((s, c) => s + c.quantity, 0),
+    }),
+    [cards],
+  )
+
   async function copyDeckList() {
-    const lines = cards.map((c) => `${c.quantity} ${c.card.name}`).join('\n')
+    const lines = cards
+      .filter((c) => c.board === 'main' || c.board === 'commander')
+      .map((c) => `${c.quantity} ${c.card.name}`)
+      .join('\n')
+    const sideLines = cards
+      .filter((c) => c.board === 'sideboard')
+      .map((c) => `${c.quantity} ${c.card.name}`)
+    const full = sideLines.length > 0
+      ? `${lines}\n\nSideboard\n${sideLines.join('\n')}`
+      : lines
     try {
-      await navigator.clipboard.writeText(lines)
+      await navigator.clipboard.writeText(full)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (e) {
@@ -62,7 +86,7 @@ export default function DeckView({
   return (
     <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <h1 className="text-xl font-bold text-font-primary sm:text-2xl">
             {deck.name}
@@ -70,15 +94,12 @@ export default function DeckView({
           <span className="shrink-0 rounded-full bg-bg-cell px-2 py-0.5 text-[10px] sm:px-3 sm:py-1 sm:text-xs font-medium text-font-secondary">
             {deck.format}
           </span>
-          {/* DeckView is only reached for public decks — the deck page branches
-              to notFound() for non-owners of private decks. So we always show
-              the Public badge here. */}
           <span className="flex items-center gap-1 rounded-full bg-bg-green/20 px-2 py-0.5 text-[10px] font-bold text-bg-green">
             <Globe className="h-3 w-3" /> Public
           </span>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Link
             href={`/u/${ownerUsername}`}
             className="flex items-center gap-2 text-sm text-font-secondary transition-colors hover:text-font-accent"
@@ -94,13 +115,9 @@ export default function DeckView({
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-secondary transition-colors hover:bg-bg-hover"
           >
             {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5 text-bg-green" /> Copied
-              </>
+              <><Check className="h-3.5 w-3.5 text-bg-green" /> Copied</>
             ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" /> Copy list
-              </>
+              <><Copy className="h-3.5 w-3.5" /> Copy list</>
             )}
           </button>
           {copyError && (
@@ -111,16 +128,60 @@ export default function DeckView({
 
       {/* Two-panel layout */}
       <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
-        <div className="flex-1">
+        {/* Left panel */}
+        <div className="flex-1 min-w-0">
+          {/* Compact stats bar */}
+          <div className="mb-3 sm:mb-4">
+            <DeckStatsBar
+              cards={statsCards}
+              format={deck.format}
+              expanded={showExpandedStats}
+              onToggleExpand={() => setShowExpandedStats((p) => !p)}
+            />
+          </div>
+
+          {/* Expanded stats on mobile */}
+          {showExpandedStats && (
+            <div className="mb-3 sm:mb-4 lg:hidden rounded-xl border border-border bg-bg-surface p-4">
+              <DeckStats cards={statsCards} />
+            </div>
+          )}
+
+          {/* Board tabs */}
+          <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
+            {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                  activeTab === tab
+                    ? 'bg-bg-surface text-font-primary shadow-sm'
+                    : 'text-font-secondary hover:text-font-primary'
+                }`}
+              >
+                <span className="sm:hidden">
+                  {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
+                </span>
+                <span className="hidden sm:inline">
+                  {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
+                </span>
+                <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                  ({tabCounts[tab]})
+                </span>
+              </button>
+            ))}
+          </div>
+
           <DeckContent
-            cards={mainCards}
+            cards={filteredCards}
             commanderCards={commanderCards}
             isCommander={isCommander}
             onCardClick={setSelectedDetailCard}
           />
         </div>
 
-        <div className="w-full shrink-0 lg:w-80">
+        {/* Right panel: Full stats — only on lg+ */}
+        <div className="hidden lg:block w-80 shrink-0">
           <div className="sticky top-6 rounded-xl border border-border bg-bg-surface p-4">
             <h2 className="mb-4 text-sm font-semibold text-font-secondary">
               Deck Statistics
