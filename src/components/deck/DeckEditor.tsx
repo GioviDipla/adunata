@@ -386,34 +386,36 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         </div>
       </div>
 
-      {/* Compact stats bar — always visible */}
-      <DeckStatsBar
-        cards={statsCards}
-        format={deck.format}
-        expanded={showExpandedStats}
-        onToggleExpand={() => setShowExpandedStats((p) => !p)}
-      />
+      {/* Compact stats bar */}
+      <div className="mb-3">
+        <DeckStatsBar
+          cards={statsCards}
+          format={deck.format}
+          expanded={showExpandedStats}
+          onToggleExpand={() => setShowExpandedStats((p) => !p)}
+        />
+      </div>
 
       {/* Expanded stats on mobile (hidden on lg where right panel shows) */}
       {showExpandedStats && (
-        <div className="lg:hidden rounded-xl border border-border bg-bg-surface p-4">
+        <div className="mb-3 lg:hidden rounded-xl border border-border bg-bg-surface p-4">
           <DeckStats cards={statsCards} />
         </div>
       )}
+
+      {/* Search bar */}
+      <div className="mb-3">
+        <AddCardSearch
+          deckId={deck.id}
+          onCardAdded={handleCardAdded}
+          currentBoard={activeTab}
+        />
+      </div>
 
       {/* Two-panel layout: cards left, stats right on lg */}
       <div className="flex gap-6">
         {/* Left panel: Card list */}
         <div className="flex-1 min-w-0">
-          {/* Search bar */}
-          <div className="mb-3 sm:mb-4">
-            <AddCardSearch
-              deckId={deck.id}
-              onCardAdded={handleCardAdded}
-              currentBoard={activeTab}
-            />
-          </div>
-
           {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
             {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (

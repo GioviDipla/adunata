@@ -1,6 +1,7 @@
 'use client'
 
 import { getCardTypeCategory } from '@/lib/utils/card'
+import { TYPE_ICONS } from '@/lib/utils/typeIcons'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -225,12 +226,16 @@ export default function DeckStats({ cards }: DeckStatsProps) {
         <div className="flex flex-col gap-1">
           {Object.entries(typeCounts)
             .sort((a, b) => b[1] - a[1])
-            .map(([type, count]) => (
-              <div key={type} className="flex items-center justify-between text-sm">
-                <span className="text-font-secondary">{type}</span>
-                <span className="font-medium text-font-primary">{count}</span>
-              </div>
-            ))}
+            .map(([type, count]) => {
+              const Icon = TYPE_ICONS[type]
+              return (
+                <div key={type} className="flex items-center gap-2 text-sm">
+                  {Icon && <Icon className="h-3.5 w-3.5 text-font-muted shrink-0" />}
+                  <span className="flex-1 text-font-secondary">{type}</span>
+                  <span className="font-medium text-font-primary">{count}</span>
+                </div>
+              )
+            })}
         </div>
       </div>
     </div>
