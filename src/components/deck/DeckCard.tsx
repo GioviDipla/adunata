@@ -200,7 +200,19 @@ export default function DeckCard({
 
       {/* Card image preview on hover */}
       {showPreview && card.image_normal && (
-        <div className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 hidden lg:block">
+        <div className="pointer-events-none fixed z-50 hidden md:block"
+          style={{ left: 'var(--preview-x, 16px)', top: 'var(--preview-y, 16px)' }}
+          ref={(el) => {
+            if (!el) return
+            const parent = el.parentElement
+            if (!parent) return
+            const rect = parent.getBoundingClientRect()
+            const x = Math.min(rect.right + 8, window.innerWidth - 240)
+            const y = Math.max(8, Math.min(rect.top, window.innerHeight - 340))
+            el.style.left = `${x}px`
+            el.style.top = `${y}px`
+          }}
+        >
           <img
             src={card.image_normal}
             alt={card.name}

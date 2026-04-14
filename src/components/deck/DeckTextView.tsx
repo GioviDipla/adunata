@@ -140,10 +140,10 @@ export default function DeckTextView({
       </div>
       {hoverCard && hoverCard.card.image_normal && (
         <div
-          className="pointer-events-none fixed z-50 hidden lg:block"
+          className="pointer-events-none fixed z-50 hidden md:block"
           style={{
-            left: hoverCard.x + 200,
-            top: Math.max(8, hoverCard.y - 160),
+            left: Math.min(hoverCard.x + 200, window.innerWidth - 240),
+            top: Math.max(8, Math.min(hoverCard.y - 160, window.innerHeight - 340)),
           }}
         >
           <img
