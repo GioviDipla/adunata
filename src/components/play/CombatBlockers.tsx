@@ -118,7 +118,7 @@ export default function CombatBlockers({
             ATTACKING CREATURES
             {selectedBlocker && ' — tap one to assign block'}
           </span>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
             {attackers.map((c) => {
               const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
               if (!data) return null
@@ -136,7 +136,7 @@ export default function CombatBlockers({
                         : 'border-bg-red/30 bg-bg-card'
                   }`}
                 >
-                  <div className="relative w-full" style={{ height: 90 }}>
+                  <div className="relative w-full aspect-[5/7] overflow-hidden">
                     {data.imageSmall ? (
                       <img src={data.imageSmall} alt={data.name} className="h-full w-full object-cover" />
                     ) : (
@@ -162,7 +162,7 @@ export default function CombatBlockers({
           <span className="mb-1.5 block text-[9px] font-bold tracking-wider text-blue-400">
             YOUR CREATURES — tap to select blocker
           </span>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
             {eligibleBlockers.map((c) => {
               const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
               if (!data) return null
@@ -181,7 +181,7 @@ export default function CombatBlockers({
                         : 'border-border bg-bg-card'
                   }`}
                 >
-                  <div className="relative w-full" style={{ height: 90 }}>
+                  <div className="relative w-full aspect-[5/7] overflow-hidden">
                     {data.imageSmall ? (
                       <img src={data.imageSmall} alt={data.name} className="h-full w-full object-cover" />
                     ) : (

@@ -32,6 +32,12 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleDiscard(s, action)
     case 'phase_change':
       return handlePhaseChange(s, action)
+    case 'mulligan':
+      return handleMulligan(s, action)
+    case 'keep_hand':
+      return handleKeepHand(s, action)
+    case 'bottom_cards':
+      return handleBottomCards(s, action)
     case 'concede':
       return s // handled at API level
     default:
@@ -393,4 +399,80 @@ function handleDiscard(s: GameState, action: GameAction): GameState {
 
 function handlePhaseChange(s: GameState, _action: GameAction): GameState {
   return advancePhase(s)
+}
+
+function handleMulligan(s: GameState, action: GameAction): GameState {
+  if (!s.mulliganStage) return s
+  const player = s.players[action.playerId]
+  const decision = s.mulliganStage.playerDecisions[action.playerId]
+  if (!decision || decision.decided) return s
+
+  // Cap at 7 mulligans (keeping 0 cards)
+  if (decision.mulliganCount >= 7) return s
+
+  decision.mulliganCount++
+
+  // Shuffle hand back into library, reshuffle, draw 7
+  player.library = [...player.library, ...player.hand]
+  player.hand = []
+
+  // Fisher-Yates shuffle
+  const lib = player.library
+  for (let i = lib.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [lib[i], lib[j]] = [lib[j], lib[i]]
+  }
+
+  // Draw 7
+  player.hand = lib.splice(0, 7)
+  player.libraryCount = lib.length
+  player.handCount = player.hand.length
+
+  return s
+}
+
+function handleKeepHand(s: GameState, action: GameAction): GameState {
+  if (!s.mulliganStage) return s
+  const decision = s.mulliganStage.playerDecisions[action.playerId]
+  if (!decision || decision.decided) return s
+
+  decision.decided = true
+  decision.needsBottomCards = decision.mulliganCount
+  decision.bottomCardsDone = decision.mulliganCount === 0
+
+  return checkMulliganComplete(s)
+}
+
+function handleBottomCards(s: GameState, action: GameAction): GameState {
+  if (!s.mulliganStage) return s
+  const decision = s.mulliganStage.playerDecisions[action.playerId]
+  if (!decision || decision.bottomCardsDone) return s
+
+  const { instanceIds } = action.data as { instanceIds: string[] }
+  const player = s.players[action.playerId]
+
+  // Move selected cards from hand to bottom of library
+  const toBottom = player.hand.filter((id) => instanceIds.includes(id))
+  player.hand = player.hand.filter((id) => !instanceIds.includes(id))
+  player.library = [...player.library, ...toBottom]
+  player.libraryCount = player.library.length
+  player.handCount = player.hand.length
+
+  decision.bottomCardsDone = true
+
+  return checkMulliganComplete(s)
+}
+
+function checkMulliganComplete(s: GameState): GameState {
+  if (!s.mulliganStage) return s
+
+  const allDone = Object.values(s.mulliganStage.playerDecisions).every(
+    (d) => d.decided && d.bottomCardsDone
+  )
+
+  if (allDone) {
+    delete s.mulliganStage
+  }
+
+  return s
 }

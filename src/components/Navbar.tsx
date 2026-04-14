@@ -11,8 +11,11 @@ import {
   Users,
   LogOut,
   Sparkles,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useSidebar } from "@/lib/contexts/SidebarContext";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -26,6 +29,7 @@ const navItems = [
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { collapsed, toggle } = useSidebar();
 
   async function handleLogout() {
     const supabase = createClient();
@@ -41,13 +45,15 @@ export function Navbar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 border-r border-border bg-bg-surface">
+      <aside className={`hidden md:flex ${collapsed ? 'md:w-16' : 'md:w-60'} md:flex-col md:fixed md:inset-y-0 border-r border-border bg-bg-surface transition-all duration-200`}>
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2 px-6 border-b border-border">
-          <Sparkles className="h-6 w-6 text-font-accent" />
-          <span className="text-lg font-bold text-font-primary">
-            The Gathering
-          </span>
+        <div className={`flex h-16 items-center gap-2 border-b border-border ${collapsed ? 'justify-center px-2' : 'px-6'}`}>
+          <Sparkles className="h-6 w-6 shrink-0 text-font-accent" />
+          {!collapsed && (
+            <span className="text-lg font-bold text-font-primary">
+              The Gathering
+            </span>
+          )}
         </div>
 
         {/* Nav links */}
@@ -59,33 +65,47 @@ export function Navbar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium transition-colors ${
                   active
                     ? "bg-bg-accent/10 text-font-accent"
                     : "text-font-secondary hover:bg-bg-hover hover:text-font-primary"
                 }`}
+                title={item.label}
               >
-                <Icon className="h-5 w-5" />
-                {item.label}
+                <Icon className="h-5 w-5 shrink-0" />
+                {!collapsed && item.label}
               </Link>
             );
           })}
         </nav>
 
+        {/* Collapse toggle */}
+        <div className="mt-auto border-t border-border px-3 py-2">
+          <button
+            onClick={toggle}
+            className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary`}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            {!collapsed && "Collapse"}
+          </button>
+        </div>
+
         {/* Logout */}
         <div className="border-t border-border px-3 py-4">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+            className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary`}
+            title="Sign out"
           >
-            <LogOut className="h-5 w-5" />
-            Sign out
+            <LogOut className="h-5 w-5 shrink-0" />
+            {!collapsed && "Sign out"}
           </button>
         </div>
       </aside>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-border bg-bg-surface px-2 py-1 md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-border bg-bg-surface px-1 py-0.5 md:hidden">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
@@ -93,14 +113,14 @@ export function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+              className={`flex flex-col items-center gap-0 rounded-lg px-1.5 py-1 text-[10px] font-medium transition-colors ${
                 active
                   ? "text-font-accent"
                   : "text-font-muted hover:text-font-secondary"
               }`}
             >
-              <Icon className="h-5 w-5" />
-              <span>{item.label}</span>
+              <Icon className="h-4 w-4" />
+              <span className="truncate max-w-[3.5rem]">{item.label}</span>
             </Link>
           );
         })}

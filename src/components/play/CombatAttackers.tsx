@@ -63,7 +63,7 @@ export default function CombatAttackers({ battlefield, cardMap, onConfirm, onSki
             <span className="text-sm text-font-muted">No creatures available to attack</span>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
             {eligibleCreatures.map((c) => {
               const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
               if (!data) return null
@@ -78,7 +78,7 @@ export default function CombatAttackers({ battlefield, cardMap, onConfirm, onSki
                       : 'border-border bg-bg-card'
                   }`}
                 >
-                  <div className="relative w-full" style={{ height: 100 }}>
+                  <div className="relative w-full aspect-[5/7] overflow-hidden">
                     {data.imageSmall ? (
                       <img src={data.imageSmall} alt={data.name} className="h-full w-full object-cover" />
                     ) : (

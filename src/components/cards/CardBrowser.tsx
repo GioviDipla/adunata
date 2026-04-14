@@ -102,19 +102,57 @@ export default function CardBrowser({ initialCards }: CardBrowserProps) {
   // Fetch cards when filters change
   useEffect(() => {
     let cancelled = false
+    let controller: AbortController | null = null
 
     async function fetchCards() {
       setLoading(true)
+
+      // Primary: Supabase textSearch (fast, GIN-indexed)
       const { data, error } = await buildQuery(0)
 
-      if (!cancelled) {
-        if (error) {
-          console.error('Error fetching cards:', error)
-          setCards([])
-        } else {
-          setCards(data || [])
-          setHasMore((data || []).length === PAGE_SIZE)
+      if (cancelled) return
+
+      if (error) {
+        console.error('Error fetching cards:', error)
+        setCards([])
+        setHasMore(false)
+        setLoading(false)
+        return
+      }
+
+      // If textSearch found results, use them
+      if (data && data.length > 0) {
+        setCards(data)
+        setHasMore(data.length === PAGE_SIZE)
+        setLoading(false)
+        return
+      }
+
+      // Fallback: if textSearch returned 0 and we have a search term,
+      // try the /api/cards/search endpoint (ilike + Scryfall fallback)
+      if (debouncedSearch.trim().length >= 2) {
+        try {
+          controller = new AbortController()
+          const res = await fetch(
+            `/api/cards/search?q=${encodeURIComponent(debouncedSearch.trim())}`,
+            { signal: controller.signal }
+          )
+          if (!cancelled && res.ok) {
+            const json = await res.json()
+            const fallbackCards = json.cards ?? []
+            setCards(fallbackCards)
+            setHasMore(false)
+            setLoading(false)
+            return
+          }
+        } catch {
+          // Ignore abort/network errors
         }
+      }
+
+      if (!cancelled) {
+        setCards(data ?? [])
+        setHasMore(false)
         setLoading(false)
       }
     }
@@ -139,6 +177,7 @@ export default function CardBrowser({ initialCards }: CardBrowserProps) {
 
     return () => {
       cancelled = true
+      controller?.abort()
     }
   }, [debouncedSearch, selectedColors, selectedType, selectedRarity, cmcMin, cmcMax, setCode, buildQuery, initialCards])
 

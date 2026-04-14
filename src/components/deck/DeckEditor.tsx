@@ -130,6 +130,28 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     [deck.id]
   )
 
+  const handleMoveToBoard = useCallback(
+    async (cardId: number, fromBoard: string, toBoard: string) => {
+      setCards((prev) =>
+        prev.map((c) =>
+          c.card.id === cardId && c.board === fromBoard
+            ? { ...c, board: toBoard }
+            : c
+        )
+      )
+      await fetch(`/api/decks/${deck.id}/cards`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card_id: cardId,
+          board: toBoard,
+          current_board: fromBoard,
+        }),
+      })
+    },
+    [deck.id]
+  )
+
   const handleToggleCommander = useCallback(
     async (cardId: number, currentBoard: string) => {
       const isCurrentlyCommander = currentBoard === 'commander'
@@ -408,6 +430,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             onQuantityChange={handleQuantityChange}
             onRemove={handleRemove}
             onToggleCommander={handleToggleCommander}
+            onMoveToBoard={handleMoveToBoard}
           />
 
         </div>

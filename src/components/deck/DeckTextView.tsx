@@ -1,6 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { Crown } from 'lucide-react'
+import CardContextMenu from './CardContextMenu'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
@@ -20,6 +22,7 @@ interface DeckTextViewProps {
   isCommander?: (cardId: number) => boolean
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
+  onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
 }
 
 export default function DeckTextView({
@@ -28,7 +31,11 @@ export default function DeckTextView({
   isCommander,
   onToggleCommander,
   onCardClick,
+  onMoveToBoard,
 }: DeckTextViewProps) {
+  const [hoverCard, setHoverCard] = useState<{ card: CardRow; x: number; y: number } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
+
   if (cards.length === 0 && (!groupsProp || groupsProp.length === 0)) {
     return (
       <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
@@ -76,12 +83,23 @@ export default function DeckTextView({
                       className={`group flex items-center gap-2 rounded px-2 py-0.5 text-sm transition-colors hover:bg-bg-hover ${
                         commander ? 'bg-bg-yellow/10' : ''
                       }`}
+                      onContextMenu={(e) => {
+                        if (onMoveToBoard) {
+                          e.preventDefault()
+                          setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
+                        }
+                      }}
                     >
                       <span className="w-6 text-right font-mono text-xs text-font-muted">
                         {entry.quantity}x
                       </span>
                       <button
                         onClick={() => onCardClick?.(entry.card)}
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setHoverCard({ card: entry.card, x: rect.left, y: rect.top })
+                        }}
+                        onMouseLeave={() => setHoverCard(null)}
                         className={`flex-1 text-left hover:text-font-accent transition-colors ${
                           commander
                             ? 'font-semibold text-bg-yellow'
@@ -120,6 +138,30 @@ export default function DeckTextView({
           )
         })}
       </div>
+      {hoverCard && hoverCard.card.image_normal && (
+        <div
+          className="pointer-events-none fixed z-50 hidden lg:block"
+          style={{
+            left: hoverCard.x + 200,
+            top: Math.max(8, hoverCard.y - 160),
+          }}
+        >
+          <img
+            src={hoverCard.card.image_normal}
+            alt={hoverCard.card.name}
+            className="h-auto w-56 rounded-lg shadow-2xl"
+          />
+        </div>
+      )}
+      {contextMenu && onMoveToBoard && (
+        <CardContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          currentBoard={contextMenu.board}
+          onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   )
 }

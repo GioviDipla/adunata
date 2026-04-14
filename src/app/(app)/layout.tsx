@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser } from "@/lib/supabase/get-user";
 import { Navbar } from "@/components/Navbar";
+import { SidebarProvider } from "@/lib/contexts/SidebarContext";
+import { MainContent } from "@/components/MainContent";
 
 export default async function AppLayout({
   children,
@@ -13,14 +15,11 @@ export default async function AppLayout({
   if (!user) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-bg-dark">
-      <Navbar />
-      {/* Main content area - offset for sidebar on desktop, bottom bar on mobile */}
-      <main className="pb-20 md:pb-0 md:pl-60">
-        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-          {children}
-        </div>
-      </main>
-    </div>
+    <SidebarProvider>
+      <div className="min-h-screen bg-bg-dark">
+        <Navbar />
+        <MainContent>{children}</MainContent>
+      </div>
+    </SidebarProvider>
   );
 }

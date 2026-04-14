@@ -63,7 +63,7 @@ export default function CardZoneViewer({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-bg-dark/80 p-0 sm:p-4">
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl sm:rounded-xl border border-border bg-bg-surface shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="relative z-10 flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-bold text-font-primary">
             {title} ({cards.length})
           </h2>
@@ -77,7 +77,7 @@ export default function CardZoneViewer({
 
         {/* Type filters */}
         {cards.length > 0 && (
-          <div className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2">
+          <div className="relative z-10 flex gap-1 overflow-x-auto border-b border-border px-3 py-2">
             {TYPE_FILTERS.map((f) => {
               const count = f === 'All' ? cards.length : (activeFilters[f] || 0)
               if (f !== 'All' && count === 0) return null
@@ -99,7 +99,7 @@ export default function CardZoneViewer({
         )}
 
         {/* Card list */}
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="isolate flex-1 overflow-y-auto p-3">
           {filteredCards.length === 0 ? (
             <p className="py-8 text-center text-sm text-font-muted">
               No cards in this zone.

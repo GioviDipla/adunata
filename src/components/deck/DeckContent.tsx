@@ -53,6 +53,7 @@ interface DeckContentProps {
   onQuantityChange?: (cardId: number, quantity: number, board: string) => void
   onRemove?: (cardId: number, board: string) => void
   onToggleCommander?: (cardId: number, board: string) => void
+  onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
 }
 
 export default function DeckContent({
@@ -63,6 +64,7 @@ export default function DeckContent({
   onQuantityChange,
   onRemove,
   onToggleCommander,
+  onMoveToBoard,
 }: DeckContentProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [sortMode, setSortMode] = useState<SortMode>('type')
@@ -250,6 +252,7 @@ export default function DeckContent({
               onToggleCommander={onToggleCommander}
               onCardClick={onCardClick}
               readOnly={readOnly}
+              onMoveToBoard={onMoveToBoard}
             />
           ) : viewMode === 'text' ? (
             <DeckTextView
@@ -257,6 +260,7 @@ export default function DeckContent({
               isCommander={() => true}
               onToggleCommander={onToggleCommander}
               onCardClick={onCardClick}
+              onMoveToBoard={onMoveToBoard}
             />
           ) : (
             <div className="flex flex-col gap-1">
@@ -271,6 +275,7 @@ export default function DeckContent({
                   onRemove={onRemove}
                   onToggleCommander={onToggleCommander}
                   onCardClick={onCardClick}
+                  onMoveToBoard={onMoveToBoard}
                 />
               ))}
             </div>
@@ -307,6 +312,7 @@ export default function DeckContent({
                         onRemove={onRemove}
                         onToggleCommander={onToggleCommander}
                         onCardClick={onCardClick}
+                        onMoveToBoard={onMoveToBoard}
                       />
                     ))}
                   </div>
@@ -326,6 +332,7 @@ export default function DeckContent({
           onToggleCommander={onToggleCommander}
           onCardClick={onCardClick}
           readOnly={readOnly}
+          onMoveToBoard={onMoveToBoard}
         />
       )}
 
@@ -336,6 +343,7 @@ export default function DeckContent({
           isCommander={isCommander}
           onToggleCommander={onToggleCommander}
           onCardClick={onCardClick}
+          onMoveToBoard={onMoveToBoard}
         />
       )}
     </div>

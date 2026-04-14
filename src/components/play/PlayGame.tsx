@@ -9,6 +9,7 @@ import {
   createConfirmUntap, createMoveZone, createLifeChange,
   createDraw, createConcede,
   createDeclareAttackers, createDeclareBlockers, createCombatDamage, createDiscard,
+  createMulligan, createKeepHand, createBottomCards,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, CardMap, LogEntry } from '@/lib/game/types'
@@ -124,6 +125,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [gameOver, setGameOver] = useState<{ winnerId: string } | null>(null)
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
   const [preview, setPreview] = useState<PreviewState | null>(null)
+  const [bottomSelectIds, setBottomSelectIds] = useState<Set<string>>(new Set())
 
   // Fetch initial state
   useEffect(() => {
@@ -399,6 +401,19 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     }
   }, [sendAction, userId, myName])
 
+  const handleMulligan = useCallback(() => {
+    sendAction(createMulligan(userId, myName))
+  }, [sendAction, userId, myName])
+
+  const handleKeepMultiplayerHand = useCallback(() => {
+    const mulliganCount = gameState?.mulliganStage?.playerDecisions[userId]?.mulliganCount ?? 0
+    sendAction(createKeepHand(userId, myName, mulliganCount))
+  }, [sendAction, userId, myName, gameState])
+
+  const handleBottomCardsConfirm = useCallback((selectedIds: string[]) => {
+    sendAction(createBottomCards(userId, myName, selectedIds, selectedIds.length))
+  }, [sendAction, userId, myName])
+
   // Auto combat damage calculation
   const combatDamageSentRef = useRef(false)
 
@@ -509,6 +524,124 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         <Link href="/play" className="rounded-xl bg-bg-accent px-6 py-2 text-sm font-bold text-font-white">
           Back to Lobby
         </Link>
+      </div>
+    )
+  }
+
+  // Mulligan stage
+  if (gameState.mulliganStage) {
+    const myDecision = gameState.mulliganStage.playerDecisions[userId]
+    const opponentDecision = opponentId ? gameState.mulliganStage.playerDecisions[opponentId] : null
+
+    // Bottom cards selection
+    if (myDecision.decided && !myDecision.bottomCardsDone && myDecision.needsBottomCards > 0) {
+      const needed = myDecision.needsBottomCards
+      return (
+        <div className="flex min-h-screen flex-col bg-bg-dark">
+          <div className="flex items-center justify-between border-b border-border bg-bg-surface px-4 py-3">
+            <span className="text-sm font-semibold text-font-primary">Multiplayer</span>
+            <span className="text-xs text-font-muted">Select {needed} card{needed > 1 ? 's' : ''} to put on bottom</span>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+            <h2 className="text-lg font-bold text-font-primary">Put {needed} Card{needed > 1 ? 's' : ''} on Bottom</h2>
+            <p className="text-sm text-font-secondary">Selected: {bottomSelectIds.size} / {needed}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {myHandCards.map((hc) => {
+                const isSelected = bottomSelectIds.has(hc.instanceId)
+                return (
+                  <button key={hc.instanceId}
+                    onClick={() => {
+                      if (!isSelected && bottomSelectIds.size >= needed) return
+                      setBottomSelectIds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(hc.instanceId)) next.delete(hc.instanceId); else next.add(hc.instanceId)
+                        return next
+                      })
+                    }}
+                    className={`relative overflow-hidden rounded-lg border transition-all ${isSelected ? 'border-bg-red ring-2 ring-bg-red/40' : 'border-border-light hover:border-bg-accent'}`}
+                    style={{ width: 90, height: 126 }}>
+                    {hc.card.image_small ? <img src={hc.card.image_small} alt={hc.card.name} className="h-full w-full object-cover" /> : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-bg-surface p-2">
+                        <span className="text-[8px] text-font-secondary">{hc.card.type_line?.split('—')[0].trim()}</span>
+                        <span className="text-center text-[10px] font-semibold text-font-primary">{hc.card.name}</span>
+                      </div>
+                    )}
+                    {isSelected && <div className="absolute inset-0 flex items-center justify-center bg-bg-dark/50"><span className="text-xs font-bold text-font-white">BOTTOM</span></div>}
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              onClick={() => {
+                handleBottomCardsConfirm(Array.from(bottomSelectIds))
+                setBottomSelectIds(new Set())
+              }}
+              disabled={bottomSelectIds.size !== needed}
+              className="rounded-xl bg-bg-green px-6 py-2.5 text-sm font-bold text-font-white hover:bg-bg-green/80 disabled:cursor-not-allowed disabled:opacity-40">
+              Confirm ({bottomSelectIds.size}/{needed})
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    // Mulligan decision (keep or mull)
+    if (!myDecision.decided) {
+      const mulliganCount = myDecision.mulliganCount
+      return (
+        <div className="flex min-h-screen flex-col bg-bg-dark">
+          <div className="flex items-center justify-between border-b border-border bg-bg-surface px-4 py-3">
+            <span className="text-sm font-semibold text-font-primary">Multiplayer</span>
+            <span className="text-xs text-font-muted">{mulliganCount > 0 ? `Mulligan ${mulliganCount}` : 'Opening Hand'}</span>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+            <h2 className="text-lg font-bold text-font-primary">
+              {mulliganCount === 0 ? 'Opening Hand' : `Mulligan ${mulliganCount} — Draw 7`}
+            </h2>
+            <p className="text-sm text-font-secondary">
+              {mulliganCount > 0 ? `After keeping, put ${mulliganCount} card${mulliganCount > 1 ? 's' : ''} on bottom.` : 'Keep this hand or mulligan?'}
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {myHandCards.map((hc) => (
+                <button key={hc.instanceId}
+                  onClick={() => setPreview({ card: hc.card })}
+                  className="overflow-hidden rounded-lg border border-border-light transition-transform hover:scale-105"
+                  style={{ width: 90, height: 126 }}>
+                  {hc.card.image_small ? <img src={hc.card.image_small} alt={hc.card.name} className="h-full w-full object-cover" /> : (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-bg-surface p-2">
+                      <span className="text-[8px] text-font-secondary">{hc.card.type_line?.split('—')[0].trim()}</span>
+                      <span className="text-center text-[10px] font-semibold text-font-primary">{hc.card.name}</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            {opponentDecision && (
+              <p className="text-xs text-font-muted">
+                {opponentDecision.decided
+                  ? (opponentDecision.bottomCardsDone ? 'Opponent is ready' : 'Opponent is selecting bottom cards...')
+                  : 'Opponent is deciding...'}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={handleKeepMultiplayerHand} className="rounded-xl bg-bg-green px-6 py-2.5 text-sm font-bold text-font-white hover:bg-bg-green/80">Keep</button>
+              {mulliganCount < 7 && (
+                <button onClick={handleMulligan} className="rounded-xl bg-bg-accent px-6 py-2.5 text-sm font-bold text-font-white hover:bg-bg-accent-dark">Mulligan</button>
+              )}
+            </div>
+          </div>
+          <CardPreviewOverlay preview={preview} onClose={closePreview} isCommanderCard={isCommanderCard}
+            onTapToggle={handleTapToggle} onReturnToHand={handleReturnToHand} onReturnToCommandZone={handleReturnToCommandZone}
+            onSendToGraveyard={handleSendToGraveyard} onExile={handleExile} onPlayCard={handlePlayCard}
+            onDiscardFromHand={handleDiscardFromHand} onExileFromHand={handleExileFromHand} onPlayFromCommandZone={handlePlayFromCommandZone} />
+        </div>
+      )
+    }
+
+    // Waiting for opponent to finish
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg-dark">
+        <span className="text-sm text-font-muted">Waiting for opponent to finish mulligan...</span>
       </div>
     )
   }

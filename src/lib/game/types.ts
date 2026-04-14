@@ -44,6 +44,15 @@ export interface GameState {
   players: Record<string, PlayerState>
   lastActionSeq: number
   apPassedFirst?: boolean
+  /** Mulligan stage: present during pre-game, absent once both players have kept */
+  mulliganStage?: {
+    playerDecisions: Record<string, {
+      mulliganCount: number
+      decided: boolean
+      needsBottomCards: number
+      bottomCardsDone: boolean
+    }>
+  }
 }
 
 export type GameActionType =
@@ -62,6 +71,9 @@ export type GameActionType =
   | 'phase_change'
   | 'confirm_untap'
   | 'concede'
+  | 'mulligan'
+  | 'keep_hand'
+  | 'bottom_cards'
 
 export interface GameAction {
   type: GameActionType

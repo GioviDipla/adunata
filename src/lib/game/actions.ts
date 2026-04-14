@@ -84,3 +84,23 @@ export function createDraw(playerId: string, playerName: string): GameAction {
 export function createConcede(playerId: string, playerName: string): GameAction {
   return { type: 'concede', playerId, data: {}, text: `${playerName} concedes` }
 }
+
+export function createMulligan(playerId: string, playerName: string): GameAction {
+  return { type: 'mulligan', playerId, data: {}, text: `${playerName} mulligans` }
+}
+
+export function createKeepHand(playerId: string, playerName: string, mulliganCount: number): GameAction {
+  return {
+    type: 'keep_hand', playerId,
+    data: { mulliganCount },
+    text: `${playerName} keeps hand${mulliganCount > 0 ? ` (mulligan ${mulliganCount})` : ''}`,
+  }
+}
+
+export function createBottomCards(playerId: string, playerName: string, instanceIds: string[], count: number): GameAction {
+  return {
+    type: 'bottom_cards', playerId,
+    data: { instanceIds, count },
+    text: `${playerName} puts ${count} card${count > 1 ? 's' : ''} on bottom`,
+  }
+}

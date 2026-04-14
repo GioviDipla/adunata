@@ -1,7 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Crown, Minus, Plus, X } from 'lucide-react'
+import CardContextMenu from './CardContextMenu'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -15,6 +17,7 @@ interface DeckCardProps {
   onRemove?: (cardId: number, board: string) => void
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
+  onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
 }
 
 function ManaCostDisplay({ manaCost }: { manaCost: string | null }) {
@@ -75,8 +78,18 @@ export default function DeckCard({
   onRemove,
   onToggleCommander,
   onCardClick,
+  onMoveToBoard,
 }: DeckCardProps) {
   const [showPreview, setShowPreview] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const lastPointerPos = useRef({ x: 0, y: 0 })
+
+  const longPress = useLongPress({
+    onLongPress: () => {
+      setContextMenu({ x: lastPointerPos.current.x, y: lastPointerPos.current.y })
+    },
+    delay: 500,
+  })
 
   return (
     <div
@@ -85,6 +98,22 @@ export default function DeckCard({
           ? 'border-bg-yellow/50 bg-bg-yellow/5'
           : 'border-border bg-bg-card'
       }`}
+      onContextMenu={(e) => {
+        if (onMoveToBoard) {
+          e.preventDefault()
+          setContextMenu({ x: e.clientX, y: e.clientY })
+        }
+      }}
+      onPointerDown={(e) => {
+        lastPointerPos.current = { x: e.clientX, y: e.clientY }
+        if (onMoveToBoard) longPress.onPointerDown()
+      }}
+      onPointerUp={onMoveToBoard ? longPress.onPointerUp : undefined}
+      onPointerLeave={() => {
+        setShowPreview(false)
+        if (onMoveToBoard) longPress.onPointerLeave()
+      }}
+      onPointerCancel={onMoveToBoard ? longPress.onPointerCancel : undefined}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
     >
@@ -116,7 +145,7 @@ export default function DeckCard({
       {/* Card info */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <button
-          onClick={() => onCardClick?.(card)}
+          onClick={() => { if (longPress.wasLongPress()) return; onCardClick?.(card) }}
           className="truncate text-xs sm:text-sm font-medium text-font-primary hover:text-font-accent transition-colors text-left"
         >
           {card.name}
@@ -179,6 +208,18 @@ export default function DeckCard({
             className="h-auto w-56 rounded-lg shadow-2xl"
           />
         </div>
+      )}
+
+      {/* Context menu for moving between boards */}
+      {contextMenu && onMoveToBoard && (
+        <CardContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          currentBoard={board}
+          onMoveToBoard={(toBoard) => onMoveToBoard(card.id, board, toBoard)}
+          onRemove={onRemove ? () => onRemove(card.id, board) : undefined}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </div>
   )

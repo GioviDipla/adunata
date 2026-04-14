@@ -1,6 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { Crown } from 'lucide-react'
+import CardContextMenu from './CardContextMenu'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -20,6 +22,7 @@ interface DeckGridViewProps {
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
   readOnly?: boolean
+  onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
 }
 
 export default function DeckGridView({
@@ -30,7 +33,9 @@ export default function DeckGridView({
   onToggleCommander,
   onCardClick,
   readOnly = false,
+  onMoveToBoard,
 }: DeckGridViewProps) {
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
   if (cards.length === 0) {
     return (
       <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
@@ -51,6 +56,12 @@ export default function DeckGridView({
                 ? 'ring-2 ring-bg-yellow shadow-lg shadow-bg-yellow/20'
                 : 'ring-1 ring-border hover:ring-border-light'
             }`}
+            onContextMenu={(e) => {
+              if (onMoveToBoard) {
+                e.preventDefault()
+                setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
+              }
+            }}
           >
             {/* Card image */}
             {entry.card.image_normal ? (
@@ -138,6 +149,16 @@ export default function DeckGridView({
           </div>
         )
       })}
+      {contextMenu && onMoveToBoard && (
+        <CardContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          currentBoard={contextMenu.board}
+          onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}
+          onRemove={onRemove ? () => onRemove(contextMenu.cardId, contextMenu.board) : undefined}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   )
 }

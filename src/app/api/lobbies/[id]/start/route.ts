@@ -97,6 +97,16 @@ export async function POST(
   await admin.from('game_players').update({ is_first: true }).eq('user_id', firstPlayerId).eq('lobby_id', lobbyId)
   await admin.from('game_players').update({ is_first: false }).eq('user_id', players[1 - firstPlayerIdx].user_id).eq('lobby_id', lobbyId)
 
+  const mulliganDecisions: Record<string, { mulliganCount: number; decided: boolean; needsBottomCards: number; bottomCardsDone: boolean }> = {}
+  for (const player of players) {
+    mulliganDecisions[player.user_id] = {
+      mulliganCount: 0,
+      decided: false,
+      needsBottomCards: 0,
+      bottomCardsDone: false,
+    }
+  }
+
   const initialState: GameState = {
     turn: 1,
     phase: 'untap',
@@ -106,6 +116,7 @@ export async function POST(
     combat: { phase: null, attackers: [], blockers: [], damageAssigned: false },
     players: playerStates,
     lastActionSeq: 0,
+    mulliganStage: { playerDecisions: mulliganDecisions },
   }
 
   // Create game state
