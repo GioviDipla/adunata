@@ -31,6 +31,7 @@ export interface Database {
           prices_usd_foil: number | null
           prices_eur: number | null
           prices_eur_foil: number | null
+          released_at: string | null
           legalities: Json | null
           power: string | null
           toughness: string | null
@@ -63,6 +64,7 @@ export interface Database {
           prices_usd_foil?: number | null
           prices_eur?: number | null
           prices_eur_foil?: number | null
+          released_at?: string | null
           legalities?: Json | null
           power?: string | null
           toughness?: string | null
@@ -95,6 +97,7 @@ export interface Database {
           prices_usd_foil?: number | null
           prices_eur?: number | null
           prices_eur_foil?: number | null
+          released_at?: string | null
           legalities?: Json | null
           power?: string | null
           toughness?: string | null
@@ -422,6 +425,10 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
+      get_distinct_sets: {
+        Args: Record<string, never>
+        Returns: { set_code: string; set_name: string; latest_release: string }[]
+      }
       lookup_cards_by_names: {
         Args: { card_names: string[] }
         Returns: Database['public']['Tables']['cards']['Row'][]

@@ -9,17 +9,25 @@ export const metadata = {
 export default async function CardsPage() {
   const supabase = await createClient()
 
-  const { data: initialCards } = await supabase
-    .from('cards')
-    .select('*')
-    .order('name', { ascending: true })
-    .limit(40)
+  const [{ data: initialCards }, { data: sets }] = await Promise.all([
+    supabase
+      .from('cards')
+      .select('*')
+      .not('released_at', 'is', null)
+      .order('released_at', { ascending: false })
+      .limit(40),
+    supabase
+      .rpc('get_distinct_sets'),
+  ])
 
   return (
     <div className="min-h-screen bg-bg-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-bold text-font-primary mb-6">Card Database</h1>
-        <CardBrowser initialCards={initialCards || []} />
+        <CardBrowser
+          initialCards={initialCards || []}
+          sets={(sets as { set_code: string; set_name: string; latest_release: string }[]) || []}
+        />
       </div>
     </div>
   )

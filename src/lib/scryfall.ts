@@ -38,6 +38,7 @@ export interface ScryfallCard {
   toughness?: string
   keywords?: string[]
   produced_mana?: string[]
+  released_at?: string
 }
 
 export interface ScryfallCardFace {
@@ -209,6 +210,7 @@ export function mapScryfallCard(card: ScryfallCard): CardInsert {
     prices_usd_foil: isNaN(priceUsdFoil as number) ? null : priceUsdFoil,
     prices_eur: isNaN(priceEur as number) ? null : priceEur,
     prices_eur_foil: isNaN(priceEurFoil as number) ? null : priceEurFoil,
+    released_at: card.released_at ?? null,
     legalities: card.legalities ?? null,
     power: card.power ?? frontFace?.power ?? null,
     toughness: card.toughness ?? frontFace?.toughness ?? null,
