@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Loader2, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Search, Loader2, ChevronDown, ChevronUp, X, ArrowUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/types/supabase'
 import { useDebounce } from '@/lib/hooks/useDebounce'
@@ -59,6 +59,7 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
   const [creatureType, setCreatureType] = useState('')
   const [selectedKeyword, setSelectedKeyword] = useState('')
   const [typeMode, setTypeMode] = useState<'and' | 'or'>('and')
+  const [sortBy, setSortBy] = useState<string>('released_at_desc')
 
   const debouncedSearch = useDebounce(searchText, 300)
   const debouncedCreatureType = useDebounce(creatureType, 300)
@@ -72,8 +73,25 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
 
       if (debouncedSearch.trim()) {
         query = query.textSearch('search_vector', debouncedSearch.trim(), { type: 'websearch' })
-      } else {
-        query = query.order('released_at', { ascending: false, nullsFirst: false })
+      }
+
+      // Apply sort
+      switch (sortBy) {
+        case 'name_asc':
+          query = query.order('name', { ascending: true }); break
+        case 'name_desc':
+          query = query.order('name', { ascending: false }); break
+        case 'cmc_asc':
+          query = query.order('cmc', { ascending: true }).order('name', { ascending: true }); break
+        case 'cmc_desc':
+          query = query.order('cmc', { ascending: false }).order('name', { ascending: true }); break
+        case 'price_asc':
+          query = query.order('prices_eur', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
+        case 'price_desc':
+          query = query.order('prices_eur', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
+        case 'released_at_desc':
+        default:
+          query = query.order('released_at', { ascending: false, nullsFirst: false }); break
       }
 
       if (selectedColors.length > 0) {
@@ -109,7 +127,7 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
 
       return query
     },
-    [supabase, debouncedSearch, selectedColors, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, selectedKeyword]
+    [supabase, debouncedSearch, selectedColors, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, selectedKeyword, sortBy]
   )
 
   useEffect(() => {
@@ -256,6 +274,26 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
             <span className="rounded-full bg-bg-accent px-1.5 py-0.5 text-[9px] font-bold text-font-white">{activeFilterCount}</span>
           )}
         </button>
+
+        <div className="w-px h-6 bg-border" />
+
+        {/* Sort dropdown */}
+        <label className="flex items-center gap-1.5 rounded-lg bg-bg-card border border-border px-2.5 py-2 text-sm text-font-secondary cursor-pointer">
+          <ArrowUpDown size={14} className="shrink-0 text-font-muted" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="bg-transparent text-font-primary text-sm focus:outline-none cursor-pointer"
+          >
+            <option value="released_at_desc" className="bg-bg-surface">Newest</option>
+            <option value="name_asc" className="bg-bg-surface">Name A→Z</option>
+            <option value="name_desc" className="bg-bg-surface">Name Z→A</option>
+            <option value="cmc_asc" className="bg-bg-surface">CMC Low→High</option>
+            <option value="cmc_desc" className="bg-bg-surface">CMC High→Low</option>
+            <option value="price_asc" className="bg-bg-surface">Price Low→High</option>
+            <option value="price_desc" className="bg-bg-surface">Price High→Low</option>
+          </select>
+        </label>
 
         {activeFilterCount > 0 && (
           <button onClick={clearFilters} className="text-xs text-font-accent hover:text-font-primary transition-colors">
