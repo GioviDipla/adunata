@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { getCardTypeCategory } from '@/lib/utils/card'
 import { TYPE_ICONS } from '@/lib/utils/typeIcons'
 import type { Database } from '@/types/supabase'
@@ -16,106 +17,141 @@ interface DeckStatsProps {
   cards: DeckCardEntry[]
 }
 
-function getColorForMana(color: string): string {
-  switch (color) {
-    case 'W': return 'bg-mana-white'
-    case 'U': return 'bg-mana-blue'
-    case 'B': return 'bg-mana-black'
-    case 'R': return 'bg-mana-red'
-    case 'G': return 'bg-mana-green'
-    default: return 'bg-bg-cell'
+const COLORS = ['W', 'U', 'B', 'R', 'G', 'C'] as const
+const COLOR_NAMES: Record<string, string> = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green', C: 'Colorless' }
+const COLOR_BG: Record<string, string> = { W: 'bg-mana-white', U: 'bg-mana-blue', B: 'bg-mana-black', R: 'bg-mana-red', G: 'bg-mana-green', C: 'bg-bg-cell' }
+const COLOR_TEXT: Record<string, string> = { W: 'text-mana-white', U: 'text-mana-blue', B: 'text-mana-black', R: 'text-mana-red', G: 'text-mana-green', C: 'text-font-muted' }
+// Mana symbol display colors (text on circle)
+const COLOR_SYMBOL_TEXT: Record<string, string> = { W: 'text-bg-dark', U: 'text-font-white', B: 'text-font-white', R: 'text-font-white', G: 'text-font-white', C: 'text-font-primary' }
+
+const CMC_BUCKETS = ['0', '1', '2', '3', '4', '5', '6', '7+'] as const
+
+/** Count mana pips in a mana_cost string like "{2}{W}{U}{U}" */
+function countManaPips(manaCost: string | null): Record<string, number> {
+  if (!manaCost) return {}
+  const pips: Record<string, number> = {}
+  const symbols = manaCost.match(/\{([^}]+)\}/g) || []
+  for (const sym of symbols) {
+    const s = sym.replace(/[{}]/g, '')
+    if (['W', 'U', 'B', 'R', 'G'].includes(s)) {
+      pips[s] = (pips[s] || 0) + 1
+    }
   }
+  return pips
 }
 
 export default function DeckStats({ cards }: DeckStatsProps) {
-  const mainCards = cards.filter((c) => c.board === 'main' || c.board === 'commander')
-  const sideboardCards = cards.filter((c) => c.board === 'sideboard')
+  const stats = useMemo(() => {
+    const mainCards = cards.filter((c) => c.board === 'main' || c.board === 'commander')
+    const sideboardCards = cards.filter((c) => c.board === 'sideboard')
+    const allDeckCards = [...mainCards, ...sideboardCards]
 
-  // Total cards
-  const totalMain = mainCards.reduce((sum, c) => sum + c.quantity, 0)
-  const totalSideboard = sideboardCards.reduce((sum, c) => sum + c.quantity, 0)
+    const totalMain = mainCards.reduce((s, c) => s + c.quantity, 0)
+    const totalSideboard = sideboardCards.reduce((s, c) => s + c.quantity, 0)
 
-  // Non-land cards for average CMC
-  const nonLandCards = mainCards.filter(
-    (c) => !c.card.type_line?.toLowerCase().includes('land')
-  )
-  const totalCMC = nonLandCards.reduce(
-    (sum, c) => sum + c.card.cmc * c.quantity,
-    0
-  )
-  const totalNonLandCount = nonLandCards.reduce((sum, c) => sum + c.quantity, 0)
-  const avgCMC = totalNonLandCount > 0 ? totalCMC / totalNonLandCount : 0
+    // Non-land cards
+    const nonLandCards = mainCards.filter((c) => !c.card.type_line?.toLowerCase().includes('land'))
+    const totalCMC = nonLandCards.reduce((s, c) => s + c.card.cmc * c.quantity, 0)
+    const totalNonLandCount = nonLandCards.reduce((s, c) => s + c.quantity, 0)
+    const avgCMC = totalNonLandCount > 0 ? totalCMC / totalNonLandCount : 0
+    const totalManaValue = mainCards.reduce((s, c) => s + c.card.cmc * c.quantity, 0)
 
-  // Mana curve (CMC distribution for non-land cards)
-  const manaCurve: Record<string, number> = {
-    '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7+': 0,
-  }
-  // Track dominant colors per CMC bucket
-  const cmcColors: Record<string, Record<string, number>> = {
-    '0': {}, '1': {}, '2': {}, '3': {}, '4': {}, '5': {}, '6': {}, '7+': {},
-  }
+    // --- Mana Cost (pips) per color ---
+    const costPips: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0 }
+    let totalCostPips = 0
+    nonLandCards.forEach(({ card, quantity }) => {
+      const pips = countManaPips(card.mana_cost)
+      for (const [color, count] of Object.entries(pips)) {
+        costPips[color] = (costPips[color] || 0) + count * quantity
+        totalCostPips += count * quantity
+      }
+    })
 
-  nonLandCards.forEach(({ card, quantity }) => {
-    const bucket = card.cmc >= 7 ? '7+' : String(Math.floor(card.cmc))
-    manaCurve[bucket] += quantity
-    if (card.colors) {
-      card.colors.forEach((color) => {
-        cmcColors[bucket][color] = (cmcColors[bucket][color] || 0) + quantity
-      })
+    // --- Mana Production per color ---
+    const productionCounts: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 }
+    let totalProduction = 0
+    mainCards.forEach(({ card, quantity }) => {
+      const pm = card.produced_mana as string[] | null
+      if (pm && pm.length > 0) {
+        for (const color of pm) {
+          if (color in productionCounts) {
+            productionCounts[color] += quantity
+            totalProduction += quantity
+          } else if (color === 'C' || !['W', 'U', 'B', 'R', 'G'].includes(color)) {
+            productionCounts['C'] += quantity
+            totalProduction += quantity
+          }
+        }
+      }
+    })
+
+    // --- Mana curve ---
+    const manaCurve: Record<string, number> = {}
+    const cmcByColor: Record<string, Record<string, number>> = {}
+    for (const b of CMC_BUCKETS) { manaCurve[b] = 0; cmcByColor[b] = {} }
+
+    nonLandCards.forEach(({ card, quantity }) => {
+      const bucket = card.cmc >= 7 ? '7+' : String(Math.floor(card.cmc))
+      manaCurve[bucket] += quantity
+      const colors = card.colors && card.colors.length > 0 ? card.colors : ['C']
+      for (const color of colors) {
+        cmcByColor[bucket][color] = (cmcByColor[bucket][color] || 0) + quantity
+      }
+    })
+    const maxCurve = Math.max(...Object.values(manaCurve), 1)
+
+    // --- Mana curve PER COLOR (for the per-color mini histograms) ---
+    const perColorCurve: Record<string, Record<string, number>> = {}
+    for (const color of COLORS) {
+      perColorCurve[color] = {}
+      for (const b of CMC_BUCKETS) perColorCurve[color][b] = 0
     }
-    if (!card.colors || card.colors.length === 0) {
-      cmcColors[bucket]['C'] = (cmcColors[bucket]['C'] || 0) + quantity
-    }
-  })
+    nonLandCards.forEach(({ card, quantity }) => {
+      const bucket = card.cmc >= 7 ? '7+' : String(Math.floor(card.cmc))
+      const colors = card.colors && card.colors.length > 0 ? card.colors : ['C']
+      for (const color of colors) {
+        if (color in perColorCurve) {
+          perColorCurve[color][bucket] += quantity
+        }
+      }
+    })
 
-  const maxCurve = Math.max(...Object.values(manaCurve), 1)
+    // --- Color distribution (card count) ---
+    const colorCounts: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 }
+    mainCards.forEach(({ card, quantity }) => {
+      if (card.colors && card.colors.length > 0) {
+        card.colors.forEach((c) => { if (c in colorCounts) colorCounts[c] += quantity })
+      } else if (!card.type_line?.toLowerCase().includes('land')) {
+        colorCounts['C'] += quantity
+      }
+    })
+    const totalColoredCards = Object.values(colorCounts).reduce((a, b) => a + b, 0) || 1
+
+    // --- Type distribution ---
+    const typeCounts: Record<string, number> = {}
+    mainCards.forEach(({ card, quantity }) => {
+      typeCounts[getCardTypeCategory(card.type_line)] = (typeCounts[getCardTypeCategory(card.type_line)] || 0) + quantity
+    })
+    const landCount = typeCounts['Lands'] || 0
+
+    // --- Prices ---
+    const totalValueEur = allDeckCards.reduce((s, c) => s + (c.card.prices_eur || 0) * c.quantity, 0)
+    const totalValueUsd = allDeckCards.reduce((s, c) => s + (c.card.prices_usd || 0) * c.quantity, 0)
+
+    return {
+      totalMain, totalSideboard, avgCMC, totalManaValue, landCount,
+      costPips, totalCostPips, productionCounts, totalProduction,
+      manaCurve, cmcByColor, maxCurve, perColorCurve,
+      colorCounts, totalColoredCards, typeCounts,
+      totalValueEur, totalValueUsd,
+    }
+  }, [cards])
 
   function getDominantColorClass(bucket: string): string {
-    const colors = cmcColors[bucket]
+    const colors = stats.cmcByColor[bucket]
     if (!colors || Object.keys(colors).length === 0) return 'bg-bg-accent'
     const dominant = Object.entries(colors).sort((a, b) => b[1] - a[1])[0][0]
-    return getColorForMana(dominant)
-  }
-
-  // Color distribution
-  const colorCounts: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 }
-  mainCards.forEach(({ card, quantity }) => {
-    if (card.colors && card.colors.length > 0) {
-      card.colors.forEach((color) => {
-        if (color in colorCounts) colorCounts[color] += quantity
-      })
-    } else if (!card.type_line?.toLowerCase().includes('land')) {
-      colorCounts['C'] += quantity
-    }
-  })
-  const totalColoredCards = Object.values(colorCounts).reduce((a, b) => a + b, 0) || 1
-
-  // Type distribution
-  const typeCounts: Record<string, number> = {}
-  mainCards.forEach(({ card, quantity }) => {
-    const category = getCardTypeCategory(card.type_line)
-    typeCounts[category] = (typeCounts[category] || 0) + quantity
-  })
-
-  // Land count
-  const landCount = typeCounts['Lands'] || 0
-
-  // Total value — EUR (Cardmarket) primary, USD (TCGPlayer) secondary
-  const allDeckCards = [...mainCards, ...sideboardCards]
-  const totalValueEur = allDeckCards.reduce(
-    (sum, c) => sum + (c.card.prices_eur || 0) * c.quantity, 0
-  )
-  const totalValueUsd = allDeckCards.reduce(
-    (sum, c) => sum + (c.card.prices_usd || 0) * c.quantity, 0
-  )
-
-  const colorNames: Record<string, string> = {
-    W: 'White',
-    U: 'Blue',
-    B: 'Black',
-    R: 'Red',
-    G: 'Green',
-    C: 'Colorless',
+    return COLOR_BG[dominant] || 'bg-bg-accent'
   }
 
   return (
@@ -124,67 +160,177 @@ export default function DeckStats({ cards }: DeckStatsProps) {
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-border bg-bg-cell p-3">
           <div className="text-xs text-font-muted">Main Deck</div>
-          <div className="text-lg font-bold text-font-primary">{totalMain}</div>
+          <div className="text-lg font-bold text-font-primary">{stats.totalMain}</div>
         </div>
         <div className="rounded-lg border border-border bg-bg-cell p-3">
           <div className="text-xs text-font-muted">Sideboard</div>
-          <div className="text-lg font-bold text-font-primary">{totalSideboard}</div>
+          <div className="text-lg font-bold text-font-primary">{stats.totalSideboard}</div>
         </div>
         <div className="rounded-lg border border-border bg-bg-cell p-3">
-          <div className="text-xs text-font-muted">Avg CMC</div>
-          <div className="text-lg font-bold text-font-primary">{avgCMC.toFixed(2)}</div>
+          <div className="text-xs text-font-muted">Avg Mana Value</div>
+          <div className="text-lg font-bold text-font-primary">{stats.avgCMC.toFixed(2)}</div>
         </div>
         <div className="rounded-lg border border-border bg-bg-cell p-3">
           <div className="text-xs text-font-muted">Lands</div>
           <div className="text-lg font-bold text-font-primary">
-            {landCount}
+            {stats.landCount}
             <span className="ml-1 text-xs font-normal text-font-muted">
-              ({totalMain > 0 ? ((landCount / totalMain) * 100).toFixed(0) : 0}%)
+              ({stats.totalMain > 0 ? ((stats.landCount / stats.totalMain) * 100).toFixed(0) : 0}%)
             </span>
           </div>
         </div>
       </div>
 
-      {/* Estimated value — Cardmarket EUR primary */}
+      {/* Estimated value */}
       <div className="rounded-lg border border-border bg-bg-cell p-3">
         <div className="text-xs text-font-muted">Estimated Value (Cardmarket)</div>
         <div className="flex items-baseline gap-3">
-          {totalValueEur > 0 ? (
-            <span className="text-lg font-bold text-font-accent">
-              €{totalValueEur.toFixed(2)}
-            </span>
+          {stats.totalValueEur > 0 ? (
+            <span className="text-lg font-bold text-font-accent">€{stats.totalValueEur.toFixed(2)}</span>
           ) : (
-            <span className="text-lg font-bold text-font-accent">
-              ${totalValueUsd.toFixed(2)}
-            </span>
+            <span className="text-lg font-bold text-font-accent">${stats.totalValueUsd.toFixed(2)}</span>
           )}
-          {totalValueEur > 0 && totalValueUsd > 0 && (
-            <span className="text-sm font-semibold text-font-secondary">
-              ${totalValueUsd.toFixed(2)}
-            </span>
+          {stats.totalValueEur > 0 && stats.totalValueUsd > 0 && (
+            <span className="text-sm font-semibold text-font-secondary">${stats.totalValueUsd.toFixed(2)}</span>
           )}
+        </div>
+      </div>
+
+      {/* Cost & Production bars */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-font-secondary">Mana Cost vs Production</h3>
+
+        {/* Cost bar */}
+        <div className="mb-2">
+          <div className="mb-1 text-[10px] font-medium text-font-muted">Cost</div>
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-bg-cell">
+            {(['W', 'U', 'B', 'R', 'G'] as const).map((color) => {
+              const pct = stats.totalCostPips > 0 ? (stats.costPips[color] / stats.totalCostPips) * 100 : 0
+              if (pct === 0) return null
+              return <div key={color} className={`${COLOR_BG[color]} opacity-80`} style={{ width: `${pct}%` }} title={`${COLOR_NAMES[color]}: ${stats.costPips[color]} pips (${pct.toFixed(0)}%)`} />
+            })}
+          </div>
+        </div>
+
+        {/* Production bar */}
+        <div>
+          <div className="mb-1 text-[10px] font-medium text-font-muted">Production</div>
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-bg-cell">
+            {COLORS.map((color) => {
+              const pct = stats.totalProduction > 0 ? (stats.productionCounts[color] / stats.totalProduction) * 100 : 0
+              if (pct === 0) return null
+              return <div key={color} className={`${COLOR_BG[color]} opacity-80`} style={{ width: `${pct}%` }} title={`${COLOR_NAMES[color]}: ${stats.productionCounts[color]} sources (${pct.toFixed(0)}%)`} />
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Per-color Cost vs Production breakdown */}
+      <div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {(['W', 'U', 'B', 'R', 'G', 'C'] as const).map((color) => {
+            const costPct = stats.totalCostPips > 0 ? ((stats.costPips[color] || 0) / stats.totalCostPips) * 100 : 0
+            const prodPct = stats.totalProduction > 0 ? (stats.productionCounts[color] / stats.totalProduction) * 100 : 0
+            if (costPct === 0 && prodPct === 0) return null
+            return (
+              <div key={color} className="rounded-lg border border-border bg-bg-cell p-2">
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <div className={`flex h-5 w-5 items-center justify-center rounded-full ${COLOR_BG[color]} ${COLOR_SYMBOL_TEXT[color]} text-[9px] font-bold`}>
+                    {color}
+                  </div>
+                  <span className="text-[10px] text-font-muted">{COLOR_NAMES[color]}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-9 text-[9px] text-font-muted">Cost</span>
+                    <div className="h-1.5 flex-1 rounded-full bg-bg-dark">
+                      <div className={`h-1.5 rounded-full ${COLOR_BG[color]} opacity-80`} style={{ width: `${Math.min(costPct, 100)}%` }} />
+                    </div>
+                    <span className="w-7 text-right text-[9px] text-font-secondary">{costPct.toFixed(0)}%</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-9 text-[9px] text-font-muted">Prod</span>
+                    <div className="h-1.5 flex-1 rounded-full bg-bg-dark">
+                      <div className={`h-1.5 rounded-full ${COLOR_BG[color]} opacity-60`} style={{ width: `${Math.min(prodPct, 100)}%` }} />
+                    </div>
+                    <span className="w-7 text-right text-[9px] text-font-secondary">{prodPct.toFixed(0)}%</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
       {/* Mana Curve */}
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-font-secondary">Mana Curve</h3>
+        <h3 className="mb-1 text-sm font-semibold text-font-secondary">Mana Curve</h3>
+        <div className="mb-1 flex items-baseline gap-2 text-[10px] text-font-muted">
+          <span>Avg: {stats.avgCMC.toFixed(2)}</span>
+          <span>Total: {stats.totalManaValue.toFixed(0)}</span>
+        </div>
         <div className="flex items-end gap-1.5" style={{ height: '120px' }}>
-          {Object.entries(manaCurve).map(([cmc, count]) => (
-            <div key={cmc} className="flex flex-1 flex-col items-center gap-1">
-              <span className="text-[10px] text-font-muted">{count || ''}</span>
-              <div className="relative w-full" style={{ height: '80px' }}>
-                <div
-                  className={`absolute bottom-0 w-full rounded-t transition-all ${getDominantColorClass(cmc)}`}
-                  style={{
-                    height: count > 0 ? `${Math.max((count / maxCurve) * 100, 8)}%` : '0%',
-                    opacity: count > 0 ? 0.8 : 0,
-                  }}
-                />
+          {CMC_BUCKETS.map((cmc) => {
+            const count = stats.manaCurve[cmc]
+            return (
+              <div key={cmc} className="flex flex-1 flex-col items-center gap-1">
+                <span className="text-[10px] text-font-muted">{count || ''}</span>
+                <div className="relative w-full" style={{ height: '80px' }}>
+                  <div
+                    className={`absolute bottom-0 w-full rounded-t transition-all ${getDominantColorClass(cmc)}`}
+                    style={{
+                      height: count > 0 ? `${Math.max((count / stats.maxCurve) * 100, 8)}%` : '0%',
+                      opacity: count > 0 ? 0.8 : 0,
+                    }}
+                  />
+                </div>
+                <span className="text-xs text-font-muted">{cmc}</span>
               </div>
-              <span className="text-xs text-font-muted">{cmc}</span>
-            </div>
-          ))}
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Mana Curve by Color */}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-font-secondary">Mana Curve by Color</h3>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {COLORS.map((color) => {
+            const curve = stats.perColorCurve[color]
+            const max = Math.max(...Object.values(curve), 1)
+            const total = Object.values(curve).reduce((a, b) => a + b, 0)
+            if (total === 0) return null
+            return (
+              <div key={color} className="rounded-lg border border-border bg-bg-cell p-2">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <div className={`flex h-4 w-4 items-center justify-center rounded-full ${COLOR_BG[color]} ${COLOR_SYMBOL_TEXT[color]} text-[8px] font-bold`}>
+                    {color}
+                  </div>
+                  <span className="text-[10px] text-font-muted">{COLOR_NAMES[color]}</span>
+                </div>
+                <div className="flex items-end gap-0.5" style={{ height: '40px' }}>
+                  {CMC_BUCKETS.map((cmc) => {
+                    const count = curve[cmc]
+                    return (
+                      <div key={cmc} className="flex flex-1 flex-col items-center">
+                        {count > 0 && <span className="text-[7px] text-font-muted">{count}</span>}
+                        <div className="relative w-full" style={{ height: '28px' }}>
+                          <div
+                            className={`absolute bottom-0 w-full rounded-t ${COLOR_BG[color]}`}
+                            style={{
+                              height: count > 0 ? `${Math.max((count / max) * 100, 10)}%` : '0%',
+                              opacity: count > 0 ? 0.7 : 0,
+                            }}
+                          />
+                        </div>
+                        <span className="text-[7px] text-font-muted">{cmc}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -192,31 +338,26 @@ export default function DeckStats({ cards }: DeckStatsProps) {
       <div>
         <h3 className="mb-3 text-sm font-semibold text-font-secondary">Color Distribution</h3>
         <div className="flex flex-col gap-2">
-          {Object.entries(colorCounts)
-            .filter(([, count]) => count > 0)
-            .sort((a, b) => b[1] - a[1])
-            .map(([color, count]) => (
-              <div key={color} className="flex items-center gap-2">
-                <div className={`h-3 w-3 rounded-full ${getColorForMana(color)}`} />
-                <span className="w-16 text-xs text-font-secondary">
-                  {colorNames[color]}
-                </span>
-                <div className="flex-1">
-                  <div className="h-2 w-full rounded-full bg-bg-cell">
-                    <div
-                      className={`h-2 rounded-full transition-all ${getColorForMana(color)}`}
-                      style={{
-                        width: `${(count / totalColoredCards) * 100}%`,
-                        opacity: 0.8,
-                      }}
-                    />
+          {COLORS
+            .filter((color) => stats.colorCounts[color] > 0)
+            .sort((a, b) => stats.colorCounts[b] - stats.colorCounts[a])
+            .map((color) => {
+              const count = stats.colorCounts[color]
+              return (
+                <div key={color} className="flex items-center gap-2">
+                  <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${COLOR_BG[color]} ${COLOR_SYMBOL_TEXT[color]} text-[9px] font-bold`}>
+                    {color}
                   </div>
+                  <span className="w-16 text-xs text-font-secondary">{COLOR_NAMES[color]}</span>
+                  <div className="flex-1">
+                    <div className="h-2 w-full rounded-full bg-bg-cell">
+                      <div className={`h-2 rounded-full ${COLOR_BG[color]} opacity-80`} style={{ width: `${(count / stats.totalColoredCards) * 100}%` }} />
+                    </div>
+                  </div>
+                  <span className="w-8 text-right text-xs text-font-muted">{count}</span>
                 </div>
-                <span className="w-8 text-right text-xs text-font-muted">
-                  {count}
-                </span>
-              </div>
-            ))}
+              )
+            })}
         </div>
       </div>
 
@@ -224,7 +365,7 @@ export default function DeckStats({ cards }: DeckStatsProps) {
       <div>
         <h3 className="mb-3 text-sm font-semibold text-font-secondary">Type Distribution</h3>
         <div className="flex flex-col gap-1">
-          {Object.entries(typeCounts)
+          {Object.entries(stats.typeCounts)
             .sort((a, b) => b[1] - a[1])
             .map(([type, count]) => {
               const Icon = TYPE_ICONS[type]
