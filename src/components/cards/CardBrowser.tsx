@@ -89,6 +89,8 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
           query = query.order('prices_eur', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
         case 'price_desc':
           query = query.order('prices_eur', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
+        case 'type_asc':
+          query = query.order('type_line', { ascending: true }).order('name', { ascending: true }); break
         case 'released_at_desc':
         default:
           query = query.order('released_at', { ascending: false, nullsFirst: false }); break
@@ -290,6 +292,7 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
             <option value="name_desc" className="bg-bg-surface">Name Z→A</option>
             <option value="cmc_asc" className="bg-bg-surface">CMC Low→High</option>
             <option value="cmc_desc" className="bg-bg-surface">CMC High→Low</option>
+            <option value="type_asc" className="bg-bg-surface">Type</option>
             <option value="price_asc" className="bg-bg-surface">Price Low→High</option>
             <option value="price_desc" className="bg-bg-surface">Price High→Low</option>
           </select>

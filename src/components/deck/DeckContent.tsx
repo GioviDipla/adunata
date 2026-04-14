@@ -25,12 +25,14 @@ export interface DeckCardEntry {
 }
 
 type ViewMode = 'list' | 'grid' | 'text'
-type SortMode = 'type' | 'name' | 'cmc'
+type SortMode = 'type' | 'name' | 'cmc' | 'price' | 'released'
 
 const SORT_LABELS: Record<SortMode, string> = {
   type: 'Type',
   name: 'Name',
   cmc: 'Mana Cost',
+  price: 'Price',
+  released: 'Newest',
 }
 
 const VIEW_MODE_OPTIONS: { mode: ViewMode; icon: typeof List; label: string }[] = [
@@ -104,13 +106,28 @@ export default function DeckContent({
       return sorted
     }
 
-    const sortFn =
-      sortMode === 'name'
-        ? (a: DeckCardEntry, b: DeckCardEntry) =>
-            a.card.name.localeCompare(b.card.name)
-        : (a: DeckCardEntry, b: DeckCardEntry) =>
-            a.card.cmc - b.card.cmc ||
-            a.card.name.localeCompare(b.card.name)
+    let sortFn: (a: DeckCardEntry, b: DeckCardEntry) => number
+    switch (sortMode) {
+      case 'name':
+        sortFn = (a, b) => a.card.name.localeCompare(b.card.name)
+        break
+      case 'price':
+        sortFn = (a, b) =>
+          ((b.card.prices_eur ?? b.card.prices_usd ?? 0) as number) -
+          ((a.card.prices_eur ?? a.card.prices_usd ?? 0) as number) ||
+          a.card.name.localeCompare(b.card.name)
+        break
+      case 'released':
+        sortFn = (a, b) =>
+          (b.card.released_at ?? '').localeCompare(a.card.released_at ?? '') ||
+          a.card.name.localeCompare(b.card.name)
+        break
+      case 'cmc':
+      default:
+        sortFn = (a, b) =>
+          a.card.cmc - b.card.cmc ||
+          a.card.name.localeCompare(b.card.name)
+    }
 
     const flat = [...visibleCards].sort(sortFn)
     return flat.length > 0 ? [['All Cards', flat]] : []
