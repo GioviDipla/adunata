@@ -99,13 +99,13 @@ export default function DeckStats({ cards }: DeckStatsProps) {
   // Land count
   const landCount = typeCounts['Lands'] || 0
 
-  // Total value
-  const totalValue = mainCards.reduce(
-    (sum, c) => sum + (c.card.prices_usd || 0) * c.quantity,
-    0
-  ) + sideboardCards.reduce(
-    (sum, c) => sum + (c.card.prices_usd || 0) * c.quantity,
-    0
+  // Total value — EUR (Cardmarket) primary, USD (TCGPlayer) secondary
+  const allDeckCards = [...mainCards, ...sideboardCards]
+  const totalValueEur = allDeckCards.reduce(
+    (sum, c) => sum + (c.card.prices_eur || 0) * c.quantity, 0
+  )
+  const totalValueUsd = allDeckCards.reduce(
+    (sum, c) => sum + (c.card.prices_usd || 0) * c.quantity, 0
   )
 
   const colorNames: Record<string, string> = {
@@ -144,16 +144,24 @@ export default function DeckStats({ cards }: DeckStatsProps) {
         </div>
       </div>
 
-      {/* Estimated value */}
+      {/* Estimated value — Cardmarket EUR primary */}
       <div className="rounded-lg border border-border bg-bg-cell p-3">
-        <div className="text-xs text-font-muted">Estimated Value</div>
+        <div className="text-xs text-font-muted">Estimated Value (Cardmarket)</div>
         <div className="flex items-baseline gap-3">
-          <span className="text-lg font-bold text-font-accent">
-            ${totalValue.toFixed(2)}
-          </span>
-          <span className="text-sm font-semibold text-font-secondary">
-            ~€{(totalValue * 0.92).toFixed(2)}
-          </span>
+          {totalValueEur > 0 ? (
+            <span className="text-lg font-bold text-font-accent">
+              €{totalValueEur.toFixed(2)}
+            </span>
+          ) : (
+            <span className="text-lg font-bold text-font-accent">
+              ${totalValueUsd.toFixed(2)}
+            </span>
+          )}
+          {totalValueEur > 0 && totalValueUsd > 0 && (
+            <span className="text-sm font-semibold text-font-secondary">
+              ${totalValueUsd.toFixed(2)}
+            </span>
+          )}
         </div>
       </div>
 

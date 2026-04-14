@@ -29,6 +29,8 @@ export interface Database {
           image_art_crop: string | null
           prices_usd: number | null
           prices_usd_foil: number | null
+          prices_eur: number | null
+          prices_eur_foil: number | null
           legalities: Json | null
           power: string | null
           toughness: string | null
@@ -59,6 +61,8 @@ export interface Database {
           image_art_crop?: string | null
           prices_usd?: number | null
           prices_usd_foil?: number | null
+          prices_eur?: number | null
+          prices_eur_foil?: number | null
           legalities?: Json | null
           power?: string | null
           toughness?: string | null
@@ -89,6 +93,8 @@ export interface Database {
           image_art_crop?: string | null
           prices_usd?: number | null
           prices_usd_foil?: number | null
+          prices_eur?: number | null
+          prices_eur_foil?: number | null
           legalities?: Json | null
           power?: string | null
           toughness?: string | null

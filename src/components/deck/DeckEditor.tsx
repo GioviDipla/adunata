@@ -14,6 +14,7 @@ import {
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import DeckStats from './DeckStats'
+import DeckStatsBar from './DeckStatsBar'
 import DeckExport from './DeckExport'
 import AddCardSearch from './AddCardSearch'
 import CardDetail from '@/components/cards/CardDetail'
@@ -37,7 +38,7 @@ interface DeckEditorProps {
   initialCards: DeckCardEntry[]
 }
 
-type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'stats'
+type BoardTab = 'main' | 'sideboard' | 'maybeboard'
 
 export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const router = useRouter()
@@ -51,6 +52,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const [deleting, setDeleting] = useState(false)
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [showImport, setShowImport] = useState(false)
+  const [showExpandedStats, setShowExpandedStats] = useState(false)
 
   // Extract commander cards
   const commanderCards = useMemo(
@@ -384,21 +386,37 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="flex flex-col gap-4 sm:gap-6">
-        <div>
+      {/* Compact stats bar — always visible */}
+      <DeckStatsBar
+        cards={statsCards}
+        format={deck.format}
+        expanded={showExpandedStats}
+        onToggleExpand={() => setShowExpandedStats((p) => !p)}
+      />
+
+      {/* Expanded stats on mobile (hidden on lg where right panel shows) */}
+      {showExpandedStats && (
+        <div className="lg:hidden rounded-xl border border-border bg-bg-surface p-4">
+          <DeckStats cards={statsCards} />
+        </div>
+      )}
+
+      {/* Two-panel layout: cards left, stats right on lg */}
+      <div className="flex gap-6">
+        {/* Left panel: Card list */}
+        <div className="flex-1 min-w-0">
           {/* Search bar */}
           <div className="mb-3 sm:mb-4">
             <AddCardSearch
               deckId={deck.id}
               onCardAdded={handleCardAdded}
-              currentBoard={activeTab === 'stats' ? 'main' : activeTab}
+              currentBoard={activeTab}
             />
           </div>
 
           {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
-            {(['main', 'sideboard', 'maybeboard', 'stats'] as BoardTab[]).map((tab) => (
+            {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -409,35 +427,38 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                 }`}
               >
                 <span className="sm:hidden">
-                  {tab === 'stats' ? 'Stats' : tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
+                  {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
                 </span>
                 <span className="hidden sm:inline">
-                  {tab === 'stats' ? 'Statistics' : tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
+                  {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
                 </span>
-                {tab !== 'stats' && (
-                  <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                    ({tabCounts[tab as keyof typeof tabCounts]})
-                  </span>
-                )}
+                <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                  ({tabCounts[tab]})
+                </span>
               </button>
             ))}
           </div>
 
-          {activeTab === 'stats' ? (
-            <DeckStats cards={statsCards} />
-          ) : (
-            <DeckContent
-              cards={filteredCards}
-              commanderCards={commanderCards}
-              isCommander={isCommander}
-              onCardClick={setSelectedDetailCard}
-              onQuantityChange={handleQuantityChange}
-              onRemove={handleRemove}
-              onToggleCommander={handleToggleCommander}
-              onMoveToBoard={handleMoveToBoard}
-            />
-          )}
+          <DeckContent
+            cards={filteredCards}
+            commanderCards={commanderCards}
+            isCommander={isCommander}
+            onCardClick={setSelectedDetailCard}
+            onQuantityChange={handleQuantityChange}
+            onRemove={handleRemove}
+            onToggleCommander={handleToggleCommander}
+            onMoveToBoard={handleMoveToBoard}
+          />
+        </div>
 
+        {/* Right panel: Full stats — only on lg+ */}
+        <div className="hidden lg:block w-80 shrink-0">
+          <div className="sticky top-6 rounded-xl border border-border bg-bg-surface p-4">
+            <h2 className="mb-4 text-sm font-semibold text-font-secondary">
+              Deck Statistics
+            </h2>
+            <DeckStats cards={statsCards} />
+          </div>
         </div>
       </div>
 
@@ -490,7 +511,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             handlePrintingSelect(selectedDetailCard, newPrinting)
           }
           onAddToDeck={(card) => {
-            handleCardAdded(card, activeTab === 'stats' ? 'main' : activeTab)
+            handleCardAdded(card, activeTab)
           }}
         />
       )}
@@ -498,7 +519,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
       {showImport && (
         <ImportCardsModal
           deckId={deck.id}
-          currentBoard={activeTab === 'stats' ? 'main' : activeTab}
+          currentBoard={activeTab}
           onClose={() => setShowImport(false)}
           onCardsImported={(imported) => {
             for (const { card, board } of imported) {

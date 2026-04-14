@@ -184,6 +184,10 @@ export function mapScryfallCard(card: ScryfallCard): CardInsert {
   const priceUsdFoil = card.prices?.usd_foil
     ? parseFloat(card.prices.usd_foil)
     : null
+  const priceEur = card.prices?.eur ? parseFloat(card.prices.eur) : null
+  const priceEurFoil = card.prices?.eur_foil
+    ? parseFloat(card.prices.eur_foil)
+    : null
 
   return {
     scryfall_id: card.id,
@@ -203,6 +207,8 @@ export function mapScryfallCard(card: ScryfallCard): CardInsert {
     image_art_crop: imageUris?.art_crop ?? null,
     prices_usd: isNaN(priceUsd as number) ? null : priceUsd,
     prices_usd_foil: isNaN(priceUsdFoil as number) ? null : priceUsdFoil,
+    prices_eur: isNaN(priceEur as number) ? null : priceEur,
+    prices_eur_foil: isNaN(priceEurFoil as number) ? null : priceEurFoil,
     legalities: card.legalities ?? null,
     power: card.power ?? frontFace?.power ?? null,
     toughness: card.toughness ?? frontFace?.toughness ?? null,
