@@ -58,6 +58,7 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
   const [selectedSet, setSelectedSet] = useState('')
   const [creatureType, setCreatureType] = useState('')
   const [selectedKeyword, setSelectedKeyword] = useState('')
+  const [typeMode, setTypeMode] = useState<'and' | 'or'>('and')
 
   const debouncedSearch = useDebounce(searchText, 300)
   const debouncedCreatureType = useDebounce(creatureType, 300)
@@ -82,7 +83,15 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
       if (selectedTypes.length === 1) {
         query = query.ilike('type_line', `%${selectedTypes[0]}%`)
       } else if (selectedTypes.length > 1) {
-        query = query.or(selectedTypes.map(t => `type_line.ilike.%${t}%`).join(','))
+        if (typeMode === 'and') {
+          // AND: each type must appear in type_line (e.g. "Artifact Creature")
+          for (const t of selectedTypes) {
+            query = query.ilike('type_line', `%${t}%`)
+          }
+        } else {
+          // OR: any of the types
+          query = query.or(selectedTypes.map(t => `type_line.ilike.%${t}%`).join(','))
+        }
       }
 
       if (selectedRarity) query = query.eq('rarity', selectedRarity)
@@ -100,7 +109,7 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
 
       return query
     },
-    [supabase, debouncedSearch, selectedColors, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, selectedKeyword]
+    [supabase, debouncedSearch, selectedColors, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, selectedKeyword]
   )
 
   useEffect(() => {
@@ -314,7 +323,22 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
 
           {/* Card types (multi-select toggle) */}
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-font-muted">Card Type</label>
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-font-muted">Card Type</span>
+              {selectedTypes.length > 1 && (
+                <button
+                  onClick={() => setTypeMode((m) => m === 'and' ? 'or' : 'and')}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                    typeMode === 'and'
+                      ? 'bg-bg-accent/20 text-font-accent'
+                      : 'bg-bg-yellow/20 text-bg-yellow'
+                  }`}
+                  title={typeMode === 'and' ? 'AND: card must match ALL selected types' : 'OR: card must match ANY selected type'}
+                >
+                  {typeMode.toUpperCase()}
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {CARD_TYPES.map((type) => {
                 const isActive = selectedTypes.includes(type)
