@@ -18,6 +18,18 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
       currentBoard = 'sideboard'
       continue
     }
+    if (/^maybeboard\s*$/i.test(line)) {
+      currentBoard = 'maybeboard'
+      continue
+    }
+    if (/^commander\s*$/i.test(line)) {
+      currentBoard = 'commander'
+      continue
+    }
+    if (/^mainboard\s*$/i.test(line) || /^main\s*deck\s*$/i.test(line)) {
+      currentBoard = 'main'
+      continue
+    }
 
     let workingLine = line
     let board = currentBoard

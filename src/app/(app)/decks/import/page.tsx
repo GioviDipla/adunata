@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Upload, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Upload, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { parseDeckList } from '@/lib/utils/deckParser'
@@ -23,19 +23,12 @@ const FORMATS = [
   'Casual',
 ]
 
-interface ImportResult {
-  name: string
-  status: 'success' | 'error' | 'pending'
-  message?: string
-}
-
 export default function ImportDeckPage() {
   const router = useRouter()
   const [deckName, setDeckName] = useState('')
-  const [format, setFormat] = useState('Standard')
+  const [format, setFormat] = useState('Commander')
   const [deckText, setDeckText] = useState('')
   const [importing, setImporting] = useState(false)
-  const [progress, setProgress] = useState<ImportResult[]>([])
   const [error, setError] = useState<string | null>(null)
 
   async function handleImport(e: React.FormEvent) {
@@ -59,115 +52,62 @@ export default function ImportDeckPage() {
 
     setImporting(true)
     setError(null)
-    setProgress(
-      parsedCards.map((c) => ({
-        name: `${c.quantity}x ${c.name}`,
-        status: 'pending' as const,
-      }))
-    )
 
-    // Step 1: Create the deck
-    const deckRes = await fetch('/api/decks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: deckName.trim(),
-        format,
-      }),
-    })
+    try {
+      // Step 1: Create the deck
+      const deckRes = await fetch('/api/decks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: deckName.trim(),
+          format,
+        }),
+      })
 
-    if (!deckRes.ok) {
-      setError('Failed to create deck')
-      setImporting(false)
-      return
-    }
-
-    const { deck } = await deckRes.json()
-    const errors: string[] = []
-
-    // Step 2: Look up each card and add to deck
-    for (let i = 0; i < parsedCards.length; i++) {
-      const parsed = parsedCards[i]
-
-      setProgress((prev) =>
-        prev.map((p, idx) =>
-          idx === i ? { ...p, status: 'pending' as const, message: 'Looking up...' } : p
-        )
-      )
-
-      try {
-        // Look up card via API (checks local DB, falls back to Scryfall)
-        const lookupRes = await fetch(
-          `/api/cards/lookup?name=${encodeURIComponent(parsed.name)}`
-        )
-
-        if (!lookupRes.ok) {
-          setProgress((prev) =>
-            prev.map((p, idx) =>
-              idx === i
-                ? { ...p, status: 'error' as const, message: `Card not found: ${parsed.name}` }
-                : p
-            )
-          )
-          errors.push(parsed.name)
-          continue
-        }
-
-        const { card } = await lookupRes.json()
-
-        // Add card to deck
-        const addRes = await fetch(`/api/decks/${deck.id}/cards`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            card_id: card.id,
-            quantity: parsed.quantity,
-            board: parsed.board,
-          }),
-        })
-
-        if (addRes.ok) {
-          setProgress((prev) =>
-            prev.map((p, idx) =>
-              idx === i ? { ...p, status: 'success' as const, message: 'Added' } : p
-            )
-          )
-        } else {
-          setProgress((prev) =>
-            prev.map((p, idx) =>
-              idx === i
-                ? { ...p, status: 'error' as const, message: 'Failed to add to deck' }
-                : p
-            )
-          )
-          errors.push(parsed.name)
-        }
-      } catch {
-        setProgress((prev) =>
-          prev.map((p, idx) =>
-            idx === i
-              ? { ...p, status: 'error' as const, message: 'Lookup failed' }
-              : p
-          )
-        )
-        errors.push(parsed.name)
+      if (!deckRes.ok) {
+        setError('Failed to create deck')
+        setImporting(false)
+        return
       }
 
-      // Small delay to avoid hammering Scryfall rate limit
-      await new Promise((r) => setTimeout(r, 120))
-    }
+      const { deck } = await deckRes.json()
 
-    if (errors.length === 0) {
-      // All cards imported successfully, redirect
-      router.push(`/decks/${deck.id}`)
-    } else {
-      setError(
-        `${errors.length} card(s) could not be imported. You can add them manually in the deck editor.`
-      )
-      // Still allow navigation
-      setTimeout(() => {
+      // Step 2: Bulk import all cards in one request
+      const res = await fetch(`/api/decks/${deck.id}/cards/bulk-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: parsedCards.map((p) => ({
+            name: p.name,
+            quantity: p.quantity,
+            board: p.board,
+          })),
+        }),
+      })
+
+      const data = await res.json() as {
+        imported?: { card: { name: string }; board: string }[]
+        failures?: { name: string; reason: string }[]
+        error?: string
+      }
+
+      if (!res.ok) {
+        setError(data.error ?? 'Import failed')
+        setImporting(false)
+        return
+      }
+
+      const failures = data.failures ?? []
+      if (failures.length > 0) {
+        setError(
+          `${failures.length} card(s) not found: ${failures.map((f) => f.name).join(', ')}. Redirecting...`
+        )
+        setTimeout(() => router.push(`/decks/${deck.id}`), 2000)
+      } else {
         router.push(`/decks/${deck.id}`)
-      }, 3000)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed')
     }
 
     setImporting(false)
@@ -259,44 +199,10 @@ export default function ImportDeckPage() {
         </Button>
       </form>
 
-      {/* Progress display */}
-      {progress.length > 0 && (
-        <div className="mt-6 rounded-xl border border-border bg-bg-surface p-4">
-          <h3 className="mb-3 text-sm font-semibold text-font-secondary">
-            Import Progress
-          </h3>
-          <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-            {progress.map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 rounded px-2 py-1 text-sm"
-              >
-                {item.status === 'pending' && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-font-muted" />
-                )}
-                {item.status === 'success' && (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-bg-green" />
-                )}
-                {item.status === 'error' && (
-                  <AlertCircle className="h-3.5 w-3.5 text-bg-red" />
-                )}
-                <span
-                  className={
-                    item.status === 'error'
-                      ? 'text-bg-red'
-                      : item.status === 'success'
-                        ? 'text-font-primary'
-                        : 'text-font-muted'
-                  }
-                >
-                  {item.name}
-                </span>
-                {item.message && (
-                  <span className="text-xs text-font-muted">- {item.message}</span>
-                )}
-              </div>
-            ))}
-          </div>
+      {importing && (
+        <div className="mt-6 flex items-center gap-3 rounded-xl border border-border bg-bg-surface px-4 py-3">
+          <Loader2 className="h-4 w-4 animate-spin text-bg-accent" />
+          <span className="text-sm text-font-secondary">Importing cards...</span>
         </div>
       )}
     </div>
