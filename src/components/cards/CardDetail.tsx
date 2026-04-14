@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { X, Plus, ChevronDown, Loader2 } from 'lucide-react'
+import { X, Plus, ChevronDown, Loader2, Check, Layers } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
 
@@ -25,10 +26,17 @@ const LEGALITY_COLORS: Record<string, string> = {
   restricted: 'bg-bg-yellow/20 text-bg-yellow',
 }
 
+interface DeckSummary {
+  id: string
+  name: string
+  format: string
+}
+
 interface CardDetailProps {
   card: Card
   onClose: () => void
   onPrintingSelect?: (printing: Card) => void
+  /** If provided, called after adding card to a deck (for local state update in deck editor) */
   onAddToDeck?: (card: Card) => void
 }
 
@@ -37,6 +45,13 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   const [printings, setPrintings] = useState<Card[]>([])
   const [loadingPrintings, setLoadingPrintings] = useState(false)
   const [showPrintings, setShowPrintings] = useState(false)
+
+  // Add to deck state
+  const [showDeckPicker, setShowDeckPicker] = useState(false)
+  const [myDecks, setMyDecks] = useState<DeckSummary[]>([])
+  const [loadingDecks, setLoadingDecks] = useState(false)
+  const [addedToDeckId, setAddedToDeckId] = useState<string | null>(null)
+  const [addingToDeck, setAddingToDeck] = useState<string | null>(null)
 
   const legalities = displayCard.legalities as Record<string, string> | null
   const cardFaces = displayCard.card_faces as CardFace[] | null
@@ -73,6 +88,42 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     setDisplayCard(printing)
     setShowPrintings(false)
     onPrintingSelect?.(printing)
+  }
+
+  async function toggleDeckPicker() {
+    if (showDeckPicker) {
+      setShowDeckPicker(false)
+      return
+    }
+    setShowDeckPicker(true)
+    if (myDecks.length > 0) return // already loaded
+    setLoadingDecks(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('decks')
+        .select('id, name, format')
+        .order('updated_at', { ascending: false })
+      setMyDecks((data as DeckSummary[]) ?? [])
+    } catch { /* ignore */ }
+    setLoadingDecks(false)
+  }
+
+  async function addCardToDeck(deckId: string) {
+    setAddingToDeck(deckId)
+    try {
+      const res = await fetch(`/api/decks/${deckId}/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: displayCard.id, quantity: 1, board: 'main' }),
+      })
+      if (res.ok) {
+        setAddedToDeckId(deckId)
+        onAddToDeck?.(displayCard)
+        setTimeout(() => setAddedToDeckId(null), 1500)
+      }
+    } catch { /* ignore */ }
+    setAddingToDeck(null)
   }
 
   return (
@@ -273,16 +324,56 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                 </div>
               )}
 
-              {/* Add to Deck button */}
-              {onAddToDeck && (
+              {/* Add to Deck */}
+              <div className="relative">
                 <button
-                  onClick={() => { onAddToDeck(displayCard); onClose() }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-bg-accent hover:bg-bg-accent-dark text-font-white font-medium transition-colors"
+                  onClick={toggleDeckPicker}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                    showDeckPicker
+                      ? 'bg-bg-accent text-font-white'
+                      : 'bg-bg-accent hover:bg-bg-accent-dark text-font-white'
+                  }`}
                 >
                   <Plus size={16} />
                   Add to Deck
+                  <ChevronDown size={14} className={`transition-transform ${showDeckPicker ? 'rotate-180' : ''}`} />
                 </button>
-              )}
+
+                {showDeckPicker && (
+                  <div className="absolute left-0 top-full z-20 mt-1 w-72 max-h-60 overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-xl">
+                    {loadingDecks ? (
+                      <div className="flex items-center justify-center gap-2 px-3 py-4 text-sm text-font-muted">
+                        <Loader2 size={14} className="animate-spin" /> Loading decks...
+                      </div>
+                    ) : myDecks.length === 0 ? (
+                      <div className="px-3 py-4 text-sm text-font-muted text-center">
+                        No decks found. Create a deck first.
+                      </div>
+                    ) : (
+                      myDecks.map((deck) => (
+                        <button
+                          key={deck.id}
+                          onClick={() => addCardToDeck(deck.id)}
+                          disabled={addingToDeck === deck.id}
+                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-bg-hover disabled:opacity-50"
+                        >
+                          <Layers size={14} className="shrink-0 text-font-muted" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium text-font-primary">{deck.name}</div>
+                            <div className="text-[10px] text-font-muted">{deck.format}</div>
+                          </div>
+                          {addingToDeck === deck.id && (
+                            <Loader2 size={14} className="shrink-0 animate-spin text-font-muted" />
+                          )}
+                          {addedToDeckId === deck.id && (
+                            <Check size={14} className="shrink-0 text-bg-green" />
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
