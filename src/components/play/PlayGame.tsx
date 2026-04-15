@@ -537,6 +537,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     if (gameState.priorityPlayerId !== userId) return
     if (combatDamageSentRef.current) return
     if (gameState.combat.damageAssigned) return
+    if (gameState.combat.damageApplied) return  // Already calculated, in response window
 
     combatDamageSentRef.current = true
 

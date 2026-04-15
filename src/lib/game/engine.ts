@@ -31,6 +31,8 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleDeclareBlockers(s, action)
     case 'combat_damage':
       return handleCombatDamage(s, action)
+    case 'resolve_combat_damage':
+      return handleResolveCombatDamage(s, action)
     case 'draw':
       return handleDraw(s, action)
     case 'discard':
@@ -83,8 +85,12 @@ function handlePassPriority(s: GameState, action: GameAction): GameState {
 
   // NAP is passing
   if (s.apPassedFirst) {
-    // Both passed in sequence (AP then NAP) → advance phase
+    // Both passed in sequence (AP then NAP)
     s.apPassedFirst = false
+    // If combat damage was applied and both pass, resolve it
+    if (s.phase === 'combat_damage' && s.combat.damageApplied) {
+      return handleResolveCombatDamage(s, action)
+    }
     return advancePhase(s)
   }
 
@@ -157,26 +163,6 @@ function advancePhase(s: GameState): GameState {
   }
 
   if (nextPhaseKey === 'end_combat') {
-    // Move lethal-damage creatures to graveyard
-    for (const pid of Object.keys(s.players)) {
-      const player = s.players[pid]
-      const dead: BattlefieldCardState[] = []
-      const alive: BattlefieldCardState[] = []
-      for (const c of player.battlefield) {
-        if (c.highlighted === 'red') dead.push(c)
-        else alive.push(c)
-      }
-      player.battlefield = alive.map((c) => ({
-        ...c,
-        attacking: false,
-        blocking: null,
-        damageMarked: 0,
-        highlighted: null,
-      }))
-      for (const c of dead) {
-        player.graveyard.push({ instanceId: c.instanceId, cardId: c.cardId })
-      }
-    }
     s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false, damageApplied: false }
   }
 
@@ -421,9 +407,15 @@ function handleCombatDamage(s: GameState, _action: GameAction): GameState {
     }
   }
 
-  // Auto-advance: move dead creatures to graveyard, clear combat state,
-  // and jump to main2. Otherwise AP would be stuck in combat_damage with
-  // priority but no way to move forward.
+  // Mark damage applied — give priority for responses before resolving
+  s.combat.damageApplied = true
+  s.priorityPlayerId = s.activePlayerId
+  s.apPassedFirst = false
+  return s
+}
+
+function handleResolveCombatDamage(s: GameState, _action: GameAction): GameState {
+  // Move all red-highlighted (lethal damage) creatures to graveyard
   for (const pid of Object.keys(s.players)) {
     const player = s.players[pid]
     const dead: BattlefieldCardState[] = []
@@ -438,13 +430,13 @@ function handleCombatDamage(s: GameState, _action: GameAction): GameState {
       blocking: null,
       damageMarked: 0,
       highlighted: null,
+      counters: c.counters,
     }))
     for (const c of dead) {
       player.graveyard.push({ instanceId: c.instanceId, cardId: c.cardId })
     }
   }
-
-  s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: true, damageApplied: true }
+  s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: true, damageApplied: false }
   s.phase = 'main2'
   s.priorityPlayerId = s.activePlayerId
   s.apPassedFirst = false
