@@ -71,15 +71,25 @@ export default function SpecialActionsMenu({
           })}
         </div>
 
-        {/* Number input + Go */}
+        {/* Number selector + Go */}
         {selected && (
           <div className="flex items-center gap-3">
             <label className="text-xs text-font-secondary">N:</label>
-            <input type="number" min={1} max={10} value={n}
-              onChange={(e) => setN(Math.max(1, Math.min(10, Number(e.target.value))))}
-              className="w-16 rounded bg-bg-cell px-2 py-1.5 text-center text-sm text-font-primary outline-none" />
+            <div className="flex items-center gap-0">
+              <button onClick={() => setN(Math.max(1, n - 1))}
+                className="flex h-9 w-9 items-center justify-center rounded-l-lg bg-bg-cell text-lg font-bold text-font-primary active:bg-bg-hover">
+                −
+              </button>
+              <div className="flex h-9 w-10 items-center justify-center bg-bg-dark text-sm font-bold text-font-primary">
+                {n}
+              </div>
+              <button onClick={() => setN(Math.min(10, n + 1))}
+                className="flex h-9 w-9 items-center justify-center rounded-r-lg bg-bg-cell text-lg font-bold text-font-primary active:bg-bg-hover">
+                +
+              </button>
+            </div>
             <button onClick={handleConfirm}
-              className="flex-1 rounded-lg bg-bg-accent py-2 text-sm font-bold text-font-white">
+              className="flex-1 rounded-lg bg-bg-accent py-2.5 text-sm font-bold text-font-white active:bg-bg-accent-dark">
               Go
             </button>
           </div>
