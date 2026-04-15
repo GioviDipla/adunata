@@ -13,6 +13,7 @@ import {
   Plus,
 } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
@@ -65,13 +66,9 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const [showImport, setShowImport] = useState(false)
   const [showExpandedStats, setShowExpandedStats] = useState(false)
   const [tokens, setTokens] = useState<TokenDef[]>([])
-  const [showAddToken, setShowAddToken] = useState(false)
-  const [newTokenName, setNewTokenName] = useState('')
-  const [newTokenPower, setNewTokenPower] = useState('')
-  const [newTokenToughness, setNewTokenToughness] = useState('')
-  const [newTokenColors, setNewTokenColors] = useState<string[]>([])
-  const [newTokenTypeLine, setNewTokenTypeLine] = useState('Token Creature')
-  const [newTokenKeywords, setNewTokenKeywords] = useState('')
+  const [tokenSearch, setTokenSearch] = useState('')
+  const [tokenSearchResults, setTokenSearchResults] = useState<CardRow[]>([])
+  const [searchingTokens, setSearchingTokens] = useState(false)
 
   // Fetch tokens when tokens tab is active
   useEffect(() => {
@@ -90,15 +87,74 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     return () => { cancelled = true }
   }, [activeTab, deck.id])
 
-  const handleAddToken = useCallback(async () => {
-    if (!newTokenName.trim()) return
+  // Search tokens from DB + Scryfall
+  useEffect(() => {
+    if (tokenSearch.trim().length < 2) {
+      setTokenSearchResults([])
+      return
+    }
+    const controller = new AbortController()
+    let timeout: ReturnType<typeof setTimeout>
+    timeout = setTimeout(async () => {
+      setSearchingTokens(true)
+      try {
+        // Search local DB for tokens
+        const supabase = createClient()
+        const { data: localTokens } = await supabase
+          .from('cards')
+          .select('*')
+          .ilike('type_line', '%Token%')
+          .ilike('name', `%${tokenSearch.trim()}%`)
+          .limit(10)
+
+        if (controller.signal.aborted) return
+
+        if (localTokens && localTokens.length >= 3) {
+          setTokenSearchResults(localTokens)
+          setSearchingTokens(false)
+          return
+        }
+
+        // Fallback to Scryfall search for tokens
+        const res = await fetch(
+          `https://api.scryfall.com/cards/search?q=t:token+${encodeURIComponent(tokenSearch.trim())}&unique=cards`,
+          { signal: controller.signal }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          const scryfallTokens = (data.data ?? []).slice(0, 10).map((c: Record<string, unknown>) => ({
+            id: c.id,
+            name: c.name,
+            type_line: c.type_line,
+            power: c.power ?? null,
+            toughness: c.toughness ?? null,
+            colors: c.colors ?? [],
+            image_small: c.image_uris ? (c.image_uris as Record<string, string>).small : null,
+            image_normal: c.image_uris ? (c.image_uris as Record<string, string>).normal : null,
+            oracle_text: c.oracle_text ?? null,
+            keywords: c.keywords ?? [],
+            set_code: c.set ?? '',
+            set_name: c.set_name ?? '',
+          }))
+          if (!controller.signal.aborted) {
+            setTokenSearchResults([...((localTokens ?? []) as CardRow[]), ...scryfallTokens])
+          }
+        }
+      } catch { /* ignore abort */ }
+      if (!controller.signal.aborted) setSearchingTokens(false)
+    }, 400)
+    return () => { controller.abort(); clearTimeout(timeout) }
+  }, [tokenSearch])
+
+  const handleAddTokenFromSearch = useCallback(async (card: CardRow) => {
     const body = {
-      name: newTokenName.trim(),
-      power: newTokenPower || null,
-      toughness: newTokenToughness || null,
-      colors: newTokenColors,
-      type_line: newTokenTypeLine,
-      keywords: newTokenKeywords.split(',').map(k => k.trim()).filter(Boolean),
+      name: card.name,
+      power: card.power ?? null,
+      toughness: card.toughness ?? null,
+      colors: card.colors ?? [],
+      type_line: card.type_line ?? 'Token',
+      keywords: card.keywords ?? [],
+      image_url: card.image_small ?? card.image_normal ?? null,
     }
     const res = await fetch(`/api/decks/${deck.id}/tokens`, {
       method: 'POST',
@@ -108,15 +164,8 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     if (res.ok) {
       const token = await res.json()
       setTokens(prev => [...prev, token])
-      setNewTokenName('')
-      setNewTokenPower('')
-      setNewTokenToughness('')
-      setNewTokenColors([])
-      setNewTokenTypeLine('Token Creature')
-      setNewTokenKeywords('')
-      setShowAddToken(false)
     }
-  }, [deck.id, newTokenName, newTokenPower, newTokenToughness, newTokenColors, newTokenTypeLine, newTokenKeywords])
+  }, [deck.id])
 
   const handleDeleteToken = useCallback(async (tokenId: string) => {
     await fetch(`/api/decks/${deck.id}/tokens`, {
@@ -523,20 +572,53 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
 
           {activeTab === 'tokens' ? (
             <div className="rounded-xl border border-border bg-bg-surface p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-font-primary">Token Definitions</h3>
-                <button
-                  onClick={() => setShowAddToken(true)}
-                  className="flex items-center gap-1 rounded-lg bg-bg-accent px-3 py-1.5 text-xs font-medium text-font-white hover:bg-bg-accent-dark"
-                >
-                  <Plus className="h-3 w-3" />
-                  Add Token
-                </button>
+              <h3 className="text-sm font-semibold text-font-primary mb-3">Deck Tokens</h3>
+
+              {/* Search bar */}
+              <div className="mb-3">
+                <input
+                  value={tokenSearch}
+                  onChange={(e) => setTokenSearch(e.target.value)}
+                  placeholder="Search tokens (e.g. Soldier, Zombie, Treasure)..."
+                  className="w-full rounded-lg bg-bg-cell px-3 py-2 text-sm text-font-primary placeholder:text-font-muted outline-none focus:ring-1 focus:ring-bg-accent"
+                />
               </div>
 
-              {tokens.length === 0 && !showAddToken && (
+              {/* Search results */}
+              {tokenSearch.trim().length >= 2 && (
+                <div className="mb-4 max-h-60 overflow-y-auto rounded-lg border border-border bg-bg-card">
+                  {searchingTokens ? (
+                    <div className="flex items-center justify-center py-4 text-sm text-font-muted">Searching...</div>
+                  ) : tokenSearchResults.length === 0 ? (
+                    <div className="py-4 text-center text-sm text-font-muted">No tokens found</div>
+                  ) : (
+                    tokenSearchResults.map((card) => (
+                      <button
+                        key={card.id}
+                        onClick={() => handleAddTokenFromSearch(card)}
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover border-b border-border/30 last:border-0"
+                      >
+                        {card.image_small && (
+                          <img src={card.image_small} alt={card.name} className="h-12 w-auto rounded" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-font-primary truncate">{card.name}</div>
+                          <div className="text-[10px] text-font-muted">
+                            {card.type_line}
+                            {card.power && card.toughness ? ` · ${card.power}/${card.toughness}` : ''}
+                          </div>
+                        </div>
+                        <Plus className="h-4 w-4 shrink-0 text-font-accent" />
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* Current tokens list */}
+              {tokens.length === 0 && tokenSearch.trim().length < 2 && (
                 <p className="text-sm text-font-muted text-center py-6">
-                  No tokens defined yet. Add tokens that your deck can create.
+                  No tokens yet. Search above to add tokens your deck can create.
                 </p>
               )}
 
@@ -548,71 +630,12 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                       <span className="ml-2 text-xs text-font-muted">{token.power ?? '?'}/{token.toughness ?? '?'}</span>
                     )}
                     <span className="ml-2 text-xs text-font-secondary">{token.type_line}</span>
-                    {token.colors.length > 0 && (
-                      <span className="ml-2 text-[10px] text-font-muted">[{token.colors.join('')}]</span>
-                    )}
-                    {token.keywords.length > 0 && (
-                      <span className="ml-2 text-[10px] text-font-muted italic">{token.keywords.join(', ')}</span>
-                    )}
                   </div>
                   <button onClick={() => handleDeleteToken(token.id)} className="text-font-muted hover:text-bg-red ml-2">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               ))}
-
-              {showAddToken && (
-                <div className="mt-3 rounded-lg border border-border bg-bg-card p-3 space-y-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-font-muted">NAME *</label>
-                    <input value={newTokenName} onChange={(e) => setNewTokenName(e.target.value)} placeholder="e.g. Soldier"
-                      className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary placeholder:text-font-muted" />
-                  </div>
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="text-[10px] font-bold text-font-muted">POWER</label>
-                      <input value={newTokenPower} onChange={(e) => setNewTokenPower(e.target.value)} placeholder="1"
-                        className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-[10px] font-bold text-font-muted">TOUGHNESS</label>
-                      <input value={newTokenToughness} onChange={(e) => setNewTokenToughness(e.target.value)} placeholder="1"
-                        className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-font-muted">COLORS</label>
-                    <div className="flex gap-1.5 mt-1">
-                      {['W', 'U', 'B', 'R', 'G'].map((c) => (
-                        <button key={c} onClick={() => setNewTokenColors(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])}
-                          className={`rounded px-2 py-1 text-[10px] font-bold ${newTokenColors.includes(c) ? 'bg-bg-accent text-font-white ring-2 ring-bg-accent' : 'bg-bg-cell text-font-muted'}`}>
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-font-muted">TYPE LINE</label>
-                    <input value={newTokenTypeLine} onChange={(e) => setNewTokenTypeLine(e.target.value)}
-                      className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-font-muted">KEYWORDS (comma separated)</label>
-                    <input value={newTokenKeywords} onChange={(e) => setNewTokenKeywords(e.target.value)} placeholder="Flying, Haste"
-                      className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary placeholder:text-font-muted" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={handleAddToken} disabled={!newTokenName.trim()}
-                      className="flex-1 rounded-lg bg-bg-accent py-2 text-sm font-bold text-font-white disabled:opacity-40">
-                      Save Token
-                    </button>
-                    <button onClick={() => setShowAddToken(false)}
-                      className="rounded-lg bg-bg-cell px-4 py-2 text-sm font-medium text-font-secondary hover:text-font-primary">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
           <DeckContent
