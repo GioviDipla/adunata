@@ -12,6 +12,7 @@ import {
   createMulligan, createKeepHand, createBottomCards,
   createAddCounter, createRemoveCounter, createCreateToken,
   createCommanderChoice, createToggleAutoPass,
+  createShuffleIntoLibrary, createCopyCard, createTakeControl,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
@@ -25,7 +26,7 @@ import type { HandCardEntry } from '@/components/goldfish/HandArea'
 import GameLog from './GameLog'
 import GameActionBar from './GameActionBar'
 import CardZoneViewer from '@/components/goldfish/CardZoneViewer'
-import CardPreviewOverlay, { type PreviewState } from '@/components/game/CardPreviewOverlay'
+import CardPreviewOverlay, { type PreviewState, type PreviewZone } from '@/components/game/CardPreviewOverlay'
 import CombatAttackers from './CombatAttackers'
 import CombatBlockers from './CombatBlockers'
 import DiscardSelector from './DiscardSelector'
@@ -461,6 +462,102 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     sendAction(createRemoveCounter(userId, myName, instanceId, data.name, counterName))
   }, [cardMap, sendAction, userId, myName])
 
+  // Generic "send to bottom of library" from any zone
+  const handleSendToBottom = useCallback((instanceId: string, from: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, from, 'libraryBottom'))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Generic "send to top of library" from any zone
+  const handleSendToTop = useCallback((instanceId: string, from: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, from, 'libraryTop'))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Shuffle into library from any zone
+  const handleShuffle = useCallback((instanceId: string, from: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createShuffleIntoLibrary(userId, myName, instanceId, data.cardId, data.name, from))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Copy a battlefield card (create token copy)
+  const handleCopy = useCallback((instanceId: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    const newId = `tk-${Date.now()}-copy`
+    setCardMap(prev => ({
+      ...prev,
+      [newId]: { ...prev[instanceId], isToken: true, isCommander: false },
+    }))
+    sendAction(createCopyCard(userId, myName, instanceId, data.cardId, data.name, newId))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Take control of opponent's card
+  const handleTakeControl = useCallback((instanceId: string) => {
+    if (!opponentId) return
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createTakeControl(userId, myName, instanceId, opponentId, data.name))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName, opponentId])
+
+  // Discard from hand (hand -> graveyard)
+  const handleDiscardCard = useCallback((instanceId: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createDiscard(userId, myName, instanceId, data.cardId, data.name))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Play from command zone
+  const handleCastCommander = useCallback((instanceId: string) => {
+    if (!myState) return
+    const card = myState.commandZone.find((c) => c.instanceId === instanceId)
+    if (!card) return
+    const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
+    sendAction(createPlayCard(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'commandZone', 'battlefield'))
+    setPreview(null)
+  }, [myState, cardMap, sendAction, userId, myName])
+
+  // Send to graveyard from non-battlefield zones
+  const handleSendToGraveyardFromZone = useCallback((instanceId: string, from: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, from, 'graveyard'))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Play (to battlefield) from non-hand zones
+  const handlePlayFromZone = useCallback((instanceId: string, from: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, from, 'battlefield'))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Return to hand from any zone
+  const handleReturnToHandFromZone = useCallback((instanceId: string, from: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, from, 'hand'))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
+  // Exile from any zone
+  const handleExileFromZone = useCallback((instanceId: string, from: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, from, 'exile'))
+    setPreview(null)
+  }, [cardMap, sendAction, userId, myName])
+
   const closePreview = useCallback(() => setPreview(null), [])
 
   // Combat: declare attackers
@@ -754,11 +851,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
               )}
             </div>
           </div>
-          <CardPreviewOverlay preview={preview} onClose={closePreview} isCommanderCard={isCommanderCard}
-            onTapToggle={handleTapToggle} onReturnToHand={handleReturnToHand} onReturnToCommandZone={handleReturnToCommandZone}
-            onSendToGraveyard={handleSendToGraveyard} onExile={handleExile} onPlayCard={handlePlayCard}
-            onDiscardFromHand={handleDiscardFromHand} onExileFromHand={handleExileFromHand} onPlayFromCommandZone={handlePlayFromCommandZone}
-            onAddCounter={handleAddCounter} onRemoveCounter={handleRemoveCounter} />
+          <CardPreviewOverlay preview={preview} onClose={closePreview} readOnly />
         </div>
       )
     }
@@ -781,7 +874,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           cardMap={cardMap}
           expanded={opponentExpanded}
           onToggleExpand={() => setOpponentExpanded((v) => !v)}
-          onCardPreview={(card) => setPreview({ card })}
+          onCardPreview={(card, instanceId) => setPreview({ card, zone: 'opponentBattlefield' as PreviewZone, instanceId })}
         />
 
         {/* Divider */}
@@ -903,37 +996,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           title="Graveyard"
           cards={graveyardCards}
           onClose={() => setViewingZone(null)}
-          onReturnToHand={(instanceId) => {
-            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'hand'))
-          }}
-          onReturnToBattlefield={(instanceId) => {
-            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'battlefield'))
-          }}
-          onSendToExile={(instanceId) => {
-            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'exile'))
-          }}
-          onSendToBottom={(instanceId) => {
-            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'libraryBottom'))
-          }}
-          onSendToTop={(instanceId) => {
-            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'libraryTop'))
-          }}
           onCardPreview={(card) => setPreview({ card })}
+          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'graveyard', instanceId: entry.instanceId })}
           groupByType
         />
       )}
@@ -942,37 +1006,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           title="Exile"
           cards={exileCards}
           onClose={() => setViewingZone(null)}
-          onReturnToHand={(instanceId) => {
-            const c = myState.exile.find((e) => e.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'hand'))
-          }}
-          onReturnToBattlefield={(instanceId) => {
-            const c = myState.exile.find((e) => e.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'battlefield'))
-          }}
-          onSendToGraveyard={(instanceId) => {
-            const c = myState.exile.find((e) => e.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'graveyard'))
-          }}
-          onSendToBottom={(instanceId) => {
-            const c = myState.exile.find((e) => e.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'libraryBottom'))
-          }}
-          onSendToTop={(instanceId) => {
-            const c = myState.exile.find((e) => e.instanceId === instanceId)
-            if (!c) return
-            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
-            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'libraryTop'))
-          }}
           onCardPreview={(card) => setPreview({ card })}
+          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'exile', instanceId: entry.instanceId })}
           groupByType
         />
       )}
@@ -981,51 +1016,74 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           title="Library (top to bottom)"
           cards={libraryCards}
           onClose={() => setViewingZone(null)}
-          onReturnToHand={(instanceId) => {
-            const data = cardMap[instanceId]
-            if (!data) return
-            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'hand'))
-          }}
-          onReturnToBattlefield={(instanceId) => {
-            const data = cardMap[instanceId]
-            if (!data) return
-            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'battlefield'))
-          }}
-          onSendToGraveyard={(instanceId) => {
-            const data = cardMap[instanceId]
-            if (!data) return
-            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'graveyard'))
-          }}
-          onSendToExile={(instanceId) => {
-            const data = cardMap[instanceId]
-            if (!data) return
-            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'exile'))
-          }}
-          onSendToBottom={(instanceId) => {
-            const data = cardMap[instanceId]
-            if (!data) return
-            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'libraryBottom'))
-          }}
           onCardPreview={(card) => setPreview({ card })}
+          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'library', instanceId: entry.instanceId })}
         />
       )}
 
-      {/* Card preview overlay (long-press/right-click) */}
+      {/* Card preview overlay (long-press/right-click) — zone-aware actions */}
       <CardPreviewOverlay
         preview={preview}
         onClose={closePreview}
-        isCommanderCard={isCommanderCard}
-        onTapToggle={handleTapToggle}
-        onReturnToHand={handleReturnToHand}
-        onReturnToCommandZone={handleReturnToCommandZone}
-        onSendToGraveyard={handleSendToGraveyard}
-        onExile={handleExile}
-        onPlayCard={handlePlayCard}
-        onDiscardFromHand={handleDiscardFromHand}
-        onExileFromHand={handleExileFromHand}
-        onPlayFromCommandZone={handlePlayFromCommandZone}
-        onAddCounter={handleAddCounter}
-        onRemoveCounter={handleRemoveCounter}
+        readOnly={!preview?.instanceId || !preview?.zone}
+        counters={preview?.counters}
+
+        {...(preview?.zone === 'hand' ? {
+          onPlay: handlePlayCard,
+          onDiscard: handleDiscardCard,
+          onExile: (id: string) => handleExileFromHand(id),
+          onSendToBottom: (id: string) => handleSendToBottom(id, 'hand'),
+          onSendToTop: (id: string) => handleSendToTop(id, 'hand'),
+          onShuffle: (id: string) => handleShuffle(id, 'hand'),
+        } : {})}
+
+        {...(preview?.zone === 'battlefield' ? {
+          onSacrifice: handleSendToGraveyard,
+          onExile: handleExile,
+          onReturnToHand: handleReturnToHand,
+          onSendToBottom: (id: string) => handleSendToBottom(id, 'battlefield'),
+          onSendToTop: (id: string) => handleSendToTop(id, 'battlefield'),
+          onShuffle: (id: string) => handleShuffle(id, 'battlefield'),
+          onTap: handleTapToggle,
+          onAddCounter: handleAddCounter,
+          onRemoveCounter: handleRemoveCounter,
+          onCopy: handleCopy,
+        } : {})}
+
+        {...(preview?.zone === 'commandZone' ? {
+          onCastCommander: handleCastCommander,
+        } : {})}
+
+        {...(preview?.zone === 'graveyard' ? {
+          onPlay: (id: string) => handlePlayFromZone(id, 'graveyard'),
+          onReturnToHand: (id: string) => handleReturnToHandFromZone(id, 'graveyard'),
+          onExile: (id: string) => handleExileFromZone(id, 'graveyard'),
+          onSendToBottom: (id: string) => handleSendToBottom(id, 'graveyard'),
+          onSendToTop: (id: string) => handleSendToTop(id, 'graveyard'),
+          onShuffle: (id: string) => handleShuffle(id, 'graveyard'),
+        } : {})}
+
+        {...(preview?.zone === 'exile' ? {
+          onPlay: (id: string) => handlePlayFromZone(id, 'exile'),
+          onReturnToHand: (id: string) => handleReturnToHandFromZone(id, 'exile'),
+          onSendToGraveyard: (id: string) => handleSendToGraveyardFromZone(id, 'exile'),
+          onSendToBottom: (id: string) => handleSendToBottom(id, 'exile'),
+          onSendToTop: (id: string) => handleSendToTop(id, 'exile'),
+          onShuffle: (id: string) => handleShuffle(id, 'exile'),
+        } : {})}
+
+        {...(preview?.zone === 'library' ? {
+          onPlay: (id: string) => handlePlayFromZone(id, 'library'),
+          onReturnToHand: (id: string) => handleReturnToHandFromZone(id, 'library'),
+          onSendToGraveyard: (id: string) => handleSendToGraveyardFromZone(id, 'library'),
+          onExile: (id: string) => handleExileFromZone(id, 'library'),
+          onSendToBottom: (id: string) => handleSendToBottom(id, 'library'),
+          onSendToTop: (id: string) => handleSendToTop(id, 'library'),
+        } : {})}
+
+        {...(preview?.zone === 'opponentBattlefield' ? {
+          onTakeControl: handleTakeControl,
+        } : {})}
       />
 
       {/* Combat & discard overlays */}

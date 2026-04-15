@@ -10,7 +10,7 @@ import PhaseTracker, { PHASES, type Phase } from './PhaseTracker'
 import BattlefieldZone, { type BattlefieldCard } from './BattlefieldZone'
 import HandArea, { type HandCardEntry } from './HandArea'
 import CardZoneViewer from './CardZoneViewer'
-import CardPreviewOverlay, { type PreviewState } from '@/components/game/CardPreviewOverlay'
+import CardPreviewOverlay, { type PreviewState, type PreviewZone } from '@/components/game/CardPreviewOverlay'
 import { getCardZone } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
@@ -228,25 +228,205 @@ export default function GoldfishGame({ deckName, deckId, fullDeck, commanders = 
 
   const closePreview = useCallback(() => setPreview(null), [])
 
-  // Check if a card is a commander (for return to command zone option)
-  const isCommanderCard = useCallback((card: CardRow) => {
-    return commanders.some((c) => c.id === card.id)
-  }, [commanders])
+  // Generic zone move helpers for goldfish (local state)
+  const sendToBottom = useCallback((instanceId: string, from: string) => {
+    // Remove from source zone
+    if (from === 'hand') setHand(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'battlefield') setBattlefield(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'graveyard') setGraveyard(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'exile') setExile(prev => prev.filter(c => c.instanceId !== instanceId))
+    // For library, we need to remove from current position and re-add to bottom
+    else if (from === 'library') {
+      setLibrary(prev => {
+        const card = prev.find(c => c.instanceId === instanceId)
+        if (!card) return prev
+        return [...prev.filter(c => c.instanceId !== instanceId), card]
+      })
+      setPreview(null)
+      return
+    }
+    // Add to bottom of library
+    queueMicrotask(() => {
+      // We need the card data - find it from any zone
+      const findCard = () => {
+        const h = hand.find(c => c.instanceId === instanceId)
+        if (h) return { instanceId: h.instanceId, card: h.card }
+        const b = battlefield.find(c => c.instanceId === instanceId)
+        if (b) return { instanceId: b.instanceId, card: b.card }
+        const g = graveyard.find(c => c.instanceId === instanceId)
+        if (g) return g
+        const e = exile.find(c => c.instanceId === instanceId)
+        if (e) return e
+        return null
+      }
+      const card = findCard()
+      if (card) setLibrary(prev => [...prev, card])
+    })
+    setPreview(null)
+  }, [hand, battlefield, graveyard, exile])
+
+  const sendToTop = useCallback((instanceId: string, from: string) => {
+    if (from === 'hand') setHand(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'battlefield') setBattlefield(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'graveyard') setGraveyard(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'exile') setExile(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'library') {
+      setLibrary(prev => {
+        const card = prev.find(c => c.instanceId === instanceId)
+        if (!card) return prev
+        return [card, ...prev.filter(c => c.instanceId !== instanceId)]
+      })
+      setPreview(null)
+      return
+    }
+    queueMicrotask(() => {
+      const findCard = () => {
+        const h = hand.find(c => c.instanceId === instanceId)
+        if (h) return { instanceId: h.instanceId, card: h.card }
+        const b = battlefield.find(c => c.instanceId === instanceId)
+        if (b) return { instanceId: b.instanceId, card: b.card }
+        const g = graveyard.find(c => c.instanceId === instanceId)
+        if (g) return g
+        const e = exile.find(c => c.instanceId === instanceId)
+        if (e) return e
+        return null
+      }
+      const card = findCard()
+      if (card) setLibrary(prev => [card, ...prev])
+    })
+    setPreview(null)
+  }, [hand, battlefield, graveyard, exile])
+
+  const shuffleIntoLibrary = useCallback((instanceId: string, from: string) => {
+    if (from === 'hand') setHand(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'battlefield') setBattlefield(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'graveyard') setGraveyard(prev => prev.filter(c => c.instanceId !== instanceId))
+    else if (from === 'exile') setExile(prev => prev.filter(c => c.instanceId !== instanceId))
+    queueMicrotask(() => {
+      const findCard = () => {
+        const h = hand.find(c => c.instanceId === instanceId)
+        if (h) return { instanceId: h.instanceId, card: h.card }
+        const b = battlefield.find(c => c.instanceId === instanceId)
+        if (b) return { instanceId: b.instanceId, card: b.card }
+        const g = graveyard.find(c => c.instanceId === instanceId)
+        if (g) return g
+        const e = exile.find(c => c.instanceId === instanceId)
+        if (e) return e
+        return null
+      }
+      const card = findCard()
+      if (card) setLibrary(prev => shuffle([...prev, card]))
+    })
+    setPreview(null)
+  }, [hand, battlefield, graveyard, exile])
+
+  // Play from graveyard/exile/library to battlefield
+  const playFromZone = useCallback((instanceId: string, from: string) => {
+    let removed: CardInstance | undefined
+    if (from === 'graveyard') {
+      setGraveyard(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    } else if (from === 'exile') {
+      setExile(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    } else if (from === 'library') {
+      setLibrary(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    }
+    queueMicrotask(() => { if (removed) setBattlefield(bf => [...bf, { instanceId: removed!.instanceId, card: removed!.card, tapped: false }]) })
+    setPreview(null)
+  }, [])
+
+  // Return to hand from graveyard/exile/library
+  const returnToHandFromZone = useCallback((instanceId: string, from: string) => {
+    let removed: CardInstance | undefined
+    if (from === 'graveyard') {
+      setGraveyard(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    } else if (from === 'exile') {
+      setExile(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    } else if (from === 'library') {
+      setLibrary(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    }
+    queueMicrotask(() => { if (removed) setHand(h => [...h, { instanceId: removed!.instanceId, card: removed!.card }]) })
+    setPreview(null)
+  }, [])
+
+  // Exile from graveyard/library
+  const exileFromZone = useCallback((instanceId: string, from: string) => {
+    let removed: CardInstance | undefined
+    if (from === 'graveyard') {
+      setGraveyard(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    } else if (from === 'library') {
+      setLibrary(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    }
+    queueMicrotask(() => { if (removed) setExile(e => [...e, { instanceId: removed!.instanceId, card: removed!.card }]) })
+    setPreview(null)
+  }, [])
+
+  // Send to graveyard from exile/library
+  const sendToGraveyardFromZone = useCallback((instanceId: string, from: string) => {
+    let removed: CardInstance | undefined
+    if (from === 'exile') {
+      setExile(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    } else if (from === 'library') {
+      setLibrary(prev => { removed = prev.find(c => c.instanceId === instanceId); return prev.filter(c => c.instanceId !== instanceId) })
+    }
+    queueMicrotask(() => { if (removed) setGraveyard(g => [...g, { instanceId: removed!.instanceId, card: removed!.card }]) })
+    setPreview(null)
+  }, [])
 
   const cardPreviewOverlay = (
     <CardPreviewOverlay
       preview={preview}
       onClose={closePreview}
-      isCommanderCard={isCommanderCard}
-      onTapToggle={tapToggle}
-      onReturnToHand={returnToHand}
-      onReturnToCommandZone={returnToCommandZone}
-      onSendToGraveyard={sendToGraveyard}
-      onExile={exileCard}
-      onPlayCard={playCard}
-      onDiscardFromHand={sendFromHandToGraveyard}
-      onExileFromHand={exileFromHand}
-      onPlayFromCommandZone={playFromCommandZone}
+      readOnly={!preview?.instanceId || !preview?.zone}
+
+      {...(preview?.zone === 'hand' ? {
+        onPlay: playCard,
+        onDiscard: sendFromHandToGraveyard,
+        onExile: exileFromHand,
+        onSendToBottom: (id: string) => sendToBottom(id, 'hand'),
+        onSendToTop: (id: string) => sendToTop(id, 'hand'),
+        onShuffle: (id: string) => shuffleIntoLibrary(id, 'hand'),
+      } : {})}
+
+      {...(preview?.zone === 'battlefield' ? {
+        onSacrifice: sendToGraveyard,
+        onExile: exileCard,
+        onReturnToHand: returnToHand,
+        onSendToBottom: (id: string) => sendToBottom(id, 'battlefield'),
+        onSendToTop: (id: string) => sendToTop(id, 'battlefield'),
+        onShuffle: (id: string) => shuffleIntoLibrary(id, 'battlefield'),
+        onTap: tapToggle,
+      } : {})}
+
+      {...(preview?.zone === 'commandZone' ? {
+        onCastCommander: playFromCommandZone,
+      } : {})}
+
+      {...(preview?.zone === 'graveyard' ? {
+        onPlay: (id: string) => playFromZone(id, 'graveyard'),
+        onReturnToHand: (id: string) => returnToHandFromZone(id, 'graveyard'),
+        onExile: (id: string) => exileFromZone(id, 'graveyard'),
+        onSendToBottom: (id: string) => sendToBottom(id, 'graveyard'),
+        onSendToTop: (id: string) => sendToTop(id, 'graveyard'),
+        onShuffle: (id: string) => shuffleIntoLibrary(id, 'graveyard'),
+      } : {})}
+
+      {...(preview?.zone === 'exile' ? {
+        onPlay: (id: string) => playFromZone(id, 'exile'),
+        onReturnToHand: (id: string) => returnToHandFromZone(id, 'exile'),
+        onSendToGraveyard: (id: string) => sendToGraveyardFromZone(id, 'exile'),
+        onSendToBottom: (id: string) => sendToBottom(id, 'exile'),
+        onSendToTop: (id: string) => sendToTop(id, 'exile'),
+        onShuffle: (id: string) => shuffleIntoLibrary(id, 'exile'),
+      } : {})}
+
+      {...(preview?.zone === 'library' ? {
+        onPlay: (id: string) => playFromZone(id, 'library'),
+        onReturnToHand: (id: string) => returnToHandFromZone(id, 'library'),
+        onSendToGraveyard: (id: string) => sendToGraveyardFromZone(id, 'library'),
+        onExile: (id: string) => exileFromZone(id, 'library'),
+        onSendToBottom: (id: string) => sendToBottom(id, 'library'),
+        onSendToTop: (id: string) => sendToTop(id, 'library'),
+      } : {})}
     />
   )
 
@@ -447,16 +627,21 @@ export default function GoldfishGame({ deckName, deckId, fullDeck, commanders = 
       {/* Zone viewer overlays */}
       {viewingZone === 'graveyard' && (
         <CardZoneViewer title="Graveyard" cards={graveyard} groupByType
-          onClose={() => setViewingZone(null)} onReturnToHand={returnFromGraveyardToHand}
-          onReturnToBattlefield={returnFromGraveyardToBattlefield} onCardPreview={setPreviewCard} />
+          onClose={() => setViewingZone(null)}
+          onCardPreview={setPreviewCard}
+          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'graveyard', instanceId: entry.instanceId })} />
       )}
       {viewingZone === 'exile' && (
         <CardZoneViewer title="Exile" cards={exile}
-          onClose={() => setViewingZone(null)} onReturnToHand={returnFromExileToHand} onCardPreview={setPreviewCard} />
+          onClose={() => setViewingZone(null)}
+          onCardPreview={setPreviewCard}
+          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'exile', instanceId: entry.instanceId })} />
       )}
       {viewingZone === 'library' && (
         <CardZoneViewer title="Library" cards={library}
-          onClose={() => setViewingZone(null)} onCardPreview={setPreviewCard} />
+          onClose={() => setViewingZone(null)}
+          onCardPreview={setPreviewCard}
+          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'library', instanceId: entry.instanceId })} />
       )}
 
       {cardPreviewOverlay}

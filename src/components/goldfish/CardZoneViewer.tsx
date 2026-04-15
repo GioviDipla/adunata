@@ -16,13 +16,8 @@ interface CardZoneViewerProps {
   title: string
   cards: CardEntry[]
   onClose: () => void
-  onReturnToHand?: (instanceId: string) => void
-  onReturnToBattlefield?: (instanceId: string) => void
-  onSendToGraveyard?: (instanceId: string) => void
-  onSendToExile?: (instanceId: string) => void
-  onSendToBottom?: (instanceId: string) => void
-  onSendToTop?: (instanceId: string) => void
   onCardPreview?: (card: CardRow) => void
+  onCardAction?: (entry: CardEntry) => void
   groupByType?: boolean
 }
 
@@ -30,38 +25,23 @@ const TYPE_FILTERS = ['All', 'Creatures', 'Instants', 'Sorceries', 'Enchantments
 
 function ZoneCard({
   entry,
-  onReturnToHand,
-  onReturnToBattlefield,
-  onSendToGraveyard,
-  onSendToExile,
-  onSendToBottom,
-  onSendToTop,
   onCardPreview,
+  onCardAction,
 }: {
   entry: CardEntry
-  onReturnToHand?: (id: string) => void
-  onReturnToBattlefield?: (id: string) => void
-  onSendToGraveyard?: (id: string) => void
-  onSendToExile?: (id: string) => void
-  onSendToBottom?: (id: string) => void
-  onSendToTop?: (id: string) => void
   onCardPreview?: (card: CardRow) => void
+  onCardAction?: (entry: CardEntry) => void
 }) {
-  const [showActions, setShowActions] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const triggered = useRef(false)
-
-  const openActions = useCallback(() => {
-    setShowActions(true)
-  }, [])
 
   const handlePointerDown = useCallback(() => {
     triggered.current = false
     timerRef.current = setTimeout(() => {
       triggered.current = true
-      openActions()
+      onCardAction?.(entry)
     }, 500)
-  }, [openActions])
+  }, [entry, onCardAction])
 
   const handlePointerUp = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
@@ -74,8 +54,8 @@ function ZoneCard({
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    openActions()
-  }, [openActions])
+    onCardAction?.(entry)
+  }, [entry, onCardAction])
 
   return (
     <div className="relative">
@@ -107,77 +87,6 @@ function ZoneCard({
           </div>
         )}
       </button>
-
-      {/* Action overlay — right-click (web) / longpress (mobile) */}
-      {showActions && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-bg-dark/70"
-          onClick={() => setShowActions(false)}
-        >
-          <div
-            className="mx-4 w-full max-w-xs rounded-xl border border-border bg-bg-surface p-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="mb-2 text-center text-xs font-bold text-font-primary truncate">{entry.card.name}</p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {onReturnToHand && (
-                <button
-                  onClick={() => { onReturnToHand(entry.instanceId); setShowActions(false) }}
-                  className="rounded-lg bg-bg-accent py-2 text-[10px] font-bold text-font-white active:bg-bg-accent-dark"
-                >
-                  Hand
-                </button>
-              )}
-              {onReturnToBattlefield && (
-                <button
-                  onClick={() => { onReturnToBattlefield(entry.instanceId); setShowActions(false) }}
-                  className="rounded-lg bg-bg-green py-2 text-[10px] font-bold text-font-white active:bg-bg-green/80"
-                >
-                  Play
-                </button>
-              )}
-              {onSendToGraveyard && (
-                <button
-                  onClick={() => { onSendToGraveyard(entry.instanceId); setShowActions(false) }}
-                  className="rounded-lg bg-bg-red py-2 text-[10px] font-bold text-font-white active:bg-bg-red/80"
-                >
-                  Grave
-                </button>
-              )}
-              {onSendToExile && (
-                <button
-                  onClick={() => { onSendToExile(entry.instanceId); setShowActions(false) }}
-                  className="rounded-lg bg-gray-600 py-2 text-[10px] font-bold text-font-white active:bg-gray-500"
-                >
-                  Exile
-                </button>
-              )}
-              {onSendToBottom && (
-                <button
-                  onClick={() => { onSendToBottom(entry.instanceId); setShowActions(false) }}
-                  className="rounded-lg bg-bg-cell py-2 text-[10px] font-bold text-font-primary active:bg-bg-hover"
-                >
-                  Bottom
-                </button>
-              )}
-              {onSendToTop && (
-                <button
-                  onClick={() => { onSendToTop(entry.instanceId); setShowActions(false) }}
-                  className="rounded-lg bg-blue-600 py-2 text-[10px] font-bold text-font-white active:bg-blue-500"
-                >
-                  Top
-                </button>
-              )}
-            </div>
-            <button
-              onClick={() => setShowActions(false)}
-              className="mt-2 w-full rounded-lg bg-bg-cell py-1.5 text-[10px] font-medium text-font-muted"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -186,13 +95,8 @@ export default function CardZoneViewer({
   title,
   cards,
   onClose,
-  onReturnToHand,
-  onReturnToBattlefield,
-  onSendToGraveyard,
-  onSendToExile,
-  onSendToBottom,
-  onSendToTop,
   onCardPreview,
+  onCardAction,
   groupByType = false,
 }: CardZoneViewerProps) {
   const [filter, setFilter] = useState<string>('All')
@@ -264,13 +168,8 @@ export default function CardZoneViewer({
                   <ZoneCard
                     key={entry.instanceId}
                     entry={entry}
-                    onReturnToHand={onReturnToHand}
-                    onReturnToBattlefield={onReturnToBattlefield}
-                    onSendToGraveyard={onSendToGraveyard}
-                    onSendToExile={onSendToExile}
-                    onSendToBottom={onSendToBottom}
-                    onSendToTop={onSendToTop}
                     onCardPreview={onCardPreview}
+                    onCardAction={onCardAction}
                   />
                 ))}
               </div>

@@ -49,7 +49,7 @@ interface OpponentFieldProps {
   cardMap: CardMap
   expanded: boolean
   onToggleExpand: () => void
-  onCardPreview?: (card: CardRow) => void
+  onCardPreview?: (card: CardRow, instanceId: string) => void
 }
 
 function OpponentCard({
@@ -61,7 +61,7 @@ function OpponentCard({
   card: BattlefieldCardState
   cardMap: CardMap
   expanded: boolean
-  onCardPreview?: (card: CardRow) => void
+  onCardPreview?: (card: CardRow, instanceId: string) => void
 }) {
   const data = cardMap[card.instanceId] ?? cardMap[String(card.cardId)]
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -70,8 +70,8 @@ function OpponentCard({
   const triggerPreview = useCallback(() => {
     if (!onCardPreview || !data) return
     const row = toCardRow(card.cardId, data)
-    onCardPreview(row)
-  }, [onCardPreview, data, card.cardId])
+    onCardPreview(row, card.instanceId)
+  }, [onCardPreview, data, card.cardId, card.instanceId])
 
   const handlePointerDown = useCallback(() => {
     triggeredRef.current = false
