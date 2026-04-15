@@ -57,6 +57,14 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleCommanderChoice(s, action)
     case 'toggle_auto_pass':
       return handleToggleAutoPass(s, action)
+    case 'reveal_top':
+      return handleRevealTop(s, action)
+    case 'resolve_revealed':
+      return handleResolveRevealed(s, action)
+    case 'mill':
+      return handleMill(s, action)
+    case 'draw_x':
+      return handleDrawX(s, action)
     case 'concede':
       return s // handled at API level
     default:
@@ -583,6 +591,88 @@ function handleCreateToken(s: GameState, action: GameAction): GameState {
       damageMarked: 0, highlighted: null, counters: [],
     })
   }
+  return s
+}
+
+function handleRevealTop(s: GameState, action: GameAction): GameState {
+  const { count, actionType } = action.data as { count: number; actionType: 'scry' | 'surveil' | 'peak' }
+  const player = s.players[action.playerId]
+  const topN = player.library.slice(0, Math.min(count, player.library.length))
+  player.revealedCards = {
+    action: actionType,
+    instanceIds: topN,
+    decisions: {},
+    topOrder: [],
+  }
+  return s
+}
+
+function handleResolveRevealed(s: GameState, action: GameAction): GameState {
+  const player = s.players[action.playerId]
+  if (!player.revealedCards) return s
+  const { decisions, topOrder, cardIds } = action.data as {
+    decisions: Record<string, 'top' | 'bottom' | 'graveyard' | 'hand' | 'exile'>
+    topOrder: string[]
+    cardIds: Record<string, number>
+  }
+
+  // Remove all revealed cards from library
+  const revealedSet = new Set(player.revealedCards.instanceIds)
+  player.library = player.library.filter((id) => !revealedSet.has(id))
+
+  // Process each decision
+  const toBottom: string[] = []
+  for (const [instanceId, dest] of Object.entries(decisions)) {
+    const cardId = cardIds?.[instanceId] ?? 0
+    if (dest === 'graveyard') {
+      player.graveyard.push({ instanceId, cardId })
+    } else if (dest === 'hand') {
+      player.hand.push(instanceId)
+      player.handCount = player.hand.length
+      player.autoPass = false
+    } else if (dest === 'exile') {
+      player.exile.push({ instanceId, cardId })
+    } else if (dest === 'bottom') {
+      toBottom.push(instanceId)
+    }
+    // 'top' cards handled via topOrder below
+  }
+
+  // Put "top" cards on top of library in specified order
+  if (topOrder.length > 0) {
+    player.library = [...topOrder, ...player.library]
+  }
+  // Put "bottom" cards at bottom
+  if (toBottom.length > 0) {
+    player.library = [...player.library, ...toBottom]
+  }
+
+  player.libraryCount = player.library.length
+  delete player.revealedCards
+  return s
+}
+
+function handleMill(s: GameState, action: GameAction): GameState {
+  const { count, targetPlayerId, cardIds } = action.data as {
+    count: number; targetPlayerId: string; cardIds: Record<string, number>
+  }
+  const target = s.players[targetPlayerId]
+  const milled = target.library.splice(0, Math.min(count, target.library.length))
+  for (const instanceId of milled) {
+    target.graveyard.push({ instanceId, cardId: cardIds?.[instanceId] ?? 0 })
+  }
+  target.libraryCount = target.library.length
+  return s
+}
+
+function handleDrawX(s: GameState, action: GameAction): GameState {
+  const { count } = action.data as { count: number }
+  const player = s.players[action.playerId]
+  const drawn = player.library.splice(0, Math.min(count, player.library.length))
+  player.hand.push(...drawn)
+  player.libraryCount = player.library.length
+  player.handCount = player.hand.length
+  player.autoPass = false
   return s
 }
 

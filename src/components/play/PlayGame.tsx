@@ -32,6 +32,7 @@ import DiscardSelector from './DiscardSelector'
 import TokenCreator from './TokenCreator'
 import CommanderChoiceModal from './CommanderChoiceModal'
 import SpecialActionsMenu from './SpecialActionsMenu'
+import RevealedCardsChooser from './RevealedCardsChooser'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -1029,6 +1030,47 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
               gameState.pendingCommanderChoice!.cardName,
               destination
             ))
+          }}
+        />
+      )}
+
+      {/* Revealed cards chooser (scry/surveil) */}
+      {myState?.revealedCards && (
+        <RevealedCardsChooser
+          actionType={myState.revealedCards.action}
+          cards={myState.revealedCards.instanceIds.map(id => {
+            const data = cardMap[id]
+            if (!data) return null
+            return { instanceId: id, card: toCardRow(data.cardId, data) }
+          }).filter((x): x is { instanceId: string; card: CardRow } => x !== null)}
+          onConfirm={(decisions, topOrder) => {
+            const cardIds: Record<string, number> = {}
+            for (const id of myState.revealedCards!.instanceIds) {
+              const data = cardMap[id]
+              if (data) cardIds[id] = data.cardId
+            }
+            const parts = Object.entries(decisions).map(([id, dest]) => {
+              const data = cardMap[id]
+              return `${data?.name ?? '?'} -> ${dest}`
+            })
+            sendAction({
+              type: 'resolve_revealed' as GameActionType,
+              playerId: userId,
+              data: { decisions, topOrder, cardIds },
+              text: `${myName} resolves ${myState.revealedCards!.action}: ${parts.join(', ')}`,
+            })
+          }}
+          onClose={() => {
+            const decisions: Record<string, 'top'> = {}
+            for (const id of myState.revealedCards!.instanceIds) {
+              decisions[id] = 'top'
+            }
+            sendAction({
+              type: 'resolve_revealed' as GameActionType,
+              playerId: userId,
+              data: { decisions, topOrder: myState.revealedCards!.instanceIds, cardIds: {} },
+              text: `${myName} cancels ${myState.revealedCards!.action}`,
+            })
           }}
         />
       )}
