@@ -1,6 +1,21 @@
 'use client'
 
-import { RotateCcw, Hand, Crown, Trash2, Ban, Play } from 'lucide-react'
+import {
+  Play,
+  Trash2,
+  Flame,
+  Ban,
+  ArrowLeft,
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  Shuffle,
+  RotateCcw,
+  Hash,
+  Copy,
+  ArrowRightLeft,
+  Crown,
+} from 'lucide-react'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -19,84 +34,126 @@ interface CardPreviewOverlayProps {
   preview: PreviewState | null
   onClose: () => void
   readOnly?: boolean
-  isCommanderCard?: (card: CardRow) => boolean
 
-  // Battlefield actions
-  onTapToggle?: (instanceId: string) => void
-  onReturnToHand?: (instanceId: string) => void
-  onReturnToCommandZone?: (instanceId: string) => void
-  onSendToGraveyard?: (instanceId: string) => void
+  // Universal actions — shown based on which are provided
+  onPlay?: (instanceId: string) => void
+  onDiscard?: (instanceId: string) => void
+  onSacrifice?: (instanceId: string) => void
   onExile?: (instanceId: string) => void
+  onReturnToHand?: (instanceId: string) => void
+  onSendToGraveyard?: (instanceId: string) => void
+  onSendToBottom?: (instanceId: string) => void
+  onSendToTop?: (instanceId: string) => void
+  onShuffle?: (instanceId: string) => void
+  onTap?: (instanceId: string) => void
+  onAddCounter?: (instanceId: string, name: string) => void
+  onRemoveCounter?: (instanceId: string, name: string) => void
+  onCopy?: (instanceId: string) => void
+  onTakeControl?: (instanceId: string) => void
+  onCastCommander?: (instanceId: string) => void
 
-  // Hand actions
-  onPlayCard?: (instanceId: string) => void
-  onDiscardFromHand?: (instanceId: string) => void
-  onExileFromHand?: (instanceId: string) => void
+  // Counter display
+  counters?: { name: string; value: number }[]
+}
 
-  // Command zone actions
-  onPlayFromCommandZone?: (instanceId: string) => void
-
-  // Counter actions
-  onAddCounter?: (instanceId: string, counterName: string) => void
-  onRemoveCounter?: (instanceId: string, counterName: string) => void
+function ActionBtn({
+  icon: Icon,
+  label,
+  onClick,
+  color = 'bg-bg-cell text-font-primary',
+}: {
+  icon: React.ElementType
+  label: string
+  onClick: () => void
+  color?: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium active:opacity-80 ${color}`}
+    >
+      <Icon size={14} /> {label}
+    </button>
+  )
 }
 
 /**
- * Shared card preview modal. Used by both goldfish and multiplayer PlayGame.
- * Shows a zoomed image and context-aware action buttons based on `preview.zone`.
+ * Universal card preview overlay — action hub for ALL card interactions.
+ * The caller decides which actions to provide; this component renders them all in a grid.
  */
 export default function CardPreviewOverlay({
   preview,
   onClose,
   readOnly,
-  isCommanderCard,
-  onTapToggle,
-  onReturnToHand,
-  onReturnToCommandZone,
-  onSendToGraveyard,
+  onPlay,
+  onDiscard,
+  onSacrifice,
   onExile,
-  onPlayCard,
-  onDiscardFromHand,
-  onExileFromHand,
-  onPlayFromCommandZone,
+  onReturnToHand,
+  onSendToGraveyard,
+  onSendToBottom,
+  onSendToTop,
+  onShuffle,
+  onTap,
   onAddCounter,
   onRemoveCounter,
+  onCopy,
+  onTakeControl,
+  onCastCommander,
+  counters,
 }: CardPreviewOverlayProps) {
   if (!preview) return null
 
-  const act = (fn: (() => void) | undefined) => {
-    if (!fn) return
+  const id = preview.instanceId
+
+  const act = (fn: () => void) => {
     fn()
     onClose()
   }
 
-  const canShowBattlefieldActions =
-    preview.zone === 'battlefield' && preview.instanceId !== undefined
-  const canShowHandActions =
-    preview.zone === 'hand' && preview.instanceId !== undefined
-  const canShowCommandZoneActions =
-    preview.zone === 'commandZone' && preview.instanceId !== undefined
+  // Build the action list from provided callbacks
+  const actions: { icon: React.ElementType; label: string; onClick: () => void; color?: string }[] = []
 
-  const hasAnyActions =
-    !readOnly && (canShowBattlefieldActions || canShowHandActions || canShowCommandZoneActions)
+  if (!readOnly && id) {
+    if (onPlay) actions.push({ icon: Play, label: 'Play', onClick: () => act(() => onPlay(id)) })
+    if (onCastCommander) actions.push({ icon: Crown, label: 'Cast', onClick: () => act(() => onCastCommander(id)), color: 'bg-bg-cell text-font-accent' })
+    if (onTap) actions.push({ icon: RotateCcw, label: preview.tapped ? 'Untap' : 'Tap', onClick: () => act(() => onTap(id)) })
+    if (onDiscard) actions.push({ icon: Trash2, label: 'Discard', onClick: () => act(() => onDiscard(id)) })
+    if (onSacrifice) actions.push({ icon: Flame, label: 'Sacrifice', onClick: () => act(() => onSacrifice(id)), color: 'bg-bg-cell text-bg-red' })
+    if (onExile) actions.push({ icon: Ban, label: 'Exile', onClick: () => act(() => onExile(id)) })
+    if (onReturnToHand) actions.push({ icon: ArrowLeft, label: 'Hand', onClick: () => act(() => onReturnToHand(id)) })
+    if (onSendToGraveyard) actions.push({ icon: Archive, label: 'Grave', onClick: () => act(() => onSendToGraveyard(id)) })
+    if (onSendToBottom) actions.push({ icon: ArrowDown, label: 'Bottom', onClick: () => act(() => onSendToBottom(id)) })
+    if (onSendToTop) actions.push({ icon: ArrowUp, label: 'Top', onClick: () => act(() => onSendToTop(id)) })
+    if (onShuffle) actions.push({ icon: Shuffle, label: 'Shuffle', onClick: () => act(() => onShuffle(id)) })
+    if (onCopy) actions.push({ icon: Copy, label: 'Copy', onClick: () => act(() => onCopy(id)) })
+    if (onTakeControl) actions.push({ icon: ArrowRightLeft, label: 'Take Control', onClick: () => act(() => onTakeControl(id)) })
+  }
+
+  const displayCounters = counters ?? preview.counters
+  const showCounters = !readOnly && id && displayCounters && displayCounters.length > 0 && onAddCounter
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-bg-dark/80 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div className="relative flex max-h-[90vh] max-w-sm flex-col items-center gap-3 overflow-y-auto p-4">
+      <div
+        className="relative flex max-h-[90vh] max-w-sm flex-col items-center gap-3 overflow-y-auto p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Card image */}
         {preview.card.image_normal ? (
           <img
             src={preview.card.image_normal}
             alt={preview.card.name}
-            className="max-h-[45vh] rounded-xl"
+            className="max-h-[40vh] rounded-xl"
           />
         ) : preview.card.image_small ? (
           <img
             src={preview.card.image_small}
             alt={preview.card.name}
-            className="max-h-[45vh] rounded-xl"
+            className="max-h-[40vh] rounded-xl"
           />
         ) : (
           <div className="flex h-48 w-40 flex-col items-center justify-center gap-2 rounded-xl bg-bg-surface p-4">
@@ -111,117 +168,59 @@ export default function CardPreviewOverlay({
             )}
           </div>
         )}
+
+        {/* Card name */}
         <h3 className="text-sm font-bold text-font-primary">{preview.card.name}</h3>
 
-        {hasAnyActions && (
-          <div
-            className="flex w-full flex-col gap-1 rounded-xl bg-bg-surface p-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {canShowBattlefieldActions && (
-              <>
-                {onTapToggle && (
-                  <button
-                    onClick={() => act(() => onTapToggle(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-primary active:bg-bg-cell"
-                  >
-                    <RotateCcw size={16} /> {preview.tapped ? 'Untap' : 'Tap'}
-                  </button>
-                )}
-                {onReturnToHand && (
-                  <button
-                    onClick={() => act(() => onReturnToHand(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-primary active:bg-bg-cell"
-                  >
-                    <Hand size={16} /> Return to Hand
-                  </button>
-                )}
-                {onReturnToCommandZone && isCommanderCard?.(preview.card) && (
-                  <button
-                    onClick={() => act(() => onReturnToCommandZone(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-bg-yellow active:bg-bg-yellow/20"
-                  >
-                    <Crown size={16} /> Return to Command Zone
-                  </button>
-                )}
-                {onSendToGraveyard && (
-                  <button
-                    onClick={() => act(() => onSendToGraveyard(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-bg-red active:bg-bg-red/20"
-                  >
-                    <Trash2 size={16} /> Send to Graveyard
-                  </button>
-                )}
-                {onExile && (
-                  <button
-                    onClick={() => act(() => onExile(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-secondary active:bg-bg-cell"
-                  >
-                    <Ban size={16} /> Exile
-                  </button>
-                )}
-              </>
-            )}
-
-            {canShowHandActions && (
-              <>
-                {onPlayCard && (
-                  <button
-                    onClick={() => act(() => onPlayCard(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-accent active:bg-bg-accent/20"
-                  >
-                    <Play size={16} /> Play
-                  </button>
-                )}
-                {onDiscardFromHand && (
-                  <button
-                    onClick={() => act(() => onDiscardFromHand(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-bg-red active:bg-bg-red/20"
-                  >
-                    <Trash2 size={16} /> Discard
-                  </button>
-                )}
-                {onExileFromHand && (
-                  <button
-                    onClick={() => act(() => onExileFromHand(preview.instanceId!))}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-secondary active:bg-bg-cell"
-                  >
-                    <Ban size={16} /> Exile
-                  </button>
-                )}
-              </>
-            )}
-
-            {canShowCommandZoneActions && onPlayFromCommandZone && (
-              <button
-                onClick={() => act(() => onPlayFromCommandZone(preview.instanceId!))}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-font-accent active:bg-bg-accent/20"
-              >
-                <Play size={16} /> Cast Commander
-              </button>
-            )}
+        {/* Actions grid */}
+        {actions.length > 0 && (
+          <div className="grid w-full grid-cols-3 gap-1.5 rounded-xl bg-bg-surface p-2">
+            {actions.map((a) => (
+              <ActionBtn
+                key={a.label}
+                icon={a.icon}
+                label={a.label}
+                onClick={a.onClick}
+                color={a.color}
+              />
+            ))}
           </div>
         )}
 
-        {/* Counter management — shows for battlefield cards even without other actions */}
-        {canShowBattlefieldActions && !readOnly && (
-          <div className="w-full rounded-xl bg-bg-surface p-2" onClick={(e) => e.stopPropagation()}>
+        {/* Counter section */}
+        {showCounters && (
+          <div className="w-full rounded-xl bg-bg-surface p-2">
             <p className="text-[10px] font-bold text-font-muted mb-1">COUNTERS</p>
-            {(preview.counters ?? []).map((c) => (
+            {displayCounters.map((c) => (
               <div key={c.name} className="flex items-center justify-between py-0.5">
-                <span className="text-xs text-font-primary">{c.name}: {c.value}</span>
+                <span className="text-xs text-font-primary">
+                  {c.name}: {c.value}
+                </span>
                 <div className="flex gap-1">
-                  <button onClick={() => onRemoveCounter?.(preview.instanceId!, c.name)}
-                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">-</button>
-                  <button onClick={() => onAddCounter?.(preview.instanceId!, c.name)}
-                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">+</button>
+                  <button
+                    onClick={() => onRemoveCounter?.(id!, c.name)}
+                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
+                  >
+                    -
+                  </button>
+                  <button
+                    onClick={() => onAddCounter!(id!, c.name)}
+                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
             ))}
-            <button onClick={() => {
-              const name = prompt('Counter name (e.g. +1/+1, Loyalty, Charge):')
-              if (name?.trim() && preview.instanceId) onAddCounter?.(preview.instanceId, name.trim())
-            }} className="mt-1 text-[10px] text-font-accent hover:underline">+ Add Counter</button>
+            <button
+              onClick={() => {
+                const name = prompt('Counter name (e.g. +1/+1, Loyalty, Charge):')
+                if (name?.trim() && id) onAddCounter!(id, name.trim())
+              }}
+              className="mt-1 text-[10px] text-font-accent hover:underline"
+            >
+              + Add Counter
+            </button>
           </div>
         )}
       </div>
