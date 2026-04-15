@@ -96,6 +96,7 @@ export type GameActionType =
   | 'create_token' | 'commander_choice' | 'toggle_auto_pass'
   | 'reveal_top' | 'resolve_revealed' | 'peak' | 'mill' | 'draw_x'
   | 'resolve_combat_damage' | 'chat_message'
+  | 'shuffle_into_library' | 'copy_card' | 'take_control'
 
 export interface GameAction {
   type: GameActionType

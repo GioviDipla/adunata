@@ -144,3 +144,27 @@ export function createBottomCards(playerId: string, playerName: string, instance
     text: `${playerName} puts ${count} card${count > 1 ? 's' : ''} on bottom`,
   }
 }
+
+export function createShuffleIntoLibrary(playerId: string, playerName: string, instanceId: string, cardId: number, cardName: string, from: string): GameAction {
+  return {
+    type: 'shuffle_into_library', playerId,
+    data: { instanceId, cardId, from },
+    text: `${playerName} shuffles ${cardName} into library from ${from}`,
+  }
+}
+
+export function createCopyCard(playerId: string, playerName: string, sourceInstanceId: string, cardId: number, cardName: string, newInstanceId: string): GameAction {
+  return {
+    type: 'copy_card', playerId,
+    data: { sourceInstanceId, newInstanceId, cardId },
+    text: `${playerName} copies ${cardName}`,
+  }
+}
+
+export function createTakeControl(playerId: string, playerName: string, instanceId: string, opponentId: string, cardName: string): GameAction {
+  return {
+    type: 'take_control', playerId,
+    data: { instanceId, opponentId },
+    text: `${playerName} takes control of ${cardName}`,
+  }
+}

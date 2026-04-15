@@ -65,6 +65,12 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleMill(s, action)
     case 'draw_x':
       return handleDrawX(s, action)
+    case 'shuffle_into_library':
+      return handleShuffleIntoLibrary(s, action)
+    case 'copy_card':
+      return handleCopyCard(s, action)
+    case 'take_control':
+      return handleTakeControl(s, action)
     case 'concede':
       return s // handled at API level
     default:
@@ -676,6 +682,83 @@ function handleDrawX(s: GameState, action: GameAction): GameState {
   player.libraryCount = player.library.length
   player.handCount = player.hand.length
   player.autoPass = false
+  return s
+}
+
+function handleShuffleIntoLibrary(s: GameState, action: GameAction): GameState {
+  const { instanceId, from, cardId } = action.data as { instanceId: string; from: string; cardId: number }
+  const player = s.players[action.playerId]
+
+  // Remove from source zone
+  if (from === 'hand') {
+    player.hand = player.hand.filter((id) => id !== instanceId)
+    player.handCount = player.hand.length
+  } else if (from === 'battlefield') {
+    player.battlefield = player.battlefield.filter((c) => c.instanceId !== instanceId)
+  } else if (from === 'graveyard') {
+    player.graveyard = player.graveyard.filter((c) => c.instanceId !== instanceId)
+  } else if (from === 'exile') {
+    player.exile = player.exile.filter((c) => c.instanceId !== instanceId)
+  }
+
+  // Add to library
+  player.library.push(instanceId)
+
+  // Fisher-Yates shuffle
+  const lib = player.library
+  for (let i = lib.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [lib[i], lib[j]] = [lib[j], lib[i]]
+  }
+  player.libraryCount = lib.length
+
+  return s
+}
+
+function handleCopyCard(s: GameState, action: GameAction): GameState {
+  const { sourceInstanceId, newInstanceId } = action.data as { sourceInstanceId: string; newInstanceId: string; cardId: number }
+  const player = s.players[action.playerId]
+
+  // Find the source card on battlefield
+  const source = player.battlefield.find((c) => c.instanceId === sourceInstanceId)
+  if (!source) return s
+
+  // Create a fresh copy (token) on battlefield
+  player.battlefield.push({
+    instanceId: newInstanceId,
+    cardId: source.cardId,
+    tapped: false,
+    attacking: false,
+    blocking: null,
+    damageMarked: 0,
+    highlighted: null,
+    counters: [],
+  })
+
+  return s
+}
+
+function handleTakeControl(s: GameState, action: GameAction): GameState {
+  const { instanceId, opponentId } = action.data as { instanceId: string; opponentId: string }
+  const opponent = s.players[opponentId]
+  const player = s.players[action.playerId]
+
+  const cardIdx = opponent.battlefield.findIndex((c) => c.instanceId === instanceId)
+  if (cardIdx === -1) return s
+
+  const card = opponent.battlefield[cardIdx]
+  opponent.battlefield.splice(cardIdx, 1)
+
+  // Add to player's battlefield, untapped
+  player.battlefield.push({
+    ...card,
+    tapped: false,
+    attacking: false,
+    blocking: null,
+    damageMarked: 0,
+    highlighted: null,
+  })
+
   return s
 }
 
