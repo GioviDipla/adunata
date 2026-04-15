@@ -10,6 +10,7 @@ import {
   createDraw, createConcede,
   createDeclareAttackers, createDeclareBlockers, createCombatDamage, createDiscard,
   createMulligan, createKeepHand, createBottomCards,
+  createAddCounter, createRemoveCounter,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
@@ -257,7 +258,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
       if (!data) continue
       const row = toCardRow(c.cardId, data)
-      const entry: BattlefieldCard = { instanceId: c.instanceId, card: row, tapped: c.tapped }
+      const entry: BattlefieldCard = { instanceId: c.instanceId, card: row, tapped: c.tapped, counters: c.counters }
       const zone = getCardZone(data.typeLine)
       if (zone === 'lands') lands.push(entry)
       else if (zone === 'creatures') creatures.push(entry)
@@ -387,6 +388,18 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
     sendAction(createPlayCard(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'commandZone', 'battlefield'))
   }, [myState, cardMap, sendAction, userId, myName])
+
+  const handleAddCounter = useCallback((instanceId: string, counterName: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createAddCounter(userId, myName, instanceId, data.name, counterName))
+  }, [cardMap, sendAction, userId, myName])
+
+  const handleRemoveCounter = useCallback((instanceId: string, counterName: string) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createRemoveCounter(userId, myName, instanceId, data.name, counterName))
+  }, [cardMap, sendAction, userId, myName])
 
   const closePreview = useCallback(() => setPreview(null), [])
 
@@ -649,7 +662,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           <CardPreviewOverlay preview={preview} onClose={closePreview} isCommanderCard={isCommanderCard}
             onTapToggle={handleTapToggle} onReturnToHand={handleReturnToHand} onReturnToCommandZone={handleReturnToCommandZone}
             onSendToGraveyard={handleSendToGraveyard} onExile={handleExile} onPlayCard={handlePlayCard}
-            onDiscardFromHand={handleDiscardFromHand} onExileFromHand={handleExileFromHand} onPlayFromCommandZone={handlePlayFromCommandZone} />
+            onDiscardFromHand={handleDiscardFromHand} onExileFromHand={handleExileFromHand} onPlayFromCommandZone={handlePlayFromCommandZone}
+            onAddCounter={handleAddCounter} onRemoveCounter={handleRemoveCounter} />
         </div>
       )
     }
@@ -706,9 +720,10 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             onSendToGraveyard={handleSendToGraveyard}
             onExile={handleExile}
             onReturnToHand={handleReturnToHand}
-            onCardPreview={(card, id, tapped) =>
-              setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
-            }
+            onCardPreview={(card, id, tapped) => {
+              const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
+              setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
+            }}
           />
 
           {/* Other permanents */}
@@ -869,6 +884,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         onDiscardFromHand={handleDiscardFromHand}
         onExileFromHand={handleExileFromHand}
         onPlayFromCommandZone={handlePlayFromCommandZone}
+        onAddCounter={handleAddCounter}
+        onRemoveCounter={handleRemoveCounter}
       />
 
       {/* Combat & discard overlays */}

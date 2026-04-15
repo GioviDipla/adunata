@@ -38,6 +38,12 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleKeepHand(s, action)
     case 'bottom_cards':
       return handleBottomCards(s, action)
+    case 'add_counter':
+      return handleAddCounter(s, action)
+    case 'remove_counter':
+      return handleRemoveCounter(s, action)
+    case 'set_counter':
+      return handleSetCounter(s, action)
     case 'concede':
       return s // handled at API level
     default:
@@ -464,6 +470,49 @@ function handleBottomCards(s: GameState, action: GameAction): GameState {
   decision.bottomCardsDone = true
 
   return checkMulliganComplete(s)
+}
+
+function handleAddCounter(s: GameState, action: GameAction): GameState {
+  const { instanceId, counterName, amount } = action.data as { instanceId: string; counterName: string; amount: number }
+  const player = s.players[action.playerId]
+  const card = player.battlefield.find((c) => c.instanceId === instanceId)
+  if (!card) return s
+  const existing = card.counters.find((c) => c.name === counterName)
+  if (existing) {
+    existing.value += (amount || 1)
+    if (existing.value <= 0) card.counters = card.counters.filter((c) => c.name !== counterName)
+  } else {
+    card.counters.push({ name: counterName, value: amount || 1 })
+  }
+  return s
+}
+
+function handleRemoveCounter(s: GameState, action: GameAction): GameState {
+  const { instanceId, counterName, amount } = action.data as { instanceId: string; counterName: string; amount: number }
+  const player = s.players[action.playerId]
+  const card = player.battlefield.find((c) => c.instanceId === instanceId)
+  if (!card) return s
+  const existing = card.counters.find((c) => c.name === counterName)
+  if (existing) {
+    existing.value -= (amount || 1)
+    if (existing.value <= 0) card.counters = card.counters.filter((c) => c.name !== counterName)
+  }
+  return s
+}
+
+function handleSetCounter(s: GameState, action: GameAction): GameState {
+  const { instanceId, counterName, value } = action.data as { instanceId: string; counterName: string; value: number }
+  const player = s.players[action.playerId]
+  const card = player.battlefield.find((c) => c.instanceId === instanceId)
+  if (!card) return s
+  if (value <= 0) {
+    card.counters = card.counters.filter((c) => c.name !== counterName)
+  } else {
+    const existing = card.counters.find((c) => c.name === counterName)
+    if (existing) existing.value = value
+    else card.counters.push({ name: counterName, value })
+  }
+  return s
 }
 
 function checkMulliganComplete(s: GameState): GameState {

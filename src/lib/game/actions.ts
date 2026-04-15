@@ -97,6 +97,22 @@ export function createKeepHand(playerId: string, playerName: string, mulliganCou
   }
 }
 
+export function createAddCounter(playerId: string, playerName: string, instanceId: string, cardName: string, counterName: string, amount: number = 1): GameAction {
+  return {
+    type: 'add_counter', playerId,
+    data: { instanceId, counterName, amount },
+    text: `${playerName} adds ${counterName} counter to ${cardName}`,
+  }
+}
+
+export function createRemoveCounter(playerId: string, playerName: string, instanceId: string, cardName: string, counterName: string, amount: number = 1): GameAction {
+  return {
+    type: 'remove_counter', playerId,
+    data: { instanceId, counterName, amount },
+    text: `${playerName} removes ${counterName} counter from ${cardName}`,
+  }
+}
+
 export function createBottomCards(playerId: string, playerName: string, instanceIds: string[], count: number): GameAction {
   return {
     type: 'bottom_cards', playerId,

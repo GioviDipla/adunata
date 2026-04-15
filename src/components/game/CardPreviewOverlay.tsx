@@ -12,6 +12,7 @@ export interface PreviewState {
   zone?: PreviewZone
   instanceId?: string
   tapped?: boolean
+  counters?: { name: string; value: number }[]
 }
 
 interface CardPreviewOverlayProps {
@@ -34,6 +35,10 @@ interface CardPreviewOverlayProps {
 
   // Command zone actions
   onPlayFromCommandZone?: (instanceId: string) => void
+
+  // Counter actions
+  onAddCounter?: (instanceId: string, counterName: string) => void
+  onRemoveCounter?: (instanceId: string, counterName: string) => void
 }
 
 /**
@@ -54,6 +59,8 @@ export default function CardPreviewOverlay({
   onDiscardFromHand,
   onExileFromHand,
   onPlayFromCommandZone,
+  onAddCounter,
+  onRemoveCounter,
 }: CardPreviewOverlayProps) {
   if (!preview) return null
 
@@ -193,6 +200,28 @@ export default function CardPreviewOverlay({
                 <Play size={16} /> Cast Commander
               </button>
             )}
+          </div>
+        )}
+
+        {/* Counter management — shows for battlefield cards even without other actions */}
+        {canShowBattlefieldActions && !readOnly && (
+          <div className="w-full rounded-xl bg-bg-surface p-2" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[10px] font-bold text-font-muted mb-1">COUNTERS</p>
+            {(preview.counters ?? []).map((c) => (
+              <div key={c.name} className="flex items-center justify-between py-0.5">
+                <span className="text-xs text-font-primary">{c.name}: {c.value}</span>
+                <div className="flex gap-1">
+                  <button onClick={() => onRemoveCounter?.(preview.instanceId!, c.name)}
+                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">-</button>
+                  <button onClick={() => onAddCounter?.(preview.instanceId!, c.name)}
+                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">+</button>
+                </div>
+              </div>
+            ))}
+            <button onClick={() => {
+              const name = prompt('Counter name (e.g. +1/+1, Loyalty, Charge):')
+              if (name?.trim() && preview.instanceId) onAddCounter?.(preview.instanceId, name.trim())
+            }} className="mt-1 text-[10px] text-font-accent hover:underline">+ Add Counter</button>
           </div>
         )}
       </div>

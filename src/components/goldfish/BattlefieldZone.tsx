@@ -11,6 +11,7 @@ export interface BattlefieldCard {
   instanceId: string
   card: CardRow
   tapped: boolean
+  counters?: { name: string; value: number }[]
 }
 
 interface BattlefieldZoneProps {
@@ -80,6 +81,16 @@ function BattlefieldCardButton({
               {bc.card.power}/{bc.card.toughness}
             </span>
           )}
+        </div>
+      )}
+      {/* Counter badges */}
+      {bc.counters && bc.counters.length > 0 && (
+        <div className="absolute bottom-0.5 right-0.5 flex flex-col gap-0.5 pointer-events-none">
+          {bc.counters.map((c) => (
+            <span key={c.name} className="rounded bg-bg-accent/90 px-1 text-[7px] font-bold text-font-white leading-tight whitespace-nowrap">
+              {c.name}: {c.value}
+            </span>
+          ))}
         </div>
       )}
     </button>
