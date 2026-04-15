@@ -31,6 +31,7 @@ import CombatBlockers from './CombatBlockers'
 import DiscardSelector from './DiscardSelector'
 import TokenCreator from './TokenCreator'
 import CommanderChoiceModal from './CommanderChoiceModal'
+import SpecialActionsMenu from './SpecialActionsMenu'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -135,6 +136,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [opponentExpanded, setOpponentExpanded] = useState(false)
   const [bottomSelectIds, setBottomSelectIds] = useState<Set<string>>(new Set())
   const [showTokenCreator, setShowTokenCreator] = useState(false)
+  const [showSpecialActions, setShowSpecialActions] = useState(false)
+  const [peakCards, setPeakCards] = useState<{ instanceId: string; card: CardRow }[] | null>(null)
   const [deckTokens, setDeckTokens] = useState<{ name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[]>([])
   const libraryViewLoggedRef = useRef(false)
 
@@ -778,6 +781,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
         autoPass={myState.autoPass}
         onToggleAutoPass={() => sendAction(createToggleAutoPass(userId, myName, myState.autoPass))}
+        onSpecialActions={() => setShowSpecialActions(true)}
       />
 
       {/* Scrollable middle: opponent + divider + player battlefield */}
@@ -1027,6 +1031,68 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             ))
           }}
         />
+      )}
+
+      {/* Special Actions Menu */}
+      {showSpecialActions && (
+        <SpecialActionsMenu
+          onPeak={(n) => {
+            const topN = myState.library.slice(0, n)
+            const cards = topN.map(id => {
+              const data = cardMap[id]
+              if (!data) return null
+              return { instanceId: id, card: toCardRow(data.cardId, data) }
+            }).filter((x): x is { instanceId: string; card: CardRow } => x !== null)
+            setPeakCards(cards)
+            sendAction({ type: 'peak' as GameActionType, playerId: userId, data: { count: n }, text: `${myName} peeks at top ${n} card${n > 1 ? 's' : ''} of their library` })
+          }}
+          onScry={(n) => {
+            sendAction({ type: 'reveal_top' as GameActionType, playerId: userId, data: { count: n, actionType: 'scry' }, text: `${myName} scries ${n}` })
+          }}
+          onSurveil={(n) => {
+            sendAction({ type: 'reveal_top' as GameActionType, playerId: userId, data: { count: n, actionType: 'surveil' }, text: `${myName} surveils ${n}` })
+          }}
+          onMill={(n, target) => {
+            const targetId = target === 'self' ? userId : opponentId!
+            const targetLib = gameState.players[targetId].library
+            const topN = targetLib.slice(0, Math.min(n, targetLib.length))
+            const cardIds: Record<string, number> = {}
+            for (const id of topN) {
+              const data = cardMap[id]
+              if (data) cardIds[id] = data.cardId
+            }
+            sendAction({ type: 'mill' as GameActionType, playerId: userId, data: { count: n, targetPlayerId: targetId, cardIds }, text: `${myName} mills ${n} card${n > 1 ? 's' : ''} from ${target === 'self' ? 'their' : "opponent's"} library` })
+          }}
+          onDrawX={(n) => {
+            sendAction({ type: 'draw_x' as GameActionType, playerId: userId, data: { count: n }, text: `${myName} draws ${n} card${n > 1 ? 's' : ''}` })
+          }}
+          onCreateToken={() => setShowTokenCreator(true)}
+          onClose={() => setShowSpecialActions(false)}
+        />
+      )}
+
+      {/* Peak cards viewer */}
+      {peakCards && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-dark/80" onClick={() => setPeakCards(null)}>
+          <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-bg-surface p-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-sm font-bold text-font-primary">Top {peakCards.length} Card{peakCards.length > 1 ? 's' : ''}</h3>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {peakCards.map((pc) => (
+                <div key={pc.instanceId} className="w-24">
+                  {pc.card.image_small ? (
+                    <img src={pc.card.image_small} alt={pc.card.name} className="w-full rounded-lg" />
+                  ) : (
+                    <div className="flex aspect-[5/7] items-center justify-center rounded-lg bg-bg-cell p-2">
+                      <span className="text-[9px] text-font-primary text-center">{pc.card.name}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setPeakCards(null)}
+              className="mt-4 w-full rounded-lg bg-bg-accent py-2 text-sm font-bold text-font-white">Done</button>
+          </div>
+        </div>
       )}
     </div>
   )

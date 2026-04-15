@@ -87,7 +87,7 @@ export async function POST(
   }
 
   // Log-only actions (no state change)
-  if (action.type === 'library_view') {
+  if (action.type === 'library_view' || action.type === 'peak') {
     const newSeq = currentState.lastActionSeq + 1
     const updatedState = { ...currentState, lastActionSeq: newSeq }
     await admin.from('game_log').insert({

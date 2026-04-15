@@ -1,6 +1,6 @@
 'use client'
 
-import { Heart, Minus, Plus, Layers, Archive, Ban, BookOpen, SkipForward, Flag } from 'lucide-react'
+import { Heart, Minus, Plus, Layers, Archive, Ban, BookOpen, SkipForward, Flag, Sparkles } from 'lucide-react'
 import PriorityIndicator from './PriorityIndicator'
 import { GAME_PHASES } from '@/lib/game/phases'
 import type { GamePhase } from '@/lib/game/types'
@@ -22,12 +22,13 @@ interface GameActionBarProps {
   onConfirmUntap?: () => void
   autoPass?: boolean
   onToggleAutoPass?: () => void
+  onSpecialActions?: () => void
 }
 
 export default function GameActionBar({
   phase, turn, life, libraryCount, graveyardCount, exileCount,
   hasPriority, isActivePlayer, onPassPriority, onLifeChange, onDraw,
-  onViewZone, onConcede, onConfirmUntap, autoPass, onToggleAutoPass,
+  onViewZone, onConcede, onConfirmUntap, autoPass, onToggleAutoPass, onSpecialActions,
 }: GameActionBarProps) {
   return (
     <div className="border-t border-border bg-bg-surface">
@@ -99,6 +100,12 @@ export default function GameActionBar({
                 }`}>
                 <SkipForward size={14} />
                 <span className="text-[7px] font-bold">{autoPass ? 'AUTO' : 'F6'}</span>
+              </button>
+            )}
+            {onSpecialActions && (
+              <button onClick={onSpecialActions}
+                className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-cell px-3 py-2 text-font-secondary active:bg-bg-hover">
+                <Sparkles size={16} /><span className="text-[7px] font-bold">SPECIAL</span>
               </button>
             )}
             <button onClick={onConcede}
