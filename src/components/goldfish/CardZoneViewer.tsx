@@ -18,6 +18,9 @@ interface CardZoneViewerProps {
   onClose: () => void
   onReturnToHand?: (instanceId: string) => void
   onReturnToBattlefield?: (instanceId: string) => void
+  onSendToGraveyard?: (instanceId: string) => void
+  onSendToExile?: (instanceId: string) => void
+  onSendToBottom?: (instanceId: string) => void
   onCardPreview?: (card: CardRow) => void
   groupByType?: boolean
 }
@@ -30,6 +33,9 @@ export default function CardZoneViewer({
   onClose,
   onReturnToHand,
   onReturnToBattlefield,
+  onSendToGraveyard,
+  onSendToExile,
+  onSendToBottom,
   onCardPreview,
   groupByType = false,
 }: CardZoneViewerProps) {
@@ -75,31 +81,33 @@ export default function CardZoneViewer({
           </button>
         </div>
 
-        {/* Type filters */}
-        {cards.length > 0 && (
-          <div className="relative z-10 flex gap-1 overflow-x-auto border-b border-border px-3 py-2">
-            {TYPE_FILTERS.map((f) => {
-              const count = f === 'All' ? cards.length : (activeFilters[f] || 0)
-              if (f !== 'All' && count === 0) return null
-              return (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
-                    filter === f
-                      ? 'bg-bg-accent text-font-white'
-                      : 'bg-bg-cell text-font-secondary hover:text-font-primary'
-                  }`}
-                >
-                  {f === 'All' ? 'All' : f} ({count})
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {/* Scrollable area: sticky filters + card list */}
+        <div className="isolate flex-1 overflow-y-auto">
+          {/* Type filters — sticky within scroll container */}
+          {cards.length > 0 && (
+            <div className="sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-border bg-bg-surface px-3 py-2 shadow-sm">
+              {TYPE_FILTERS.map((f) => {
+                const count = f === 'All' ? cards.length : (activeFilters[f] || 0)
+                if (f !== 'All' && count === 0) return null
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
+                      filter === f
+                        ? 'bg-bg-accent text-font-white'
+                        : 'bg-bg-cell text-font-secondary hover:text-font-primary'
+                    }`}
+                  >
+                    {f === 'All' ? 'All' : f} ({count})
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
-        {/* Card list */}
-        <div className="isolate flex-1 overflow-y-auto p-3">
+          {/* Card list */}
+          <div className="p-3">
           {filteredCards.length === 0 ? (
             <p className="py-8 text-center text-sm text-font-muted">
               No cards in this zone.
@@ -148,11 +156,36 @@ export default function CardZoneViewer({
                         Play
                       </button>
                     )}
+                    {onSendToGraveyard && (
+                      <button
+                        onClick={() => onSendToGraveyard(entry.instanceId)}
+                        className="flex-1 rounded bg-bg-red/80 px-1 py-1 text-[9px] font-bold text-font-white"
+                      >
+                        GY
+                      </button>
+                    )}
+                    {onSendToExile && (
+                      <button
+                        onClick={() => onSendToExile(entry.instanceId)}
+                        className="flex-1 rounded bg-font-muted/80 px-1 py-1 text-[9px] font-bold text-font-white"
+                      >
+                        Exile
+                      </button>
+                    )}
+                    {onSendToBottom && (
+                      <button
+                        onClick={() => onSendToBottom(entry.instanceId)}
+                        className="flex-1 rounded bg-bg-cell/90 px-1 py-1 text-[9px] font-bold text-font-white"
+                      >
+                        Bottom
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

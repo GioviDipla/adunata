@@ -74,6 +74,7 @@ export type GameActionType =
   | 'mulligan'
   | 'keep_hand'
   | 'bottom_cards'
+  | 'library_view'
 
 export interface GameAction {
   type: GameActionType

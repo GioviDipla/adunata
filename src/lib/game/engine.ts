@@ -253,6 +253,9 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
     player.exile.push({ instanceId, cardId })
   } else if (to === 'commandZone') {
     player.commandZone.push({ instanceId, cardId })
+  } else if (to === 'libraryBottom') {
+    player.library.push(instanceId)
+    player.libraryCount = player.library.length
   }
 
   return s

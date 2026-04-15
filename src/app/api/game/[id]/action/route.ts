@@ -86,6 +86,20 @@ export async function POST(
     return NextResponse.json({ state: updatedState, seq: newSeq, conceded: true, winnerId })
   }
 
+  // Log-only actions (no state change)
+  if (action.type === 'library_view') {
+    const newSeq = currentState.lastActionSeq + 1
+    const updatedState = { ...currentState, lastActionSeq: newSeq }
+    await admin.from('game_log').insert({
+      lobby_id: lobbyId, seq: newSeq, player_id: action.playerId,
+      action: action.type, data: (action.data as Json) ?? null, text: action.text,
+    })
+    await admin.from('game_states').update({
+      state_data: updatedState as unknown as Json, updated_at: new Date().toISOString(),
+    }).eq('id', gameStateRow.id)
+    return NextResponse.json({ state: updatedState, seq: newSeq })
+  }
+
   // Apply action through the engine
   const newState = applyAction(currentState, action)
 

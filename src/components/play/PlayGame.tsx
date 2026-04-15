@@ -12,7 +12,7 @@ import {
   createMulligan, createKeepHand, createBottomCards,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
-import type { GameState, CardMap, LogEntry } from '@/lib/game/types'
+import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
 import type { Database } from '@/types/supabase'
 import { getCardZone } from '@/lib/utils/card'
 import OpponentField from './OpponentField'
@@ -130,6 +130,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [opponentExpanded, setOpponentExpanded] = useState(false)
   const [bottomSelectIds, setBottomSelectIds] = useState<Set<string>>(new Set())
+  const libraryViewLoggedRef = useRef(false)
 
   // Fetch initial state
   useEffect(() => {
@@ -218,6 +219,17 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const hasPriority = gameState?.priorityPlayerId === userId
   const isActivePlayer = gameState?.activePlayerId === userId
   const myName = playerNames[userId] ?? 'Player'
+
+  // Log library consultation when library viewer opens
+  useEffect(() => {
+    if (viewingZone === 'library' && !libraryViewLoggedRef.current) {
+      libraryViewLoggedRef.current = true
+      sendAction({ type: 'library_view' as GameActionType, playerId: userId, data: {}, text: `${myName} is searching their library` })
+    }
+    if (viewingZone !== 'library') {
+      libraryViewLoggedRef.current = false
+    }
+  }, [viewingZone, sendAction, userId, myName])
 
   // Resolve hand cards for HandArea component
   const myHandCards = useMemo((): HandCardEntry[] => {
@@ -815,12 +827,29 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           cards={libraryCards}
           onClose={() => setViewingZone(null)}
           onReturnToHand={(instanceId) => {
-            const idx = myState.library.findIndex((id) => id === instanceId)
-            if (idx === -1) return
             const data = cardMap[instanceId]
             if (!data) return
             sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'hand'))
-            setViewingZone(null)
+          }}
+          onReturnToBattlefield={(instanceId) => {
+            const data = cardMap[instanceId]
+            if (!data) return
+            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'battlefield'))
+          }}
+          onSendToGraveyard={(instanceId) => {
+            const data = cardMap[instanceId]
+            if (!data) return
+            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'graveyard'))
+          }}
+          onSendToExile={(instanceId) => {
+            const data = cardMap[instanceId]
+            if (!data) return
+            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'exile'))
+          }}
+          onSendToBottom={(instanceId) => {
+            const data = cardMap[instanceId]
+            if (!data) return
+            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, 'library', 'libraryBottom'))
           }}
           onCardPreview={(card) => setPreview({ card })}
         />
