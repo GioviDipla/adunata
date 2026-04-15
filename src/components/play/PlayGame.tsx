@@ -773,8 +773,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-bg-dark">
-      {/* Scrollable top: opponent + divider + player battlefield */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Scrollable: opponent + spacer + player battlefield */}
+      <div className="flex-1 overflow-y-auto flex flex-col">
         {/* Opponent field */}
         <OpponentField
           state={opponentState}
@@ -787,7 +787,10 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         {/* Divider */}
         <div className="mx-3 border-t border-border/40" />
 
-        {/* Your battlefield */}
+        {/* Spacer pushes player battlefield to bottom */}
+        <div className="flex-1" />
+
+        {/* Your battlefield — anchored to bottom of scroll area */}
         <div className="px-3 py-1.5">
           {/* Creatures */}
           <BattlefieldZone
