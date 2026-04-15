@@ -101,7 +101,27 @@ export async function POST(
   }
 
   // Apply action through the engine
-  const newState = applyAction(currentState, action)
+  let newState = applyAction(currentState, action)
+
+  // Auto-pass loop: chain pass_priority for players with autoPass enabled
+  let autoPassCount = 0
+  while (
+    autoPassCount < 50 &&
+    newState.priorityPlayerId &&
+    newState.players[newState.priorityPlayerId]?.autoPass &&
+    !newState.pendingCommanderChoice &&
+    !newState.mulliganStage &&
+    !newState.players[newState.priorityPlayerId]?.revealedCards
+  ) {
+    const autoAction: GameAction = {
+      type: 'pass_priority',
+      playerId: newState.priorityPlayerId,
+      data: {},
+      text: 'Auto-pass',
+    }
+    newState = applyAction(newState, autoAction)
+    autoPassCount++
+  }
 
   // Append to game log
   await admin.from('game_log').insert({

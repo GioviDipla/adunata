@@ -53,11 +53,19 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleCreateToken(s, action)
     case 'commander_choice':
       return handleCommanderChoice(s, action)
+    case 'toggle_auto_pass':
+      return handleToggleAutoPass(s, action)
     case 'concede':
       return s // handled at API level
     default:
       return s
   }
+}
+
+function handleToggleAutoPass(s: GameState, action: GameAction): GameState {
+  const player = s.players[action.playerId]
+  player.autoPass = !player.autoPass
+  return s
 }
 
 function handlePassPriority(s: GameState, action: GameAction): GameState {
@@ -135,6 +143,7 @@ function advancePhase(s: GameState): GameState {
         ap.hand.push(drawnId)
         ap.libraryCount = ap.library.length
         ap.handCount = ap.hand.length
+        ap.autoPass = false
       }
     }
   }
@@ -308,6 +317,7 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
   } else if (to === 'hand') {
     player.hand.push(instanceId)
     player.handCount = player.hand.length
+    player.autoPass = false
   } else if (to === 'graveyard') {
     player.graveyard.push({ instanceId, cardId })
   } else if (to === 'exile') {
@@ -448,6 +458,7 @@ function handleDraw(s: GameState, action: GameAction): GameState {
     player.hand.push(drawnId)
     player.libraryCount = player.library.length
     player.handCount = player.hand.length
+    player.autoPass = false
   }
   return s
 }

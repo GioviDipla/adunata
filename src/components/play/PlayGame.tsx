@@ -11,7 +11,7 @@ import {
   createDeclareAttackers, createDeclareBlockers, createCombatDamage, createDiscard,
   createMulligan, createKeepHand, createBottomCards,
   createAddCounter, createRemoveCounter, createCreateToken,
-  createCommanderChoice,
+  createCommanderChoice, createToggleAutoPass,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
@@ -775,6 +775,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         onViewZone={setViewingZone}
         onConcede={() => sendAction(createConcede(userId, myName))}
         onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
+        autoPass={myState.autoPass}
+        onToggleAutoPass={() => sendAction(createToggleAutoPass(userId, myName, myState.autoPass))}
       />
 
       {/* Scrollable middle: opponent + divider + player battlefield */}

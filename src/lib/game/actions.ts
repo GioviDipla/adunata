@@ -129,6 +129,14 @@ export function createCommanderChoice(playerId: string, playerName: string, card
   }
 }
 
+export function createToggleAutoPass(playerId: string, playerName: string, enabled: boolean): GameAction {
+  return {
+    type: 'toggle_auto_pass', playerId,
+    data: { enabled },
+    text: `${playerName} ${enabled ? 'disabled' : 'enabled'} auto-pass`,
+  }
+}
+
 export function createBottomCards(playerId: string, playerName: string, instanceIds: string[], count: number): GameAction {
   return {
     type: 'bottom_cards', playerId,

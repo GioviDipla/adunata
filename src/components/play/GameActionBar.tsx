@@ -20,12 +20,14 @@ interface GameActionBarProps {
   onViewZone: (zone: 'graveyard' | 'exile' | 'library') => void
   onConcede: () => void
   onConfirmUntap?: () => void
+  autoPass?: boolean
+  onToggleAutoPass?: () => void
 }
 
 export default function GameActionBar({
   phase, turn, life, libraryCount, graveyardCount, exileCount,
   hasPriority, isActivePlayer, onPassPriority, onLifeChange, onDraw,
-  onViewZone, onConcede, onConfirmUntap,
+  onViewZone, onConcede, onConfirmUntap, autoPass, onToggleAutoPass,
 }: GameActionBarProps) {
   return (
     <div className="border-t border-border bg-bg-surface">
@@ -90,11 +92,24 @@ export default function GameActionBar({
               className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-green py-2 text-font-white">
               <SkipForward size={16} /><span className="text-[8px] font-bold">OK</span>
             </button>
+            {onToggleAutoPass && (
+              <button onClick={onToggleAutoPass}
+                className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-2 ${
+                  autoPass ? 'bg-bg-green text-font-white' : 'bg-bg-cell text-font-secondary'
+                }`}>
+                <SkipForward size={14} />
+                <span className="text-[7px] font-bold">{autoPass ? 'AUTO' : 'F6'}</span>
+              </button>
+            )}
             <button onClick={onConcede}
               className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-cell px-3 py-2 text-font-muted">
               <Flag size={14} /><span className="text-[8px] font-bold">GG</span>
             </button>
           </>
+        ) : autoPass ? (
+          <div className="flex flex-1 items-center justify-center py-3 text-xs text-bg-green font-bold">
+            AUTO-PASSING...
+          </div>
         ) : (
           <div className="flex flex-1 items-center justify-center py-3 text-xs text-font-muted">
             Waiting for opponent...
