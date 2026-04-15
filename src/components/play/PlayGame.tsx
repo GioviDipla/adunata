@@ -98,7 +98,7 @@ function CommandZoneCard({
       }}
       {...longPress}
       className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card select-none"
-      style={{ width: 68, height: 95 }}
+      style={{ width: 48, height: 67 }}
       title={`${data?.name ?? '?'} — tap to preview & cast`}
     >
       {data?.imageSmall ? (
@@ -128,6 +128,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [gameOver, setGameOver] = useState<{ winnerId: string } | null>(null)
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
   const [preview, setPreview] = useState<PreviewState | null>(null)
+  const [opponentExpanded, setOpponentExpanded] = useState(false)
   const [bottomSelectIds, setBottomSelectIds] = useState<Set<string>>(new Set())
 
   // Fetch initial state
@@ -650,95 +651,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-bg-dark">
-      {/* Opponent field */}
-      <OpponentField state={opponentState} cardMap={cardMap} />
-
-      {/* Your battlefield */}
-      <div className="flex-1 overflow-y-auto px-3 py-2">
-        {/* Command zone */}
-        {myState.commandZone.length > 0 && (
-          <div className="mb-2">
-            <span className="text-[9px] font-semibold tracking-wider text-font-muted">COMMAND ZONE</span>
-            <div className="mt-1 flex gap-1.5">
-              {myState.commandZone.map((c) => {
-                const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
-                return (
-                  <CommandZoneCard
-                    key={c.instanceId}
-                    cardId={c.cardId}
-                    data={data}
-                    onOpenPreview={(row) =>
-                      setPreview({ card: row, zone: 'commandZone', instanceId: c.instanceId })
-                    }
-                  />
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Creatures */}
-        <BattlefieldZone
-          title="CREATURES"
-          cards={myBattlefieldByZone.creatures}
-          onTapToggle={handleTapToggle}
-          onSendToGraveyard={handleSendToGraveyard}
-          onExile={handleExile}
-          onReturnToHand={handleReturnToHand}
-          onCardPreview={(card, id, tapped) =>
-            setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
-          }
-        />
-
-        {/* Other permanents */}
-        {myBattlefieldByZone.other.length > 0 && (
-          <div className="mt-2">
-            <BattlefieldZone
-              title="OTHER"
-              cards={myBattlefieldByZone.other}
-              onTapToggle={handleTapToggle}
-              onSendToGraveyard={handleSendToGraveyard}
-              onExile={handleExile}
-              onReturnToHand={handleReturnToHand}
-              onCardPreview={(card, id, tapped) =>
-                setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
-              }
-            />
-          </div>
-        )}
-
-        {/* Lands */}
-        <div className="mt-2">
-          <BattlefieldZone
-            title="LANDS"
-            cards={myBattlefieldByZone.lands}
-            onTapToggle={handleTapToggle}
-            onSendToGraveyard={handleSendToGraveyard}
-            onExile={handleExile}
-            onReturnToHand={handleReturnToHand}
-            onCardPreview={(card, id, tapped) =>
-              setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
-            }
-          />
-        </div>
-      </div>
-
-      {/* Hand */}
-      <div className="border-t border-border bg-bg-card px-3 py-2">
-        <HandArea
-          cards={myHandCards}
-          onPlayCard={handlePlayCard}
-          onCardPreview={(card, instanceId) =>
-            setPreview({ card, zone: 'hand', instanceId })
-          }
-        />
-      </div>
-
-      {/* Game Log */}
-      <GameLog entries={log} myUserId={userId} />
-
-      {/* Action Bar */}
+    <div className="relative flex h-[100dvh] flex-col bg-bg-dark">
+      {/* Action Bar at top */}
       <GameActionBar
         phase={gameState.phase}
         turn={gameState.turn}
@@ -755,6 +669,99 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         onConcede={() => sendAction(createConcede(userId, myName))}
         onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
       />
+
+      {/* Scrollable middle: opponent + divider + player battlefield */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Opponent field */}
+        <OpponentField state={opponentState} cardMap={cardMap} />
+
+        {/* Divider */}
+        <div className="mx-3 border-t border-border/40" />
+
+        {/* Your battlefield */}
+        <div className="px-3 py-1.5">
+          {/* Creatures */}
+          <BattlefieldZone
+            title="CREATURES"
+            cards={myBattlefieldByZone.creatures}
+            onTapToggle={handleTapToggle}
+            onSendToGraveyard={handleSendToGraveyard}
+            onExile={handleExile}
+            onReturnToHand={handleReturnToHand}
+            onCardPreview={(card, id, tapped) =>
+              setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
+            }
+          />
+
+          {/* Other permanents */}
+          {myBattlefieldByZone.other.length > 0 && (
+            <div className="mt-1.5">
+              <BattlefieldZone
+                title="OTHER"
+                cards={myBattlefieldByZone.other}
+                onTapToggle={handleTapToggle}
+                onSendToGraveyard={handleSendToGraveyard}
+                onExile={handleExile}
+                onReturnToHand={handleReturnToHand}
+                onCardPreview={(card, id, tapped) =>
+                  setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
+                }
+              />
+            </div>
+          )}
+
+          {/* Lands */}
+          <div className="mt-1.5">
+            <BattlefieldZone
+              title="LANDS"
+              cards={myBattlefieldByZone.lands}
+              onTapToggle={handleTapToggle}
+              onSendToGraveyard={handleSendToGraveyard}
+              onExile={handleExile}
+              onReturnToHand={handleReturnToHand}
+              onCardPreview={(card, id, tapped) =>
+                setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Game Log */}
+      <GameLog entries={log} myUserId={userId} />
+
+      {/* Hand + Commander Zone fixed at bottom */}
+      <div className="border-t border-border bg-bg-card px-3 py-2">
+        <div className="flex gap-2">
+          <div className="flex-1 min-w-0">
+            <HandArea
+              cards={myHandCards}
+              onPlayCard={handlePlayCard}
+              onCardPreview={(card, instanceId) =>
+                setPreview({ card, zone: 'hand', instanceId })
+              }
+            />
+          </div>
+          {myState.commandZone.length > 0 && (
+            <div className="flex shrink-0 flex-col gap-1">
+              <span className="text-[7px] font-bold tracking-wider text-yellow-500 text-center">CMD</span>
+              {myState.commandZone.map((c) => {
+                const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
+                return (
+                  <CommandZoneCard
+                    key={c.instanceId}
+                    cardId={c.cardId}
+                    data={data}
+                    onOpenPreview={(row) =>
+                      setPreview({ card: row, zone: 'commandZone', instanceId: c.instanceId })
+                    }
+                  />
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Zone viewers */}
       {viewingZone === 'graveyard' && (
