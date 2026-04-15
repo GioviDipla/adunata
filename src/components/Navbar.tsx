@@ -105,22 +105,24 @@ export function Navbar() {
       </aside>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-border bg-bg-surface px-1 py-0.5 md:hidden">
-        {navItems.map((item) => {
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-stretch border-t border-border bg-bg-surface md:hidden safe-area-bottom">
+        {navItems.map((item, idx) => {
           const Icon = item.icon;
           const active = isActive(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0 rounded-lg px-1.5 py-1 text-[10px] font-medium transition-colors ${
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-[11px] font-medium transition-colors ${
+                idx > 0 ? "border-l border-border/40" : ""
+              } ${
                 active
-                  ? "text-font-accent"
-                  : "text-font-muted hover:text-font-secondary"
+                  ? "text-font-accent bg-bg-accent/5"
+                  : "text-font-muted active:bg-bg-hover"
               }`}
             >
-              <Icon className="h-4 w-4" />
-              <span className="truncate max-w-[3.5rem]">{item.label}</span>
+              <Icon className="h-5 w-5" />
+              <span className="truncate max-w-[4rem]">{item.label}</span>
             </Link>
           );
         })}

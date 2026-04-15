@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Crown } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import type { Database } from '@/types/supabase'
@@ -25,6 +25,30 @@ interface DeckGridViewProps {
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
 }
 
+function useGridLongPress(delay = 500) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const triggered = useRef(false)
+  const callbackRef = useRef<(() => void) | null>(null)
+
+  const start = useCallback((cb: () => void) => {
+    triggered.current = false
+    callbackRef.current = cb
+    timerRef.current = setTimeout(() => {
+      triggered.current = true
+      cb()
+    }, delay)
+  }, [delay])
+
+  const cancel = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  return { start, cancel, wasLongPress: () => triggered.current }
+}
+
 export default function DeckGridView({
   cards,
   onQuantityChange,
@@ -36,6 +60,7 @@ export default function DeckGridView({
   onMoveToBoard,
 }: DeckGridViewProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
+  const longPress = useGridLongPress(500)
   if (cards.length === 0) {
     return (
       <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
@@ -62,20 +87,37 @@ export default function DeckGridView({
                 setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
               }
             }}
+            onPointerDown={(e) => {
+              if (onMoveToBoard && e.pointerType === 'touch') {
+                longPress.start(() => {
+                  const rect = (e.target as HTMLElement).getBoundingClientRect()
+                  setContextMenu({ x: rect.left + rect.width / 2, y: rect.top, cardId: entry.card.id, board: entry.board })
+                })
+              }
+            }}
+            onPointerUp={() => longPress.cancel()}
+            onPointerLeave={() => longPress.cancel()}
+            onPointerCancel={() => longPress.cancel()}
+            style={{ touchAction: onMoveToBoard ? 'none' : undefined }}
           >
             {/* Card image */}
             {entry.card.image_normal ? (
               <img
                 src={entry.card.image_normal}
                 alt={entry.card.name}
-                className="w-full h-auto cursor-pointer"
+                className="w-full h-auto cursor-pointer select-none"
                 loading="lazy"
-                onClick={() => onCardClick?.(entry.card)}
+                draggable={false}
+                onClick={() => {
+                  if (!longPress.wasLongPress()) onCardClick?.(entry.card)
+                }}
               />
             ) : (
               <div
-                className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2 cursor-pointer"
-                onClick={() => onCardClick?.(entry.card)}
+                className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2 cursor-pointer select-none"
+                onClick={() => {
+                  if (!longPress.wasLongPress()) onCardClick?.(entry.card)
+                }}
               >
                 <span className="text-center text-xs text-font-muted">
                   {entry.card.name}

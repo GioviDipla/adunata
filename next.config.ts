@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    staleTimes: {
+      dynamic: 30,   // cache dynamic pages for 30s client-side
+      static: 180,   // cache static pages for 3 min client-side
+    },
+  },
   images: {
     remotePatterns: [
       {

@@ -100,11 +100,15 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     setLoadingDecks(true)
     try {
       const supabase = createClient()
-      const { data } = await supabase
-        .from('decks')
-        .select('id, name, format')
-        .order('updated_at', { ascending: false })
-      setMyDecks((data as DeckSummary[]) ?? [])
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('decks')
+          .select('id, name, format')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false })
+        setMyDecks((data as DeckSummary[]) ?? [])
+      }
     } catch { /* ignore */ }
     setLoadingDecks(false)
   }
