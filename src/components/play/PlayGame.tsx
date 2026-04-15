@@ -908,14 +908,30 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
             if (!c) return
             const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
             sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'hand'))
-            setViewingZone(null)
           }}
           onReturnToBattlefield={(instanceId) => {
             const c = myState.graveyard.find((g) => g.instanceId === instanceId)
             if (!c) return
             const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
             sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'battlefield'))
-            setViewingZone(null)
+          }}
+          onSendToExile={(instanceId) => {
+            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
+            if (!c) return
+            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'exile'))
+          }}
+          onSendToBottom={(instanceId) => {
+            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
+            if (!c) return
+            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'libraryBottom'))
+          }}
+          onSendToTop={(instanceId) => {
+            const c = myState.graveyard.find((g) => g.instanceId === instanceId)
+            if (!c) return
+            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'graveyard', 'libraryTop'))
           }}
           onCardPreview={(card) => setPreview({ card })}
           groupByType
@@ -926,12 +942,35 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           title="Exile"
           cards={exileCards}
           onClose={() => setViewingZone(null)}
+          onReturnToHand={(instanceId) => {
+            const c = myState.exile.find((e) => e.instanceId === instanceId)
+            if (!c) return
+            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'hand'))
+          }}
           onReturnToBattlefield={(instanceId) => {
             const c = myState.exile.find((e) => e.instanceId === instanceId)
             if (!c) return
             const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
             sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'battlefield'))
-            setViewingZone(null)
+          }}
+          onSendToGraveyard={(instanceId) => {
+            const c = myState.exile.find((e) => e.instanceId === instanceId)
+            if (!c) return
+            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'graveyard'))
+          }}
+          onSendToBottom={(instanceId) => {
+            const c = myState.exile.find((e) => e.instanceId === instanceId)
+            if (!c) return
+            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'libraryBottom'))
+          }}
+          onSendToTop={(instanceId) => {
+            const c = myState.exile.find((e) => e.instanceId === instanceId)
+            if (!c) return
+            const data = cardMap[instanceId] ?? cardMap[String(c.cardId)]
+            sendAction(createMoveZone(userId, myName, instanceId, c.cardId, data?.name ?? 'card', 'exile', 'libraryTop'))
           }}
           onCardPreview={(card) => setPreview({ card })}
           groupByType

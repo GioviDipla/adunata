@@ -321,6 +321,9 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
   } else if (to === 'libraryBottom') {
     player.library.push(instanceId)
     player.libraryCount = player.library.length
+  } else if (to === 'libraryTop') {
+    player.library.unshift(instanceId)
+    player.libraryCount = player.library.length
   }
 
   return s

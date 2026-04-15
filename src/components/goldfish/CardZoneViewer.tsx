@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { getCardTypeCategory } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
@@ -21,11 +21,166 @@ interface CardZoneViewerProps {
   onSendToGraveyard?: (instanceId: string) => void
   onSendToExile?: (instanceId: string) => void
   onSendToBottom?: (instanceId: string) => void
+  onSendToTop?: (instanceId: string) => void
   onCardPreview?: (card: CardRow) => void
   groupByType?: boolean
 }
 
 const TYPE_FILTERS = ['All', 'Creatures', 'Instants', 'Sorceries', 'Enchantments', 'Artifacts', 'Planeswalkers', 'Lands', 'Other'] as const
+
+function ZoneCard({
+  entry,
+  onReturnToHand,
+  onReturnToBattlefield,
+  onSendToGraveyard,
+  onSendToExile,
+  onSendToBottom,
+  onSendToTop,
+  onCardPreview,
+}: {
+  entry: CardEntry
+  onReturnToHand?: (id: string) => void
+  onReturnToBattlefield?: (id: string) => void
+  onSendToGraveyard?: (id: string) => void
+  onSendToExile?: (id: string) => void
+  onSendToBottom?: (id: string) => void
+  onSendToTop?: (id: string) => void
+  onCardPreview?: (card: CardRow) => void
+}) {
+  const [showActions, setShowActions] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const triggered = useRef(false)
+
+  const openActions = useCallback(() => {
+    setShowActions(true)
+  }, [])
+
+  const handlePointerDown = useCallback(() => {
+    triggered.current = false
+    timerRef.current = setTimeout(() => {
+      triggered.current = true
+      openActions()
+    }, 500)
+  }, [openActions])
+
+  const handlePointerUp = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
+  }, [])
+
+  const handleClick = useCallback(() => {
+    if (triggered.current) { triggered.current = false; return }
+    onCardPreview?.(entry.card)
+  }, [entry.card, onCardPreview])
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    openActions()
+  }, [openActions])
+
+  return (
+    <div className="relative">
+      <button
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className="w-full overflow-hidden rounded-lg border border-border select-none"
+        style={{ touchAction: 'none' }}
+      >
+        {entry.card.image_small ? (
+          <img
+            src={entry.card.image_small}
+            alt={entry.card.name}
+            className="h-auto w-full pointer-events-none"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex aspect-[5/7] w-full flex-col items-center justify-center gap-1 bg-bg-cell p-2">
+            <span className="text-[8px] text-font-secondary">
+              {entry.card.type_line.split('—')[0].trim()}
+            </span>
+            <span className="text-center text-[10px] font-semibold text-font-primary">
+              {entry.card.name}
+            </span>
+          </div>
+        )}
+      </button>
+
+      {/* Action overlay — right-click (web) / longpress (mobile) */}
+      {showActions && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-bg-dark/70"
+          onClick={() => setShowActions(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-xs rounded-xl border border-border bg-bg-surface p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-2 text-center text-xs font-bold text-font-primary truncate">{entry.card.name}</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {onReturnToHand && (
+                <button
+                  onClick={() => { onReturnToHand(entry.instanceId); setShowActions(false) }}
+                  className="rounded-lg bg-bg-accent py-2 text-[10px] font-bold text-font-white active:bg-bg-accent-dark"
+                >
+                  Hand
+                </button>
+              )}
+              {onReturnToBattlefield && (
+                <button
+                  onClick={() => { onReturnToBattlefield(entry.instanceId); setShowActions(false) }}
+                  className="rounded-lg bg-bg-green py-2 text-[10px] font-bold text-font-white active:bg-bg-green/80"
+                >
+                  Play
+                </button>
+              )}
+              {onSendToGraveyard && (
+                <button
+                  onClick={() => { onSendToGraveyard(entry.instanceId); setShowActions(false) }}
+                  className="rounded-lg bg-bg-red py-2 text-[10px] font-bold text-font-white active:bg-bg-red/80"
+                >
+                  Grave
+                </button>
+              )}
+              {onSendToExile && (
+                <button
+                  onClick={() => { onSendToExile(entry.instanceId); setShowActions(false) }}
+                  className="rounded-lg bg-gray-600 py-2 text-[10px] font-bold text-font-white active:bg-gray-500"
+                >
+                  Exile
+                </button>
+              )}
+              {onSendToBottom && (
+                <button
+                  onClick={() => { onSendToBottom(entry.instanceId); setShowActions(false) }}
+                  className="rounded-lg bg-bg-cell py-2 text-[10px] font-bold text-font-primary active:bg-bg-hover"
+                >
+                  Bottom
+                </button>
+              )}
+              {onSendToTop && (
+                <button
+                  onClick={() => { onSendToTop(entry.instanceId); setShowActions(false) }}
+                  className="rounded-lg bg-blue-600 py-2 text-[10px] font-bold text-font-white active:bg-blue-500"
+                >
+                  Top
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowActions(false)}
+              className="mt-2 w-full rounded-lg bg-bg-cell py-1.5 text-[10px] font-medium text-font-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CardZoneViewer({
   title,
@@ -36,11 +191,11 @@ export default function CardZoneViewer({
   onSendToGraveyard,
   onSendToExile,
   onSendToBottom,
+  onSendToTop,
   onCardPreview,
   groupByType = false,
 }: CardZoneViewerProps) {
   const [filter, setFilter] = useState<string>('All')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const filteredCards = useMemo(() => {
     if (filter === 'All') return cards
@@ -55,16 +210,6 @@ export default function CardZoneViewer({
     }
     return counts
   }, [cards])
-
-  const hasAnyAction = !!(onReturnToHand || onReturnToBattlefield || onSendToGraveyard || onSendToExile || onSendToBottom)
-
-  const handleCardClick = (entry: CardEntry) => {
-    if (hasAnyAction) {
-      setSelectedId(selectedId === entry.instanceId ? null : entry.instanceId)
-    } else {
-      onCardPreview?.(entry.card)
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-bg-dark/80 p-0 sm:p-4">
@@ -107,102 +252,29 @@ export default function CardZoneViewer({
             </div>
           )}
 
-          {/* Card list */}
+          {/* Card grid */}
           <div className="p-3">
-          {filteredCards.length === 0 ? (
-            <p className="py-8 text-center text-sm text-font-muted">
-              No cards in this zone.
-            </p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {filteredCards.map((entry) => {
-                const isSelected = selectedId === entry.instanceId
-                return (
-                  <div key={entry.instanceId} className="relative">
-                    <button
-                      onClick={() => handleCardClick(entry)}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
-                        onCardPreview?.(entry.card)
-                      }}
-                      className={`w-full overflow-hidden rounded-lg border transition-all ${
-                        isSelected ? 'border-bg-accent ring-2 ring-bg-accent/40' : 'border-border'
-                      }`}
-                    >
-                      {entry.card.image_small ? (
-                        <img
-                          src={entry.card.image_small}
-                          alt={entry.card.name}
-                          className="h-auto w-full"
-                          draggable={false}
-                        />
-                      ) : (
-                        <div className="flex aspect-[5/7] w-full flex-col items-center justify-center gap-1 bg-bg-cell p-2">
-                          <span className="text-[8px] text-font-secondary">
-                            {entry.card.type_line.split('—')[0].trim()}
-                          </span>
-                          <span className="text-center text-[10px] font-semibold text-font-primary">
-                            {entry.card.name}
-                          </span>
-                        </div>
-                      )}
-                    </button>
-                    {/* Action buttons — shown on select (tap) */}
-                    {isSelected && (
-                      <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-1 bg-gradient-to-t from-bg-dark/95 via-bg-dark/80 to-transparent p-1.5 pt-6 rounded-b-lg">
-                        {onReturnToHand && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onReturnToHand(entry.instanceId) }}
-                            className="flex-1 min-w-[40px] rounded bg-bg-accent/90 px-1 py-1.5 text-[9px] font-bold text-font-white active:bg-bg-accent"
-                          >
-                            Hand
-                          </button>
-                        )}
-                        {onReturnToBattlefield && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onReturnToBattlefield(entry.instanceId) }}
-                            className="flex-1 min-w-[40px] rounded bg-bg-green/90 px-1 py-1.5 text-[9px] font-bold text-font-white active:bg-bg-green"
-                          >
-                            Play
-                          </button>
-                        )}
-                        {onSendToGraveyard && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onSendToGraveyard(entry.instanceId) }}
-                            className="flex-1 min-w-[40px] rounded bg-bg-red/80 px-1 py-1.5 text-[9px] font-bold text-font-white active:bg-bg-red"
-                          >
-                            GY
-                          </button>
-                        )}
-                        {onSendToExile && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onSendToExile(entry.instanceId) }}
-                            className="flex-1 min-w-[40px] rounded bg-font-muted/80 px-1 py-1.5 text-[9px] font-bold text-font-white active:bg-font-muted"
-                          >
-                            Exile
-                          </button>
-                        )}
-                        {onSendToBottom && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onSendToBottom(entry.instanceId) }}
-                            className="flex-1 min-w-[40px] rounded bg-bg-cell/90 px-1 py-1.5 text-[9px] font-bold text-font-white active:bg-bg-cell"
-                          >
-                            Bottom
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onCardPreview?.(entry.card) }}
-                          className="flex-1 min-w-[40px] rounded bg-bg-cell/60 px-1 py-1.5 text-[9px] font-bold text-font-secondary active:bg-bg-cell"
-                        >
-                          View
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+            {filteredCards.length === 0 ? (
+              <p className="py-8 text-center text-sm text-font-muted">
+                No cards in this zone.
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {filteredCards.map((entry) => (
+                  <ZoneCard
+                    key={entry.instanceId}
+                    entry={entry}
+                    onReturnToHand={onReturnToHand}
+                    onReturnToBattlefield={onReturnToBattlefield}
+                    onSendToGraveyard={onSendToGraveyard}
+                    onSendToExile={onSendToExile}
+                    onSendToBottom={onSendToBottom}
+                    onSendToTop={onSendToTop}
+                    onCardPreview={onCardPreview}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
