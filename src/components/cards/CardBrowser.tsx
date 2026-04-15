@@ -14,7 +14,7 @@ const PAGE_SIZE = 40
 
 const CARD_TYPES = [
   'Creature', 'Instant', 'Sorcery', 'Enchantment',
-  'Artifact', 'Planeswalker', 'Land', 'Battle',
+  'Artifact', 'Planeswalker', 'Land', 'Battle', 'Token',
 ] as const
 
 const RARITIES = ['common', 'uncommon', 'rare', 'mythic'] as const
