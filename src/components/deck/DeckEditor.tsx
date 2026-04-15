@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Trash2,
@@ -10,6 +10,7 @@ import {
   Pencil,
   Fish,
   FileText,
+  Plus,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
@@ -38,7 +39,17 @@ interface DeckEditorProps {
   initialCards: DeckCardEntry[]
 }
 
-type BoardTab = 'main' | 'sideboard' | 'maybeboard'
+interface TokenDef {
+  id: string
+  name: string
+  power: string | null
+  toughness: string | null
+  colors: string[]
+  type_line: string
+  keywords: string[]
+}
+
+type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens'
 
 export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const router = useRouter()
@@ -53,6 +64,68 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [showImport, setShowImport] = useState(false)
   const [showExpandedStats, setShowExpandedStats] = useState(false)
+  const [tokens, setTokens] = useState<TokenDef[]>([])
+  const [showAddToken, setShowAddToken] = useState(false)
+  const [newTokenName, setNewTokenName] = useState('')
+  const [newTokenPower, setNewTokenPower] = useState('')
+  const [newTokenToughness, setNewTokenToughness] = useState('')
+  const [newTokenColors, setNewTokenColors] = useState<string[]>([])
+  const [newTokenTypeLine, setNewTokenTypeLine] = useState('Token Creature')
+  const [newTokenKeywords, setNewTokenKeywords] = useState('')
+
+  // Fetch tokens when tokens tab is active
+  useEffect(() => {
+    if (activeTab !== 'tokens') return
+    let cancelled = false
+    async function fetchTokens() {
+      try {
+        const res = await fetch(`/api/decks/${deck.id}/tokens`)
+        if (res.ok && !cancelled) {
+          const data = await res.json()
+          setTokens(data)
+        }
+      } catch { /* ignore */ }
+    }
+    fetchTokens()
+    return () => { cancelled = true }
+  }, [activeTab, deck.id])
+
+  const handleAddToken = useCallback(async () => {
+    if (!newTokenName.trim()) return
+    const body = {
+      name: newTokenName.trim(),
+      power: newTokenPower || null,
+      toughness: newTokenToughness || null,
+      colors: newTokenColors,
+      type_line: newTokenTypeLine,
+      keywords: newTokenKeywords.split(',').map(k => k.trim()).filter(Boolean),
+    }
+    const res = await fetch(`/api/decks/${deck.id}/tokens`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (res.ok) {
+      const token = await res.json()
+      setTokens(prev => [...prev, token])
+      setNewTokenName('')
+      setNewTokenPower('')
+      setNewTokenToughness('')
+      setNewTokenColors([])
+      setNewTokenTypeLine('Token Creature')
+      setNewTokenKeywords('')
+      setShowAddToken(false)
+    }
+  }, [deck.id, newTokenName, newTokenPower, newTokenToughness, newTokenColors, newTokenTypeLine, newTokenKeywords])
+
+  const handleDeleteToken = useCallback(async (tokenId: string) => {
+    await fetch(`/api/decks/${deck.id}/tokens`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tokenId }),
+    })
+    setTokens(prev => prev.filter(t => t.id !== tokenId))
+  }, [deck.id])
 
   // Extract commander cards
   const commanderCards = useMemo(
@@ -418,7 +491,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
 
           {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
-            {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (
+            {(['main', 'sideboard', 'maybeboard', 'tokens'] as BoardTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -429,18 +502,119 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                 }`}
               >
                 <span className="sm:hidden">
-                  {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
+                  {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : 'Tkns'}
                 </span>
                 <span className="hidden sm:inline">
-                  {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
+                  {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : 'Tokens'}
                 </span>
-                <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                  ({tabCounts[tab]})
-                </span>
+                {tab !== 'tokens' && (
+                  <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                    ({tabCounts[tab]})
+                  </span>
+                )}
+                {tab === 'tokens' && (
+                  <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                    ({tokens.length})
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
+          {activeTab === 'tokens' ? (
+            <div className="rounded-xl border border-border bg-bg-surface p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-font-primary">Token Definitions</h3>
+                <button
+                  onClick={() => setShowAddToken(true)}
+                  className="flex items-center gap-1 rounded-lg bg-bg-accent px-3 py-1.5 text-xs font-medium text-font-white hover:bg-bg-accent-dark"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add Token
+                </button>
+              </div>
+
+              {tokens.length === 0 && !showAddToken && (
+                <p className="text-sm text-font-muted text-center py-6">
+                  No tokens defined yet. Add tokens that your deck can create.
+                </p>
+              )}
+
+              {tokens.map((token) => (
+                <div key={token.id} className="flex items-center justify-between rounded-lg bg-bg-cell px-3 py-2 mb-1.5">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-font-primary">{token.name}</span>
+                    {(token.power || token.toughness) && (
+                      <span className="ml-2 text-xs text-font-muted">{token.power ?? '?'}/{token.toughness ?? '?'}</span>
+                    )}
+                    <span className="ml-2 text-xs text-font-secondary">{token.type_line}</span>
+                    {token.colors.length > 0 && (
+                      <span className="ml-2 text-[10px] text-font-muted">[{token.colors.join('')}]</span>
+                    )}
+                    {token.keywords.length > 0 && (
+                      <span className="ml-2 text-[10px] text-font-muted italic">{token.keywords.join(', ')}</span>
+                    )}
+                  </div>
+                  <button onClick={() => handleDeleteToken(token.id)} className="text-font-muted hover:text-bg-red ml-2">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              {showAddToken && (
+                <div className="mt-3 rounded-lg border border-border bg-bg-card p-3 space-y-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-font-muted">NAME *</label>
+                    <input value={newTokenName} onChange={(e) => setNewTokenName(e.target.value)} placeholder="e.g. Soldier"
+                      className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary placeholder:text-font-muted" />
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-[10px] font-bold text-font-muted">POWER</label>
+                      <input value={newTokenPower} onChange={(e) => setNewTokenPower(e.target.value)} placeholder="1"
+                        className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] font-bold text-font-muted">TOUGHNESS</label>
+                      <input value={newTokenToughness} onChange={(e) => setNewTokenToughness(e.target.value)} placeholder="1"
+                        className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-font-muted">COLORS</label>
+                    <div className="flex gap-1.5 mt-1">
+                      {['W', 'U', 'B', 'R', 'G'].map((c) => (
+                        <button key={c} onClick={() => setNewTokenColors(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])}
+                          className={`rounded px-2 py-1 text-[10px] font-bold ${newTokenColors.includes(c) ? 'bg-bg-accent text-font-white ring-2 ring-bg-accent' : 'bg-bg-cell text-font-muted'}`}>
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-font-muted">TYPE LINE</label>
+                    <input value={newTokenTypeLine} onChange={(e) => setNewTokenTypeLine(e.target.value)}
+                      className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-font-muted">KEYWORDS (comma separated)</label>
+                    <input value={newTokenKeywords} onChange={(e) => setNewTokenKeywords(e.target.value)} placeholder="Flying, Haste"
+                      className="w-full rounded bg-bg-cell px-2 py-1.5 text-sm text-font-primary placeholder:text-font-muted" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleAddToken} disabled={!newTokenName.trim()}
+                      className="flex-1 rounded-lg bg-bg-accent py-2 text-sm font-bold text-font-white disabled:opacity-40">
+                      Save Token
+                    </button>
+                    <button onClick={() => setShowAddToken(false)}
+                      className="rounded-lg bg-bg-cell px-4 py-2 text-sm font-medium text-font-secondary hover:text-font-primary">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
           <DeckContent
             cards={filteredCards}
             commanderCards={commanderCards}
@@ -451,6 +625,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             onToggleCommander={handleToggleCommander}
             onMoveToBoard={handleMoveToBoard}
           />
+          )}
         </div>
 
         {/* Right panel: Full stats — only on lg+ */}

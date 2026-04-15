@@ -113,6 +113,14 @@ export function createRemoveCounter(playerId: string, playerName: string, instan
   }
 }
 
+export function createCreateToken(playerId: string, playerName: string, tokens: { instanceId: string; cardId: number }[], tokenName: string, quantity: number): GameAction {
+  return {
+    type: 'create_token', playerId,
+    data: { tokens },
+    text: `${playerName} creates ${quantity}x ${tokenName} token${quantity > 1 ? 's' : ''}`,
+  }
+}
+
 export function createBottomCards(playerId: string, playerName: string, instanceIds: string[], count: number): GameAction {
   return {
     type: 'bottom_cards', playerId,

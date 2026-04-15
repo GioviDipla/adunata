@@ -44,6 +44,8 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleRemoveCounter(s, action)
     case 'set_counter':
       return handleSetCounter(s, action)
+    case 'create_token':
+      return handleCreateToken(s, action)
     case 'concede':
       return s // handled at API level
     default:
@@ -231,6 +233,14 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
     instanceId: string; from: string; to: string; cardId: number
   }
   const player = s.players[action.playerId]
+
+  // Token cleanup: tokens cease to exist when leaving battlefield
+  const isToken = (action.data as { isToken?: boolean }).isToken
+  if (isToken && from === 'battlefield' && to !== 'battlefield') {
+    // Remove from battlefield but don't add to any other zone
+    player.battlefield = player.battlefield.filter((c) => c.instanceId !== instanceId)
+    return s
+  }
 
   // Remove from source
   if (from === 'battlefield') {
@@ -511,6 +521,19 @@ function handleSetCounter(s: GameState, action: GameAction): GameState {
     const existing = card.counters.find((c) => c.name === counterName)
     if (existing) existing.value = value
     else card.counters.push({ name: counterName, value })
+  }
+  return s
+}
+
+function handleCreateToken(s: GameState, action: GameAction): GameState {
+  const { tokens } = action.data as { tokens: { instanceId: string; cardId: number }[] }
+  const player = s.players[action.playerId]
+  for (const t of tokens) {
+    player.battlefield.push({
+      instanceId: t.instanceId, cardId: t.cardId,
+      tapped: false, attacking: false, blocking: null,
+      damageMarked: 0, highlighted: null, counters: [],
+    })
   }
   return s
 }

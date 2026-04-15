@@ -10,7 +10,7 @@ import {
   createDraw, createConcede,
   createDeclareAttackers, createDeclareBlockers, createCombatDamage, createDiscard,
   createMulligan, createKeepHand, createBottomCards,
-  createAddCounter, createRemoveCounter,
+  createAddCounter, createRemoveCounter, createCreateToken,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
@@ -28,6 +28,7 @@ import CardPreviewOverlay, { type PreviewState } from '@/components/game/CardPre
 import CombatAttackers from './CombatAttackers'
 import CombatBlockers from './CombatBlockers'
 import DiscardSelector from './DiscardSelector'
+import TokenCreator from './TokenCreator'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -131,6 +132,8 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [opponentExpanded, setOpponentExpanded] = useState(false)
   const [bottomSelectIds, setBottomSelectIds] = useState<Set<string>>(new Set())
+  const [showTokenCreator, setShowTokenCreator] = useState(false)
+  const [deckTokens, setDeckTokens] = useState<{ name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[]>([])
   const libraryViewLoggedRef = useRef(false)
 
   // Fetch initial state
@@ -156,6 +159,38 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     }
     load()
   }, [lobbyId])
+
+  // Fetch deck tokens for token creator
+  useEffect(() => {
+    let cancelled = false
+    async function fetchDeckTokens() {
+      try {
+        // Get the user's deck_id from game_players
+        const supabase = createClient()
+        const { data: lobbyPlayer } = await supabase
+          .from('game_players')
+          .select('deck_id')
+          .eq('lobby_id', lobbyId)
+          .eq('user_id', userId)
+          .single()
+        if (!lobbyPlayer?.deck_id || cancelled) return
+        const res = await fetch(`/api/decks/${lobbyPlayer.deck_id}/tokens`)
+        if (res.ok && !cancelled) {
+          const data = await res.json()
+          setDeckTokens(data.map((t: Record<string, unknown>) => ({
+            name: t.name as string,
+            power: (t.power ?? '') as string,
+            toughness: (t.toughness ?? '') as string,
+            colors: (t.colors ?? []) as string[],
+            typeLine: (t.type_line ?? 'Token Creature') as string,
+            keywords: (t.keywords ?? []) as string[],
+          })))
+        }
+      } catch { /* ignore - deck_tokens table may not exist yet */ }
+    }
+    fetchDeckTokens()
+    return () => { cancelled = true }
+  }, [lobbyId, userId])
 
   // Realtime subscription
   useEffect(() => {
@@ -441,6 +476,40 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
 
   const handleBottomCardsConfirm = useCallback((selectedIds: string[]) => {
     sendAction(createBottomCards(userId, myName, selectedIds, selectedIds.length))
+  }, [sendAction, userId, myName])
+
+  // Token creation handler
+  const handleCreateToken = useCallback((token: { name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }, quantity: number) => {
+    const now = Date.now()
+    const tokens: { instanceId: string; cardId: number }[] = []
+    // Use a synthetic negative cardId so it doesn't collide with real card IDs
+    const syntheticCardId = -(now % 1000000)
+
+    for (let i = 0; i < quantity; i++) {
+      const instanceId = `tk-${now}-${i}`
+      tokens.push({ instanceId, cardId: syntheticCardId })
+
+      // Add to local cardMap so the token renders on battlefield
+      setCardMap(prev => ({
+        ...prev,
+        [instanceId]: {
+          cardId: syntheticCardId,
+          name: token.name,
+          imageSmall: null,
+          imageNormal: null,
+          typeLine: token.typeLine,
+          manaCost: null,
+          power: token.power || null,
+          toughness: token.toughness || null,
+          oracleText: token.keywords.length > 0 ? token.keywords.join(', ') : null,
+          isCommander: false,
+          isToken: true,
+        },
+      }))
+    }
+
+    sendAction(createCreateToken(userId, myName, tokens, token.name, quantity))
+    setShowTokenCreator(false)
   }, [sendAction, userId, myName])
 
   // Auto combat damage calculation
@@ -914,6 +983,15 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           hand={myState.hand}
           cardMap={cardMap}
           onConfirm={handleDiscard}
+        />
+      )}
+
+      {/* Token creator modal */}
+      {showTokenCreator && (
+        <TokenCreator
+          deckTokens={deckTokens}
+          onCreateToken={handleCreateToken}
+          onClose={() => setShowTokenCreator(false)}
         />
       )}
     </div>
