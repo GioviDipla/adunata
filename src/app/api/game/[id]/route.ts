@@ -115,11 +115,11 @@ export async function GET(
 
       if (dc.board === 'commander') {
         const iid = `ci-${++globalCounter}`
-        cardMap[iid] = { cardId: card.id, isCommander: true, ...data }
+        cardMap[iid] = { cardId: card.id, isCommander: true, isToken: false, ...data }
       } else if (dc.board === 'main') {
         for (let i = 0; i < dc.quantity; i++) {
           const iid = `ci-${++globalCounter}`
-          cardMap[iid] = { cardId: card.id, isCommander, ...data }
+          cardMap[iid] = { cardId: card.id, isCommander, isToken: false, ...data }
         }
       }
     }

@@ -6,6 +6,7 @@ export interface BattlefieldCardState {
   blocking: string | null  // instanceId of the attacker being blocked
   damageMarked: number
   highlighted: 'blue' | 'red' | null  // blue=untap step, red=lethal damage
+  counters: { name: string; value: number }[]
 }
 
 export interface PlayerState {
@@ -18,6 +19,14 @@ export interface PlayerState {
   graveyard: { instanceId: string; cardId: number }[]
   exile: { instanceId: string; cardId: number }[]
   commandZone: { instanceId: string; cardId: number }[]
+  commanderCastCount: number
+  autoPass: boolean
+  revealedCards?: {
+    action: 'scry' | 'surveil' | 'peak'
+    instanceIds: string[]
+    decisions: Record<string, 'top' | 'bottom' | 'graveyard' | 'hand' | 'exile'>
+    topOrder: string[]
+  }
 }
 
 export type GamePhase =
@@ -32,6 +41,7 @@ export interface CombatState {
   attackers: { instanceId: string; targetPlayerId: string }[]
   blockers: { instanceId: string; blockingInstanceId: string }[]
   damageAssigned: boolean
+  damageApplied: boolean
 }
 
 export interface GameState {
@@ -44,6 +54,13 @@ export interface GameState {
   players: Record<string, PlayerState>
   lastActionSeq: number
   apPassedFirst?: boolean
+  pendingCommanderChoice?: {
+    playerId: string
+    instanceId: string
+    cardId: number
+    cardName: string
+    source: 'graveyard' | 'exile'
+  }
   /** Mulligan stage: present during pre-game, absent once both players have kept */
   mulliganStage?: {
     playerDecisions: Record<string, {
@@ -75,6 +92,10 @@ export type GameActionType =
   | 'keep_hand'
   | 'bottom_cards'
   | 'library_view'
+  | 'add_counter' | 'remove_counter' | 'set_counter'
+  | 'create_token' | 'commander_choice' | 'toggle_auto_pass'
+  | 'reveal_top' | 'resolve_revealed' | 'peak' | 'mill' | 'draw_x'
+  | 'resolve_combat_damage' | 'chat_message'
 
 export interface GameAction {
   type: GameActionType
@@ -91,7 +112,8 @@ export interface LogEntry {
   data: Record<string, unknown> | null
   text: string
   createdAt: string
+  type?: 'action' | 'chat'
 }
 
 // Card map: instanceId → card data (built at game start, kept client-side)
-export type CardMap = Record<string, { cardId: number; name: string; imageSmall: string | null; imageNormal: string | null; typeLine: string; manaCost: string | null; power: string | null; toughness: string | null; oracleText: string | null; isCommander: boolean }>
+export type CardMap = Record<string, { cardId: number; name: string; imageSmall: string | null; imageNormal: string | null; typeLine: string; manaCost: string | null; power: string | null; toughness: string | null; oracleText: string | null; isCommander: boolean; isToken: boolean }>

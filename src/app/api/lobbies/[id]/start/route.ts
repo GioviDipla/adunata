@@ -87,6 +87,8 @@ export async function POST(
       graveyard: [],
       exile: [],
       commandZone,
+      commanderCastCount: 0,
+      autoPass: false,
     }
   }
 
@@ -113,7 +115,7 @@ export async function POST(
     activePlayerId: firstPlayerId,
     priorityPlayerId: firstPlayerId,
     firstPlayerId,
-    combat: { phase: null, attackers: [], blockers: [], damageAssigned: false },
+    combat: { phase: null, attackers: [], blockers: [], damageAssigned: false, damageApplied: false },
     players: playerStates,
     lastActionSeq: 0,
     mulliganStage: { playerDecisions: mulliganDecisions },

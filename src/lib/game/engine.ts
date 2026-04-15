@@ -96,7 +96,7 @@ function advancePhase(s: GameState): GameState {
     s.phase = 'untap'
     s.activePlayerId = opponentId
     s.priorityPlayerId = opponentId
-    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false }
+    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false, damageApplied: false }
 
     // Highlight tapped permanents blue for untap step
     const ap = s.players[opponentId]
@@ -125,7 +125,7 @@ function advancePhase(s: GameState): GameState {
   }
 
   if (nextPhaseKey === 'begin_combat') {
-    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false }
+    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false, damageApplied: false }
   }
 
   if (nextPhaseKey === 'declare_attackers') {
@@ -153,7 +153,7 @@ function advancePhase(s: GameState): GameState {
         player.graveyard.push({ instanceId: c.instanceId, cardId: c.cardId })
       }
     }
-    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false }
+    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false, damageApplied: false }
   }
 
   if (nextPhaseKey === 'cleanup') {
@@ -176,7 +176,7 @@ function handlePlayCard(s: GameState, action: GameAction): GameState {
     player.handCount = player.hand.length
     const cardId = (action.data as { cardId: number }).cardId
     player.battlefield.push({
-      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null,
+      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [],
     })
   } else if (from === 'hand' && to === 'graveyard') {
     player.hand = player.hand.filter((id) => id !== instanceId)
@@ -187,7 +187,7 @@ function handlePlayCard(s: GameState, action: GameAction): GameState {
     player.commandZone = player.commandZone.filter((c) => c.instanceId !== instanceId)
     const cardId = (action.data as { cardId: number }).cardId
     player.battlefield.push({
-      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null,
+      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [],
     })
   }
 
@@ -243,7 +243,7 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
 
   // Add to target
   if (to === 'battlefield') {
-    player.battlefield.push({ instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null })
+    player.battlefield.push({ instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [] })
   } else if (to === 'hand') {
     player.hand.push(instanceId)
     player.handCount = player.hand.length
@@ -286,7 +286,7 @@ function handleDeclareAttackers(s: GameState, action: GameAction): GameState {
   // The CombatAttackers overlay is shown while phase === 'declare_attackers',
   // so we MUST advance the phase here or the overlay stays stuck on screen.
   if (attackerIds.length === 0) {
-    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false }
+    s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: false, damageApplied: false }
     s.phase = 'main2'
     s.priorityPlayerId = s.activePlayerId
     s.apPassedFirst = false
@@ -373,7 +373,7 @@ function handleCombatDamage(s: GameState, _action: GameAction): GameState {
     }
   }
 
-  s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: true }
+  s.combat = { phase: null, attackers: [], blockers: [], damageAssigned: true, damageApplied: true }
   s.phase = 'main2'
   s.priorityPlayerId = s.activePlayerId
   s.apPassedFirst = false
