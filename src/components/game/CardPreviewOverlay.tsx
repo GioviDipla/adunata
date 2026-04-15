@@ -17,6 +17,7 @@ export interface PreviewState {
 interface CardPreviewOverlayProps {
   preview: PreviewState | null
   onClose: () => void
+  readOnly?: boolean
   isCommanderCard?: (card: CardRow) => boolean
 
   // Battlefield actions
@@ -42,6 +43,7 @@ interface CardPreviewOverlayProps {
 export default function CardPreviewOverlay({
   preview,
   onClose,
+  readOnly,
   isCommanderCard,
   onTapToggle,
   onReturnToHand,
@@ -69,7 +71,7 @@ export default function CardPreviewOverlay({
     preview.zone === 'commandZone' && preview.instanceId !== undefined
 
   const hasAnyActions =
-    canShowBattlefieldActions || canShowHandActions || canShowCommandZoneActions
+    !readOnly && (canShowBattlefieldActions || canShowHandActions || canShowCommandZoneActions)
 
   return (
     <div

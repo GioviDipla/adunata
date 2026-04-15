@@ -673,7 +673,13 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       {/* Scrollable middle: opponent + divider + player battlefield */}
       <div className="flex-1 overflow-y-auto">
         {/* Opponent field */}
-        <OpponentField state={opponentState} cardMap={cardMap} />
+        <OpponentField
+          state={opponentState}
+          cardMap={cardMap}
+          expanded={opponentExpanded}
+          onToggleExpand={() => setOpponentExpanded((v) => !v)}
+          onCardPreview={(card) => setPreview({ card })}
+        />
 
         {/* Divider */}
         <div className="mx-3 border-t border-border/40" />
