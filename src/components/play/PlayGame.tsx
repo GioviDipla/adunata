@@ -300,23 +300,31 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
 
   // Build battlefield cards grouped by type for BattlefieldZone
   const myBattlefieldByZone = useMemo(() => {
-    if (!myState) return { lands: [] as BattlefieldCard[], creatures: [] as BattlefieldCard[], other: [] as BattlefieldCard[] }
+    if (!myState) return { lands: [] as BattlefieldCard[], creatures: [] as BattlefieldCard[], other: [] as BattlefieldCard[], tokens: [] as BattlefieldCard[] }
     const lands: BattlefieldCard[] = []
     const creatures: BattlefieldCard[] = []
     const other: BattlefieldCard[] = []
+    const tokens: BattlefieldCard[] = []
 
     for (const c of myState.battlefield) {
       const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
       if (!data) continue
       const row = toCardRow(c.cardId, data)
       const entry: BattlefieldCard = { instanceId: c.instanceId, card: row, tapped: c.tapped, counters: c.counters }
+
+      // Tokens go to their own zone
+      if (data.isToken) {
+        tokens.push(entry)
+        continue
+      }
+
       const zone = getCardZone(data.typeLine)
       if (zone === 'lands') lands.push(entry)
       else if (zone === 'creatures') creatures.push(entry)
       else other.push(entry)
     }
 
-    return { lands, creatures, other }
+    return { lands, creatures, other, tokens }
   }, [myState, cardMap])
 
   // Graveyard cards for zone viewer
@@ -912,6 +920,24 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
                 onCardPreview={(card, id, tapped) =>
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
                 }
+              />
+            </div>
+          )}
+
+          {/* Tokens */}
+          {myBattlefieldByZone.tokens.length > 0 && (
+            <div className="mt-1.5">
+              <BattlefieldZone
+                title="TOKENS"
+                cards={myBattlefieldByZone.tokens}
+                onTapToggle={handleTapToggle}
+                onSendToGraveyard={handleSendToGraveyard}
+                onExile={handleExile}
+                onReturnToHand={handleReturnToHand}
+                onCardPreview={(card, id, tapped) => {
+                  const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
+                  setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
+                }}
               />
             </div>
           )}
