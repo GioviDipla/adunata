@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronUp, ChevronDown } from 'lucide-react'
 import type { LogEntry } from '@/lib/game/types'
 
-export default function GameLog({ entries, myUserId }: { entries: LogEntry[]; myUserId: string }) {
+export default function GameLog({ entries, myUserId, onSendChat }: { entries: LogEntry[]; myUserId: string; onSendChat?: (message: string) => void }) {
   const [expanded, setExpanded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -34,12 +34,33 @@ export default function GameLog({ entries, myUserId }: { entries: LogEntry[]; my
             <span className="shrink-0 text-font-muted">
               {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
-            <span className={entry.playerId === myUserId ? 'text-font-accent' : 'text-font-primary'}>
+            <span className={
+              entry.type === 'chat' || entry.action === 'chat_message'
+                ? 'italic text-font-secondary'
+                : entry.playerId === myUserId ? 'text-font-accent' : 'text-font-primary'
+            }>
               {entry.text}
             </span>
           </div>
         ))}
       </div>
+      {onSendChat && (
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          const input = (e.currentTarget.elements.namedItem('chatInput') as HTMLInputElement)
+          const msg = input.value.trim()
+          if (msg) {
+            onSendChat(msg)
+            input.value = ''
+          }
+        }} className="flex gap-1.5 border-t border-border/50 px-3 py-1.5">
+          <input name="chatInput" type="text" placeholder="Chat..." maxLength={200}
+            className="flex-1 rounded bg-bg-cell px-2 py-1 text-[10px] text-font-primary placeholder:text-font-muted outline-none focus:ring-1 focus:ring-bg-accent" />
+          <button type="submit" className="shrink-0 rounded bg-bg-accent px-2.5 py-1 text-[9px] font-bold text-font-white active:bg-bg-accent-dark">
+            Send
+          </button>
+        </form>
+      )}
     </div>
   )
 }

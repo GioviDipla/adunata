@@ -262,6 +262,15 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const isActivePlayer = gameState?.activePlayerId === userId
   const myName = playerNames[userId] ?? 'Player'
 
+  const handleSendChat = useCallback((message: string) => {
+    sendAction({
+      type: 'chat_message' as GameActionType,
+      playerId: userId,
+      data: { message },
+      text: `${myName}: ${message}`,
+    })
+  }, [sendAction, userId, myName])
+
   // Log library consultation when library viewer opens
   useEffect(() => {
     if (viewingZone === 'library' && !libraryViewLoggedRef.current) {
@@ -850,7 +859,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       </div>
 
       {/* Game Log */}
-      <GameLog entries={log} myUserId={userId} />
+      <GameLog entries={log} myUserId={userId} onSendChat={handleSendChat} />
 
       {/* Hand + Commander Zone fixed at bottom */}
       <div className="border-t border-border bg-bg-card px-3 py-2">

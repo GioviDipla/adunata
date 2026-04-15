@@ -378,6 +378,7 @@ export interface Database {
           action: string
           data: Json | null
           text: string
+          type: string
           created_at: string
         }
         Insert: {
@@ -388,6 +389,7 @@ export interface Database {
           action: string
           data?: Json | null
           text: string
+          type?: string
           created_at?: string
         }
         Update: {
@@ -398,6 +400,7 @@ export interface Database {
           action?: string
           data?: Json | null
           text?: string
+          type?: string
           created_at?: string
         }
         Relationships: []
