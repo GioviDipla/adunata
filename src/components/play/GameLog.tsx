@@ -14,7 +14,7 @@ export default function GameLog({ entries, myUserId, onSendChat }: { entries: Lo
     }
   }, [entries])
 
-  const visibleEntries = expanded ? entries : entries.slice(-3)
+  const visibleEntries = expanded ? entries : entries.slice(-5)
 
   return (
     <div className="border-t border-border bg-bg-card">
@@ -36,7 +36,7 @@ export default function GameLog({ entries, myUserId, onSendChat }: { entries: Lo
             </span>
             <span className={
               entry.type === 'chat' || entry.action === 'chat_message'
-                ? 'italic text-font-secondary'
+                ? 'italic text-yellow-400'
                 : entry.playerId === myUserId ? 'text-font-accent' : 'text-font-primary'
             }>
               {entry.text}

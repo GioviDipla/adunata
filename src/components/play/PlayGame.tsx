@@ -773,28 +773,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-bg-dark">
-      {/* Action Bar at top */}
-      <GameActionBar
-        phase={gameState.phase}
-        turn={gameState.turn}
-        life={myState.life}
-        libraryCount={myState.libraryCount}
-        graveyardCount={myState.graveyard.length}
-        exileCount={myState.exile.length}
-        hasPriority={hasPriority}
-        isActivePlayer={isActivePlayer}
-        onPassPriority={() => sendAction(createPassPriority(userId, myName))}
-        onLifeChange={(amount) => sendAction(createLifeChange(userId, myName, userId, myName, amount))}
-        onDraw={() => sendAction(createDraw(userId, myName))}
-        onViewZone={setViewingZone}
-        onConcede={() => sendAction(createConcede(userId, myName))}
-        onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
-        autoPass={myState.autoPass}
-        onToggleAutoPass={() => sendAction(createToggleAutoPass(userId, myName, myState.autoPass))}
-        onSpecialActions={() => setShowSpecialActions(true)}
-      />
-
-      {/* Scrollable middle: opponent + divider + player battlefield */}
+      {/* Scrollable top: opponent + divider + player battlefield */}
       <div className="flex-1 overflow-y-auto">
         {/* Opponent field */}
         <OpponentField
@@ -861,7 +840,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       {/* Game Log */}
       <GameLog entries={log} myUserId={userId} onSendChat={handleSendChat} />
 
-      {/* Hand + Commander Zone fixed at bottom */}
+      {/* Hand + Commander Zone */}
       <div className="border-t border-border bg-bg-card px-3 py-2">
         <div className="flex gap-2">
           <div className="flex-1 min-w-0">
@@ -893,6 +872,27 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           )}
         </div>
       </div>
+
+      {/* Action Bar at bottom */}
+      <GameActionBar
+        phase={gameState.phase}
+        turn={gameState.turn}
+        life={myState.life}
+        libraryCount={myState.libraryCount}
+        graveyardCount={myState.graveyard.length}
+        exileCount={myState.exile.length}
+        hasPriority={hasPriority}
+        isActivePlayer={isActivePlayer}
+        onPassPriority={() => sendAction(createPassPriority(userId, myName))}
+        onLifeChange={(amount) => sendAction(createLifeChange(userId, myName, userId, myName, amount))}
+        onDraw={() => sendAction(createDraw(userId, myName))}
+        onViewZone={setViewingZone}
+        onConcede={() => sendAction(createConcede(userId, myName))}
+        onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
+        autoPass={myState.autoPass}
+        onToggleAutoPass={() => sendAction(createToggleAutoPass(userId, myName, myState.autoPass))}
+        onSpecialActions={() => setShowSpecialActions(true)}
+      />
 
       {/* Zone viewers */}
       {viewingZone === 'graveyard' && (

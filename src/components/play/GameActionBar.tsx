@@ -114,8 +114,14 @@ export default function GameActionBar({
             </button>
           </>
         ) : autoPass ? (
-          <div className="flex flex-1 items-center justify-center py-3 text-xs text-bg-green font-bold">
-            AUTO-PASSING...
+          <div className="flex flex-1 items-center justify-center gap-3 py-2">
+            <span className="text-xs text-bg-green font-bold">AUTO-PASSING...</span>
+            {onToggleAutoPass && (
+              <button onClick={onToggleAutoPass}
+                className="rounded-lg bg-bg-red/80 px-3 py-1.5 text-[9px] font-bold text-font-white active:bg-bg-red">
+                STOP
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center py-3 text-xs text-font-muted">

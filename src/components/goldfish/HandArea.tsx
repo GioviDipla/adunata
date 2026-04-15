@@ -56,7 +56,7 @@ function HandCardButton({
       onClick={handleClick}
       onContextMenu={(e) => {
         e.preventDefault()
-        onCardPreview?.(hc.card)
+        onCardPreview?.(hc.card, hc.instanceId)
       }}
       {...longPress}
       className={`relative shrink-0 overflow-hidden rounded-lg border transition-all hover:-translate-y-1 select-none ${
