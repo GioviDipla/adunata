@@ -55,12 +55,12 @@ interface OpponentFieldProps {
 function OpponentCard({
   card,
   cardMap,
-  expanded,
+  size,
   onCardPreview,
 }: {
   card: BattlefieldCardState
   cardMap: CardMap
-  expanded: boolean
+  size: { width: number; height: number }
   onCardPreview?: (card: CardRow, instanceId: string) => void
 }) {
   const data = cardMap[card.instanceId] ?? cardMap[String(card.cardId)]
@@ -86,7 +86,6 @@ function OpponentCard({
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
-    // If long-press already triggered, don't fire click
   }, [])
 
   const handlePointerCancel = useCallback(() => {
@@ -109,12 +108,13 @@ function OpponentCard({
     [triggerPreview],
   )
 
-  const size = expanded ? { width: 68, height: 95 } : { width: 48, height: 67 }
+  const hasCounters = card.counters.length > 0
+  const isCreature = data?.typeLine?.toLowerCase().includes('creature')
 
   return (
     <button
       type="button"
-      className={`overflow-hidden rounded border transition-transform ${
+      className={`relative overflow-hidden rounded border transition-transform ${
         card.tapped ? 'rotate-90 border-font-muted' : 'border-border'
       } ${card.attacking ? 'ring-1 ring-bg-red' : ''} ${card.highlighted === 'red' ? 'ring-2 ring-bg-red' : ''}`}
       style={size}
@@ -136,7 +136,65 @@ function OpponentCard({
           <span className="text-center text-[6px] text-font-muted">{data?.name ?? '?'}</span>
         </div>
       )}
+
+      {/* Counter badges */}
+      {hasCounters && (
+        <div className="absolute left-0 top-0 flex flex-col gap-px p-px">
+          {card.counters.map((counter) => (
+            <span
+              key={counter.name}
+              className="rounded-sm bg-blue-600 px-0.5 text-[6px] font-bold leading-tight text-white"
+              title={`${counter.name}: ${counter.value}`}
+            >
+              {counter.value}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Damage badge on creatures */}
+      {isCreature && card.damageMarked > 0 && (
+        <span className="absolute bottom-0 right-0 rounded-tl-sm bg-red-600 px-0.5 text-[6px] font-bold leading-tight text-white">
+          {card.damageMarked}
+        </span>
+      )}
     </button>
+  )
+}
+
+function OpponentZone({
+  title,
+  cards,
+  cardMap,
+  expanded,
+  onCardPreview,
+}: {
+  title: string
+  cards: BattlefieldCardState[]
+  cardMap: CardMap
+  expanded: boolean
+  onCardPreview?: (card: CardRow, instanceId: string) => void
+}) {
+  if (cards.length === 0) return null
+  const size = expanded ? { width: 68, height: 95 } : { width: 48, height: 67 }
+
+  return (
+    <div className="mb-1">
+      <span className="text-[8px] font-bold tracking-wider text-font-muted">
+        {title} ({cards.length})
+      </span>
+      <div className="mt-0.5 flex flex-wrap gap-1">
+        {cards.map((c) => (
+          <OpponentCard
+            key={c.instanceId}
+            card={c}
+            cardMap={cardMap}
+            size={size}
+            onCardPreview={onCardPreview}
+          />
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -147,18 +205,31 @@ export default function OpponentField({
   onToggleExpand,
   onCardPreview,
 }: OpponentFieldProps) {
-  const creatures = state.battlefield.filter((c) => {
+  // Split battlefield into zones
+  const creatures: BattlefieldCardState[] = []
+  const lands: BattlefieldCardState[] = []
+  const tokens: BattlefieldCardState[] = []
+  const other: BattlefieldCardState[] = []
+
+  for (const c of state.battlefield) {
     const d = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
-    return d?.typeLine?.toLowerCase().includes('creature')
-  })
-  const lands = state.battlefield.filter((c) => {
-    const d = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
-    return d?.typeLine?.toLowerCase().includes('land')
-  })
-  const other = state.battlefield.filter((c) => {
-    const d = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
-    return d && !d.typeLine?.toLowerCase().includes('creature') && !d.typeLine?.toLowerCase().includes('land')
-  })
+    if (!d) {
+      other.push(c)
+      continue
+    }
+    if (d.isToken) {
+      tokens.push(c)
+    } else {
+      const t = d.typeLine?.toLowerCase() ?? ''
+      if (t.includes('creature')) {
+        creatures.push(c)
+      } else if (t.includes('land')) {
+        lands.push(c)
+      } else {
+        other.push(c)
+      }
+    }
+  }
 
   return (
     <div className="border-b border-border bg-bg-surface/50 px-3 py-2">
@@ -213,21 +284,17 @@ export default function OpponentField({
         </div>
       )}
 
-      {/* Battlefield */}
-      <div className="flex flex-wrap gap-1">
-        {[...creatures, ...other, ...lands].map((c) => (
-          <OpponentCard
-            key={c.instanceId}
-            card={c}
-            cardMap={cardMap}
-            expanded={expanded}
-            onCardPreview={onCardPreview}
-          />
-        ))}
-        {state.battlefield.length === 0 && (
-          <span className="py-2 text-[9px] text-font-muted">No permanents</span>
-        )}
-      </div>
+      {/* Battlefield zones */}
+      {state.battlefield.length > 0 ? (
+        <div className={expanded ? 'space-y-1' : ''}>
+          <OpponentZone title="CREATURES" cards={creatures} cardMap={cardMap} expanded={expanded} onCardPreview={onCardPreview} />
+          <OpponentZone title="OTHER" cards={other} cardMap={cardMap} expanded={expanded} onCardPreview={onCardPreview} />
+          <OpponentZone title="LANDS" cards={lands} cardMap={cardMap} expanded={expanded} onCardPreview={onCardPreview} />
+          <OpponentZone title="TOKENS" cards={tokens} cardMap={cardMap} expanded={expanded} onCardPreview={onCardPreview} />
+        </div>
+      ) : (
+        <span className="py-2 text-[9px] text-font-muted">No permanents</span>
+      )}
     </div>
   )
 }
