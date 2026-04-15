@@ -121,6 +121,14 @@ export function createCreateToken(playerId: string, playerName: string, tokens: 
   }
 }
 
+export function createCommanderChoice(playerId: string, playerName: string, cardName: string, destination: string): GameAction {
+  return {
+    type: 'commander_choice', playerId,
+    data: { destination },
+    text: `${playerName} sends ${cardName} to ${destination === 'commandZone' ? 'command zone' : destination}`,
+  }
+}
+
 export function createBottomCards(playerId: string, playerName: string, instanceIds: string[], count: number): GameAction {
   return {
     type: 'bottom_cards', playerId,

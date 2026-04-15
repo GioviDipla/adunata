@@ -11,6 +11,7 @@ import {
   createDeclareAttackers, createDeclareBlockers, createCombatDamage, createDiscard,
   createMulligan, createKeepHand, createBottomCards,
   createAddCounter, createRemoveCounter, createCreateToken,
+  createCommanderChoice,
 } from '@/lib/game/actions'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
@@ -29,6 +30,7 @@ import CombatAttackers from './CombatAttackers'
 import CombatBlockers from './CombatBlockers'
 import DiscardSelector from './DiscardSelector'
 import TokenCreator from './TokenCreator'
+import CommanderChoiceModal from './CommanderChoiceModal'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -377,16 +379,26 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     const card = myState.battlefield.find((c) => c.instanceId === instanceId)
     if (!card) return
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
-    sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'graveyard'))
-  }, [myState, cardMap, sendAction, userId])
+    const cardRow = data ? toCardRow(data.cardId, data) : null
+    const isCmd = cardRow ? isCommanderCard(cardRow) : false
+    const action = createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'graveyard')
+    if (isCmd) (action.data as Record<string, unknown>).isCommander = true
+    if (isCmd) (action.data as Record<string, unknown>).cardName = data?.name ?? 'Commander'
+    sendAction(action)
+  }, [myState, cardMap, sendAction, userId, isCommanderCard])
 
   const handleExile = useCallback((instanceId: string) => {
     if (!myState) return
     const card = myState.battlefield.find((c) => c.instanceId === instanceId)
     if (!card) return
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
-    sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'exile'))
-  }, [myState, cardMap, sendAction, userId])
+    const cardRow = data ? toCardRow(data.cardId, data) : null
+    const isCmd = cardRow ? isCommanderCard(cardRow) : false
+    const action = createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'exile')
+    if (isCmd) (action.data as Record<string, unknown>).isCommander = true
+    if (isCmd) (action.data as Record<string, unknown>).cardName = data?.name ?? 'Commander'
+    sendAction(action)
+  }, [myState, cardMap, sendAction, userId, isCommanderCard])
 
   const handleReturnToHand = useCallback((instanceId: string) => {
     if (!myState) return
@@ -992,6 +1004,25 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
           deckTokens={deckTokens}
           onCreateToken={handleCreateToken}
           onClose={() => setShowTokenCreator(false)}
+        />
+      )}
+
+      {/* Commander death choice modal */}
+      {gameState?.pendingCommanderChoice && gameState.pendingCommanderChoice.playerId === userId && myState && (
+        <CommanderChoiceModal
+          instanceId={gameState.pendingCommanderChoice.instanceId}
+          cardId={gameState.pendingCommanderChoice.cardId}
+          cardName={gameState.pendingCommanderChoice.cardName}
+          source={gameState.pendingCommanderChoice.source}
+          commanderCastCount={myState.commanderCastCount}
+          cardMap={cardMap}
+          onChoose={(destination) => {
+            sendAction(createCommanderChoice(
+              userId, myName,
+              gameState.pendingCommanderChoice!.cardName,
+              destination
+            ))
+          }}
         />
       )}
     </div>

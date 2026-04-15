@@ -5,6 +5,11 @@ export function applyAction(state: GameState, action: GameAction): GameState {
   const s = structuredClone(state)
   s.lastActionSeq++
 
+  // Block all actions while commander choice is pending (except the choice itself)
+  if (s.pendingCommanderChoice && action.type !== 'commander_choice') {
+    return s
+  }
+
   switch (action.type) {
     case 'pass_priority':
       return handlePassPriority(s, action)
@@ -46,6 +51,8 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleSetCounter(s, action)
     case 'create_token':
       return handleCreateToken(s, action)
+    case 'commander_choice':
+      return handleCommanderChoice(s, action)
     case 'concede':
       return s // handled at API level
     default:
@@ -197,6 +204,7 @@ function handlePlayCard(s: GameState, action: GameAction): GameState {
     player.battlefield.push({
       instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [],
     })
+    player.commanderCastCount++
   }
 
   // After playing a card, opponent gets priority (reset pass chain)
@@ -228,6 +236,30 @@ function handleConfirmUntap(s: GameState, _action: GameAction): GameState {
   return advancePhase(s)
 }
 
+function handleCommanderChoice(s: GameState, action: GameAction): GameState {
+  if (!s.pendingCommanderChoice) return s
+  if (s.pendingCommanderChoice.playerId !== action.playerId) return s
+
+  const { destination } = action.data as { destination: 'commandZone' | 'graveyard' | 'exile' | 'hand' }
+  const { instanceId, cardId, playerId } = s.pendingCommanderChoice
+  const player = s.players[playerId]
+
+  if (destination === 'commandZone') {
+    player.commandZone.push({ instanceId, cardId })
+  } else if (destination === 'graveyard') {
+    player.graveyard.push({ instanceId, cardId })
+  } else if (destination === 'exile') {
+    player.exile.push({ instanceId, cardId })
+  } else if (destination === 'hand') {
+    player.hand.push(instanceId)
+    player.handCount = player.hand.length
+    player.autoPass = false  // new card in hand resets auto-pass
+  }
+
+  delete s.pendingCommanderChoice
+  return s
+}
+
 function handleMoveZone(s: GameState, action: GameAction): GameState {
   const { instanceId, from, to, cardId } = action.data as {
     instanceId: string; from: string; to: string; cardId: number
@@ -255,6 +287,19 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
   } else if (from === 'library') {
     player.library = player.library.filter((id) => id !== instanceId)
     player.libraryCount = player.library.length
+  }
+
+  // Commander death choice: if commander goes to GY or exile, set pending choice
+  const isCommander = (action.data as { isCommander?: boolean }).isCommander
+  if (isCommander && (to === 'graveyard' || to === 'exile')) {
+    s.pendingCommanderChoice = {
+      playerId: action.playerId,
+      instanceId,
+      cardId,
+      cardName: (action.data as { cardName?: string }).cardName ?? 'Commander',
+      source: to as 'graveyard' | 'exile',
+    }
+    return s  // Don't add to destination — wait for choice
   }
 
   // Add to target
