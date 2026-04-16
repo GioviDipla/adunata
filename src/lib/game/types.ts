@@ -7,6 +7,8 @@ export interface BattlefieldCardState {
   damageMarked: number
   highlighted: 'blue' | 'red' | null  // blue=untap step, red=lethal damage
   counters: { name: string; value: number }[]
+  powerMod: number   // P/T modification (e.g. +2 from pump spell)
+  toughnessMod: number
 }
 
 export interface PlayerState {
@@ -96,7 +98,7 @@ export type GameActionType =
   | 'create_token' | 'commander_choice' | 'toggle_auto_pass'
   | 'reveal_top' | 'resolve_revealed' | 'peak' | 'mill' | 'draw_x'
   | 'resolve_combat_damage' | 'chat_message'
-  | 'shuffle_into_library' | 'copy_card' | 'take_control'
+  | 'shuffle_into_library' | 'copy_card' | 'take_control' | 'set_pt'
 
 export interface GameAction {
   type: GameActionType

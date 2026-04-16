@@ -71,6 +71,8 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleCopyCard(s, action)
     case 'take_control':
       return handleTakeControl(s, action)
+    case 'set_pt':
+      return handleSetPT(s, action)
     case 'concede':
       return s // handled at API level
     default:
@@ -200,7 +202,7 @@ function handlePlayCard(s: GameState, action: GameAction): GameState {
     player.handCount = player.hand.length
     const cardId = (action.data as { cardId: number }).cardId
     player.battlefield.push({
-      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [],
+      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [], powerMod: 0, toughnessMod: 0,
     })
   } else if (from === 'hand' && to === 'graveyard') {
     player.hand = player.hand.filter((id) => id !== instanceId)
@@ -211,7 +213,7 @@ function handlePlayCard(s: GameState, action: GameAction): GameState {
     player.commandZone = player.commandZone.filter((c) => c.instanceId !== instanceId)
     const cardId = (action.data as { cardId: number }).cardId
     player.battlefield.push({
-      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [],
+      instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [], powerMod: 0, toughnessMod: 0,
     })
     player.commanderCastCount++
   }
@@ -313,7 +315,7 @@ function handleMoveZone(s: GameState, action: GameAction): GameState {
 
   // Add to target
   if (to === 'battlefield') {
-    player.battlefield.push({ instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [] })
+    player.battlefield.push({ instanceId, cardId, tapped: false, attacking: false, blocking: null, damageMarked: 0, highlighted: null, counters: [], powerMod: 0, toughnessMod: 0 })
   } else if (to === 'hand') {
     player.hand.push(instanceId)
     player.handCount = player.hand.length
@@ -590,6 +592,16 @@ function handleSetCounter(s: GameState, action: GameAction): GameState {
   return s
 }
 
+function handleSetPT(s: GameState, action: GameAction): GameState {
+  const { instanceId, powerMod, toughnessMod } = action.data as { instanceId: string; powerMod: number; toughnessMod: number }
+  const player = s.players[action.playerId]
+  const card = player.battlefield.find((c) => c.instanceId === instanceId)
+  if (!card) return s
+  card.powerMod = powerMod
+  card.toughnessMod = toughnessMod
+  return s
+}
+
 function handleCreateToken(s: GameState, action: GameAction): GameState {
   const { tokens } = action.data as { tokens: { instanceId: string; cardId: number }[] }
   const player = s.players[action.playerId]
@@ -597,7 +609,7 @@ function handleCreateToken(s: GameState, action: GameAction): GameState {
     player.battlefield.push({
       instanceId: t.instanceId, cardId: t.cardId,
       tapped: false, attacking: false, blocking: null,
-      damageMarked: 0, highlighted: null, counters: [],
+      damageMarked: 0, highlighted: null, counters: [], powerMod: 0, toughnessMod: 0,
     })
   }
   return s
@@ -733,6 +745,8 @@ function handleCopyCard(s: GameState, action: GameAction): GameState {
     damageMarked: 0,
     highlighted: null,
     counters: [],
+    powerMod: 0,
+    toughnessMod: 0,
   })
 
   return s

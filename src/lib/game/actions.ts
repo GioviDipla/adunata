@@ -121,6 +121,22 @@ export function createCreateToken(playerId: string, playerName: string, tokens: 
   }
 }
 
+export function createSetCounter(playerId: string, playerName: string, instanceId: string, cardName: string, counterName: string, value: number): GameAction {
+  return {
+    type: 'set_counter', playerId,
+    data: { instanceId, counterName, value },
+    text: `${playerName} sets ${counterName} counter on ${cardName} to ${value}`,
+  }
+}
+
+export function createSetPT(playerId: string, playerName: string, instanceId: string, cardName: string, powerMod: number, toughnessMod: number): GameAction {
+  return {
+    type: 'set_pt', playerId,
+    data: { instanceId, powerMod, toughnessMod },
+    text: `${playerName} sets P/T mod on ${cardName} to ${powerMod >= 0 ? '+' : ''}${powerMod}/${toughnessMod >= 0 ? '+' : ''}${toughnessMod}`,
+  }
+}
+
 export function createCommanderChoice(playerId: string, playerName: string, cardName: string, destination: string): GameAction {
   return {
     type: 'commander_choice', playerId,

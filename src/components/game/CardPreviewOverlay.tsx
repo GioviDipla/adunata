@@ -49,12 +49,15 @@ interface CardPreviewOverlayProps {
   onTap?: (instanceId: string) => void
   onAddCounter?: (instanceId: string, name: string) => void
   onRemoveCounter?: (instanceId: string, name: string) => void
+  onSetCounter?: (instanceId: string, name: string, value: number) => void
+  onSetPT?: (instanceId: string, powerMod: number, toughnessMod: number) => void
   onCopy?: (instanceId: string) => void
   onTakeControl?: (instanceId: string) => void
   onCastCommander?: (instanceId: string) => void
 
   // Counter display
   counters?: { name: string; value: number }[]
+  ptMod?: { powerMod: number; toughnessMod: number }
 }
 
 function ActionBtn({
@@ -78,56 +81,75 @@ function ActionBtn({
   )
 }
 
-const QUICK_COUNTERS = ['+1/+1', '-1/-1', 'Loyalty', 'Charge']
+const COUNTER_TYPES = ['+1/+1', '-1/-1', 'Flying', 'Trample', 'Shield', 'Indestructible', 'Lifelink', 'Double Strike', 'Loyalty', 'Saga']
+
+function CounterRow({ name, value, onSet, onAdd, onRemove }: {
+  name: string; value: number
+  onSet: (v: number) => void
+  onAdd: () => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between py-0.5">
+      <span className="text-[11px] text-font-primary truncate mr-2">{name}</span>
+      <div className="flex items-center gap-1">
+        <button onClick={onRemove} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">-</button>
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => onSet(parseInt(e.target.value) || 0)}
+          className="h-6 w-10 rounded bg-bg-cell text-center text-xs text-font-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+        <button onClick={onAdd} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">+</button>
+      </div>
+    </div>
+  )
+}
 
 function CounterSection({
   counters,
   onAdd,
   onRemove,
+  onSet,
 }: {
   counters: { name: string; value: number }[]
   onAdd: (name: string) => void
   onRemove: (name: string) => void
+  onSet: (name: string, value: number) => void
 }) {
   const [customName, setCustomName] = useState('')
+
+  // Show all counter types that have a value > 0, plus buttons to add new ones
+  const activeCounters = counters.filter(c => c.value > 0)
+  const inactiveTypes = COUNTER_TYPES.filter(t => !activeCounters.some(c => c.name === t))
 
   return (
     <div className="w-full rounded-xl bg-bg-surface p-2">
       <p className="text-[10px] font-bold text-font-muted mb-1">COUNTERS</p>
-      {counters.map((c) => (
-        <div key={c.name} className="flex items-center justify-between py-0.5">
-          <span className="text-xs text-font-primary">
-            {c.name}: {c.value}
-          </span>
-          <div className="flex gap-1">
-            <button
-              onClick={() => onRemove(c.name)}
-              className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
-            >
-              -
-            </button>
-            <button
-              onClick={() => onAdd(c.name)}
-              className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
-            >
-              +
-            </button>
-          </div>
-        </div>
+      {/* Active counters with +/- and manual input */}
+      {activeCounters.map((c) => (
+        <CounterRow
+          key={c.name}
+          name={c.name}
+          value={c.value}
+          onSet={(v) => onSet(c.name, v)}
+          onAdd={() => onAdd(c.name)}
+          onRemove={() => onRemove(c.name)}
+        />
       ))}
-      {/* Quick-add buttons for common counter types */}
+      {/* Inactive counter types — tap to add */}
       <div className="flex flex-wrap gap-1 mt-1.5">
-        {QUICK_COUNTERS.filter(qc => !counters.some(c => c.name === qc)).map((qc) => (
+        {inactiveTypes.map((t) => (
           <button
-            key={qc}
-            onClick={() => onAdd(qc)}
-            className="rounded bg-bg-cell px-2 py-1 text-[10px] font-medium text-font-secondary active:bg-bg-hover"
+            key={t}
+            onClick={() => onAdd(t)}
+            className="rounded bg-bg-cell px-2 py-1 text-[9px] font-medium text-font-muted active:bg-bg-hover"
           >
-            + {qc}
+            + {t}
           </button>
         ))}
       </div>
-      {/* Custom counter name input */}
+      {/* Custom counter input */}
       <div className="flex gap-1 mt-1.5">
         <input
           type="text"
@@ -139,7 +161,7 @@ function CounterSection({
               setCustomName('')
             }
           }}
-          placeholder="Custom counter..."
+          placeholder="Custom..."
           className="flex-1 rounded bg-bg-cell px-2 py-1 text-[10px] text-font-primary placeholder:text-font-muted outline-none"
         />
         <button
@@ -153,6 +175,61 @@ function CounterSection({
         >
           Add
         </button>
+      </div>
+    </div>
+  )
+}
+
+function PTSection({ power, toughness, powerMod, toughnessMod, onSetPT }: {
+  power: string | null
+  toughness: string | null
+  powerMod: number
+  toughnessMod: number
+  onSetPT: (powerMod: number, toughnessMod: number) => void
+}) {
+  const basePower = parseInt(power ?? '0') || 0
+  const baseToughness = parseInt(toughness ?? '0') || 0
+  const effectivePower = basePower + powerMod
+  const effectiveToughness = baseToughness + toughnessMod
+
+  return (
+    <div className="w-full rounded-xl bg-bg-surface p-2">
+      <p className="text-[10px] font-bold text-font-muted mb-1">POWER / TOUGHNESS</p>
+      <div className="flex items-center justify-center gap-3">
+        {/* Power */}
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[8px] text-font-muted">POWER</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => onSetPT(powerMod - 1, toughnessMod)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">-</button>
+            <span className={`min-w-[28px] text-center text-sm font-bold ${powerMod !== 0 ? 'text-yellow-400' : 'text-font-primary'}`}>
+              {effectivePower}
+            </span>
+            <button onClick={() => onSetPT(powerMod + 1, toughnessMod)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">+</button>
+          </div>
+          {powerMod !== 0 && <span className="text-[8px] text-font-muted">base {basePower} {powerMod >= 0 ? '+' : ''}{powerMod}</span>}
+        </div>
+
+        <span className="text-lg font-bold text-font-muted">/</span>
+
+        {/* Toughness */}
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[8px] text-font-muted">TOUGHNESS</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => onSetPT(powerMod, toughnessMod - 1)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">-</button>
+            <span className={`min-w-[28px] text-center text-sm font-bold ${toughnessMod !== 0 ? 'text-yellow-400' : 'text-font-primary'}`}>
+              {effectiveToughness}
+            </span>
+            <button onClick={() => onSetPT(powerMod, toughnessMod + 1)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">+</button>
+          </div>
+          {toughnessMod !== 0 && <span className="text-[8px] text-font-muted">base {baseToughness} {toughnessMod >= 0 ? '+' : ''}{toughnessMod}</span>}
+        </div>
+
+        {/* Reset button */}
+        {(powerMod !== 0 || toughnessMod !== 0) && (
+          <button onClick={() => onSetPT(0, 0)} className="flex h-6 items-center justify-center rounded bg-bg-cell px-2 text-[9px] text-font-secondary active:bg-bg-hover">
+            <RotateCcw size={10} />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -178,10 +255,13 @@ export default function CardPreviewOverlay({
   onTap,
   onAddCounter,
   onRemoveCounter,
+  onSetCounter,
+  onSetPT,
   onCopy,
   onTakeControl,
   onCastCommander,
   counters,
+  ptMod,
 }: CardPreviewOverlayProps) {
   if (!preview) return null
 
@@ -274,6 +354,18 @@ export default function CardPreviewOverlay({
             counters={displayCounters ?? []}
             onAdd={(name) => onAddCounter!(id!, name)}
             onRemove={(name) => onRemoveCounter?.(id!, name)}
+            onSet={(name, value) => onSetCounter?.(id!, name, value) ?? onAddCounter!(id!, name)}
+          />
+        )}
+
+        {/* P/T modifier section — only for creatures (cards with power/toughness) */}
+        {!readOnly && id && onSetPT && ptMod && preview.card.power != null && (
+          <PTSection
+            power={preview.card.power}
+            toughness={preview.card.toughness}
+            powerMod={ptMod.powerMod}
+            toughnessMod={ptMod.toughnessMod}
+            onSetPT={(p, t) => onSetPT!(id!, p, t)}
           />
         )}
       </div>

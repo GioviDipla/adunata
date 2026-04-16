@@ -11,7 +11,7 @@ import {
   createDraw, createConcede,
   createDeclareAttackers, createDeclareBlockers, createCombatDamage, createDiscard,
   createMulligan, createKeepHand, createBottomCards,
-  createAddCounter, createRemoveCounter, createCreateToken,
+  createAddCounter, createRemoveCounter, createSetCounter, createSetPT, createCreateToken,
   createCommanderChoice, createToggleAutoPass,
   createShuffleIntoLibrary, createCopyCard, createTakeControl,
 } from '@/lib/game/actions'
@@ -531,6 +531,18 @@ export default function PlayGame(props: PlayGameProps) {
     const data = cardMap[instanceId]
     if (!data) return
     sendAction(createRemoveCounter(userId, myName, instanceId, data.name, counterName))
+  }, [cardMap, sendAction, userId, myName])
+
+  const handleSetCounter = useCallback((instanceId: string, counterName: string, value: number) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createSetCounter(userId, myName, instanceId, data.name, counterName, value))
+  }, [cardMap, sendAction, userId, myName])
+
+  const handleSetPT = useCallback((instanceId: string, powerMod: number, toughnessMod: number) => {
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createSetPT(userId, myName, instanceId, data.name, powerMod, toughnessMod))
   }, [cardMap, sendAction, userId, myName])
 
   // Generic "send to bottom of library" from any zone
@@ -1166,6 +1178,13 @@ export default function PlayGame(props: PlayGameProps) {
           onTap: handleTapToggle,
           onAddCounter: handleAddCounter,
           onRemoveCounter: handleRemoveCounter,
+          onSetCounter: handleSetCounter,
+          onSetPT: handleSetPT,
+          ptMod: (() => {
+            if (!preview?.instanceId) return undefined
+            const bfCard = myState?.battlefield.find((c) => c.instanceId === preview.instanceId)
+            return bfCard ? { powerMod: bfCard.powerMod ?? 0, toughnessMod: bfCard.toughnessMod ?? 0 } : undefined
+          })(),
           onCopy: handleCopy,
         } : {})}
 
