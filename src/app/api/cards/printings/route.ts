@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchCards, mapScryfallCard } from '@/lib/scryfall'
+import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
 
 export async function GET(request: NextRequest) {
   const name = request.nextUrl.searchParams.get('name')
@@ -21,10 +22,11 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient()
     const mapped = result.data.map(mapScryfallCard)
 
+    // Return grid-shaped rows; CardDetail lazy-hydrates full on open/switch.
     const { data: upserted } = await supabase
       .from('cards')
       .upsert(mapped, { onConflict: 'scryfall_id' })
-      .select('*')
+      .select(`${CARD_GRID_COLUMNS}, collector_number, set_name`)
 
     return NextResponse.json({
       printings: upserted ?? mapped,

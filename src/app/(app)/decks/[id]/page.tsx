@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
+import { CARD_DECK_COLUMNS, DECK_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import DeckEditor from '@/components/deck/DeckEditor'
 import DeckView from '@/components/deck/DeckView'
 import type { Database } from '@/types/supabase'
@@ -28,17 +29,10 @@ export default async function DeckDetailPage({
   const supabase = await createClient()
 
   const [{ data: deck, error: deckError }, { data: deckCards }] = await Promise.all([
-    supabase.from('decks').select('*').eq('id', id).single(),
+    supabase.from('decks').select(DECK_DETAIL_COLUMNS).eq('id', id).single(),
     supabase
       .from('deck_cards')
-      .select(`
-        id,
-        card_id,
-        quantity,
-        board,
-        created_at,
-        card:cards!card_id(*)
-      `)
+      .select(`id, card_id, quantity, board, created_at, card:cards!card_id(${CARD_DECK_COLUMNS})`)
       .eq('deck_id', id),
   ])
 

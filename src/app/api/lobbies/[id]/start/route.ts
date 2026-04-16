@@ -16,7 +16,7 @@ export async function POST(
   // Verify host
   const { data: lobby } = await supabase
     .from('game_lobbies')
-    .select('*')
+    .select('id')
     .eq('id', lobbyId)
     .eq('host_user_id', user.id)
     .eq('status', 'waiting')
@@ -24,10 +24,10 @@ export async function POST(
 
   if (!lobby) return NextResponse.json({ error: 'Not host or lobby not found' }, { status: 404 })
 
-  // Get players
+  // Get players — only fields needed to build initial state
   const { data: players } = await supabase
     .from('game_players')
-    .select('*')
+    .select('user_id, deck_id, seat_position, ready')
     .eq('lobby_id', lobbyId)
     .order('seat_position')
 
@@ -46,9 +46,11 @@ export async function POST(
   let instanceCounter = 0
 
   for (const player of players) {
+    // Only card.id is read downstream — the full card data is hydrated later
+    // by /api/game/[id] when building the CardMap.
     const { data: deckCards } = await admin
       .from('deck_cards')
-      .select('card_id, quantity, board, card:cards!card_id(*)')
+      .select('card_id, quantity, board, card:cards!card_id(id)')
       .eq('deck_id', player.deck_id)
 
     const library: string[] = []

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { LOBBY_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import WaitingRoom from '@/components/play/WaitingRoom'
 
 export default async function LobbyPage({ params }: { params: Promise<{ lobbyId: string }> }) {
@@ -8,7 +9,7 @@ export default async function LobbyPage({ params }: { params: Promise<{ lobbyId:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: lobby } = await supabase.from('game_lobbies').select('*').eq('id', lobbyId).single()
+  const { data: lobby } = await supabase.from('game_lobbies').select(LOBBY_DETAIL_COLUMNS).eq('id', lobbyId).single()
   if (!lobby) redirect('/play')
   if (lobby.status === 'playing') redirect(`/play/${lobbyId}/game`)
 

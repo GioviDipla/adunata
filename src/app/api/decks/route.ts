@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { DECK_LIST_COLUMNS } from '@/lib/supabase/columns'
 
 export async function GET() {
   const supabase = await createClient()
@@ -12,7 +13,7 @@ export async function GET() {
   const { data: decks, error } = await supabase
     .from('decks')
     .select(`
-      *,
+      ${DECK_LIST_COLUMNS},
       cover_card:cards!cover_card_id(id, name, image_small, image_normal, image_art_crop),
       deck_cards(quantity)
     `)
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       description: description || null,
       format,
     })
-    .select('*')
+    .select('id, name, format, visibility, created_at')
     .single()
 
   if (error) {

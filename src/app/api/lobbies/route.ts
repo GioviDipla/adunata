@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { LOBBY_LIST_COLUMNS } from '@/lib/supabase/columns'
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no ambiguous chars
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     format: format || deck.format,
     status: 'waiting',
     max_players: 2,
-  }).select('*').single()
+  }).select('id, host_user_id, lobby_code, format, status, max_players').single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -50,7 +51,7 @@ export async function GET() {
 
   const { data: lobbies } = await supabase
     .from('game_players')
-    .select('lobby:game_lobbies!lobby_id(*)')
+    .select(`lobby:game_lobbies!lobby_id(${LOBBY_LIST_COLUMNS})`)
     .eq('user_id', user.id)
     .order('joined_at', { ascending: false })
     .limit(20)

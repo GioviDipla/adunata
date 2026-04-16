@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
+import { GAME_LOG_COLUMNS } from '@/lib/supabase/columns'
 import GameHistoryView from '@/components/play/GameHistoryView'
 import type { CardMap, LogEntry } from '@/lib/game/types'
 
@@ -57,7 +58,7 @@ export default async function GameHistoryPage({
   for (const player of players ?? []) {
     const { data: deckCards } = await admin
       .from('deck_cards')
-      .select('card_id, quantity, board, card:cards!card_id(*)')
+      .select('card_id, quantity, board, card:cards!card_id(id, name, image_small, image_normal, type_line, mana_cost, power, toughness, oracle_text)')
       .eq('deck_id', player.deck_id)
 
     if (!deckCards) continue
@@ -98,7 +99,7 @@ export default async function GameHistoryPage({
   // Fetch full game log
   const { data: logRows } = await supabase
     .from('game_log')
-    .select('*')
+    .select(GAME_LOG_COLUMNS)
     .eq('lobby_id', lobbyId)
     .order('seq', { ascending: true })
 

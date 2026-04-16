@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { applyAction } from '@/lib/game/engine'
+import { GAME_STATE_COLUMNS } from '@/lib/supabase/columns'
 import type { GameState, GameAction } from '@/lib/game/types'
 import type { Json } from '@/types/supabase'
 
@@ -49,7 +50,7 @@ export async function POST(
   // Get current game state
   const { data: gameStateRow } = await admin
     .from('game_states')
-    .select('*')
+    .select(GAME_STATE_COLUMNS)
     .eq('lobby_id', lobbyId)
     .single()
 
@@ -195,7 +196,7 @@ export async function POST(
       // Re-read fresh state and retry
       const { data: freshRow } = await admin
         .from('game_states')
-        .select('*')
+        .select(GAME_STATE_COLUMNS)
         .eq('lobby_id', lobbyId)
         .single()
       if (!freshRow) return NextResponse.json({ error: 'Game not found' }, { status: 404 })

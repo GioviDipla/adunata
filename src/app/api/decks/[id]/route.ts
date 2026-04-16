@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { CARD_DECK_COLUMNS, DECK_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 
 export async function GET(
   _request: NextRequest,
@@ -15,7 +16,7 @@ export async function GET(
 
   const { data: deck, error } = await supabase
     .from('decks')
-    .select('*')
+    .select(DECK_DETAIL_COLUMNS)
     .eq('id', id)
     .eq('user_id', user.id)
     .single()
@@ -26,14 +27,7 @@ export async function GET(
 
   const { data: deckCards, error: cardsError } = await supabase
     .from('deck_cards')
-    .select(`
-      id,
-      card_id,
-      quantity,
-      board,
-      created_at,
-      card:cards!card_id(*)
-    `)
+    .select(`id, card_id, quantity, board, created_at, card:cards!card_id(${CARD_DECK_COLUMNS})`)
     .eq('deck_id', id)
 
   if (cardsError) {
@@ -69,7 +63,7 @@ export async function PUT(
     })
     .eq('id', id)
     .eq('user_id', user.id)
-    .select('*')
+    .select(DECK_DETAIL_COLUMNS)
     .single()
 
   if (error) {

@@ -27,7 +27,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("decks")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("user_id", user.id),
     supabase.from("deck_cards").select("quantity"),
     supabase

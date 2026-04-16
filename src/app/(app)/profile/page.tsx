@@ -56,7 +56,7 @@ export default function ProfilePage() {
       // Fetch deck count
       const { count } = await supabase
         .from('decks')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id);
       setDeckCount(count ?? 0);
 

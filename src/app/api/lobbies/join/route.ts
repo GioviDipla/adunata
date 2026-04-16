@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { LOBBY_LIST_COLUMNS } from '@/lib/supabase/columns'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -9,10 +10,10 @@ export async function POST(request: NextRequest) {
   const { code, deckId } = await request.json()
   if (!code || !deckId) return NextResponse.json({ error: 'code and deckId required' }, { status: 400 })
 
-  // Find lobby
+  // Find lobby — need host_user_id + max_players below
   const { data: lobby } = await supabase
     .from('game_lobbies')
-    .select('*')
+    .select(`${LOBBY_LIST_COLUMNS}, host_user_id, max_players`)
     .eq('lobby_code', code.toUpperCase())
     .eq('status', 'waiting')
     .single()
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
   // Check player count
   const { count } = await supabase
     .from('game_players')
-    .select('*', { count: 'exact', head: true })
+    .select('id', { count: 'exact', head: true })
     .eq('lobby_id', lobby.id)
 
   if ((count ?? 0) >= lobby.max_players) return NextResponse.json({ error: 'Lobby is full' }, { status: 400 })

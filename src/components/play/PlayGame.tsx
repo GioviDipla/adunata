@@ -225,7 +225,7 @@ export default function PlayGame(props: PlayGameProps) {
         if (!lobbyPlayer?.deck_id || cancelled) return
         const { data: tokenCards } = await supabase
           .from('deck_cards')
-          .select('card:cards!card_id(*)')
+          .select('card:cards!card_id(name, power, toughness, colors, type_line, keywords, image_small, image_normal)')
           .eq('deck_id', lobbyPlayer.deck_id)
           .eq('board', 'tokens')
         if (tokenCards && !cancelled) {

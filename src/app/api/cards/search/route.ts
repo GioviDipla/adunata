@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchCards, mapScryfallCard, type ScryfallCard } from '@/lib/scryfall'
+import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     // Search local DB first (English name)
     const { data: localCards } = await supabase
       .from('cards')
-      .select('*')
+      .select(CARD_GRID_COLUMNS)
       .ilike('name', `%${query}%`)
       .limit(10)
 
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     const { data: upserted } = await supabase
       .from('cards')
       .upsert(toUpsert, { onConflict: 'scryfall_id' })
-      .select('*')
+      .select(CARD_GRID_COLUMNS)
 
     return NextResponse.json({
       cards: upserted ?? toUpsert,
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Fallback: return local results if Scryfall fails
     const { data: fallback } = await supabase
       .from('cards')
-      .select('*')
+      .select(CARD_GRID_COLUMNS)
       .ilike('name', `%${query}%`)
       .limit(10)
 

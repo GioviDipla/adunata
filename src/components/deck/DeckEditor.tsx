@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { CARD_GAME_COLUMNS } from '@/lib/supabase/columns'
 import { Button } from '@/components/ui/Button'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
@@ -75,7 +76,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         const supabase = createClient()
         const { data: localTokens } = await supabase
           .from('cards')
-          .select('*')
+          .select(CARD_GAME_COLUMNS)
           .ilike('type_line', '%Token%')
           .ilike('name', `%${tokenSearch.trim()}%`)
           .limit(10)
@@ -83,7 +84,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         if (controller.signal.aborted) return
 
         if (localTokens && localTokens.length >= 3) {
-          setTokenSearchResults(localTokens)
+          setTokenSearchResults(localTokens as unknown as CardRow[])
           setSearchingTokens(false)
           return
         }

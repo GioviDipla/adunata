@@ -12,7 +12,7 @@ export default async function GamePage({ params }: { params: Promise<{ lobbyId: 
 
   // Fetch lobby + player membership in parallel
   const [{ data: lobby }, { data: player }] = await Promise.all([
-    supabase.from('game_lobbies').select('*').eq('id', lobbyId).single(),
+    supabase.from('game_lobbies').select('id, status').eq('id', lobbyId).single(),
     supabase
       .from('game_players')
       .select('id')

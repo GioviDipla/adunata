@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  CARD_GAME_COLUMNS,
+  GAME_STATE_COLUMNS,
+  GAME_LOG_COLUMNS,
+} from '@/lib/supabase/columns'
 import type { GameState, CardMap, LogEntry } from '@/lib/game/types'
 
 export async function GET(
@@ -27,7 +32,7 @@ export async function GET(
   // Get game state
   const { data: gameStateRow } = await supabase
     .from('game_states')
-    .select('*')
+    .select(GAME_STATE_COLUMNS)
     .eq('lobby_id', lobbyId)
     .single()
 
@@ -58,7 +63,7 @@ export async function GET(
   for (const player of players) {
     const { data: deckCards } = await admin
       .from('deck_cards')
-      .select('card_id, quantity, board, card:cards!card_id(*)')
+      .select(`card_id, quantity, board, card:cards!card_id(${CARD_GAME_COLUMNS})`)
       .eq('deck_id', player.deck_id)
 
     if (!deckCards) continue
@@ -128,7 +133,7 @@ export async function GET(
   // Get game log
   const { data: logRows } = await supabase
     .from('game_log')
-    .select('*')
+    .select(GAME_LOG_COLUMNS)
     .eq('lobby_id', lobbyId)
     .order('seq', { ascending: true })
 

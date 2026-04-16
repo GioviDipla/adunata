@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { X, Plus, ChevronDown, Loader2, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { CARD_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
 
@@ -74,7 +75,7 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
       const supabase = createClient()
       const { data } = await supabase
         .from('cards')
-        .select('*')
+        .select(CARD_DETAIL_COLUMNS)
         .eq('id', card.id)
         .single()
       if (aborted || !data) return

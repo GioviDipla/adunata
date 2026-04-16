@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lookupCardsByNames, mapScryfallCard } from '@/lib/scryfall'
+import { CARD_DECK_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -98,7 +99,7 @@ export async function POST(
       const { data: upserted } = await admin
         .from('cards')
         .upsert(toUpsert, { onConflict: 'scryfall_id' })
-        .select('*')
+        .select(CARD_DECK_COLUMNS)
 
       for (const c of (upserted ?? []) as CardRow[]) {
         cardByLowerName.set(c.name.toLowerCase(), c)

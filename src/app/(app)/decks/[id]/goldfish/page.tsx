@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import PlayGame from '@/components/play/PlayGame'
 import { GHOST_BOT } from '@/lib/game/bot'
+import { CARD_GAME_COLUMNS, DECK_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import type { GameState, CardMap, PlayerState, CombatState } from '@/lib/game/types'
 import type { Database } from '@/types/supabase'
 
@@ -31,10 +32,10 @@ export default async function GoldfishPage({
   const supabase = await createClient()
 
   const [{ data: deck, error: deckError }, { data: deckCards }] = await Promise.all([
-    supabase.from('decks').select('*').eq('id', id).single(),
+    supabase.from('decks').select(DECK_DETAIL_COLUMNS).eq('id', id).single(),
     supabase
       .from('deck_cards')
-      .select(`id, card_id, quantity, board, created_at, card:cards!card_id(*)`)
+      .select(`id, card_id, quantity, board, created_at, card:cards!card_id(${CARD_GAME_COLUMNS})`)
       .eq('deck_id', id)
       .in('board', ['main', 'commander', 'tokens']),
   ])
