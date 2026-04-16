@@ -96,17 +96,24 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           const data = await res.json()
           const scryfallTokens = (data.data ?? []).slice(0, 10).map((c: Record<string, unknown>) => ({
             id: c.id,
+            scryfall_id: c.id as string,
             name: c.name,
             type_line: c.type_line,
             power: c.power ?? null,
             toughness: c.toughness ?? null,
             colors: c.colors ?? [],
+            color_identity: c.color_identity ?? [],
             image_small: c.image_uris ? (c.image_uris as Record<string, string>).small : null,
             image_normal: c.image_uris ? (c.image_uris as Record<string, string>).normal : null,
             oracle_text: c.oracle_text ?? null,
             keywords: c.keywords ?? [],
             set_code: c.set ?? '',
             set_name: c.set_name ?? '',
+            collector_number: c.collector_number ?? '',
+            rarity: c.rarity ?? '',
+            mana_cost: c.mana_cost ?? null,
+            cmc: c.cmc ?? 0,
+            layout: c.layout ?? null,
           }))
           if (!controller.signal.aborted) {
             setTokenSearchResults([...((localTokens ?? []) as CardRow[]), ...scryfallTokens])
@@ -334,12 +341,37 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     })
   }, [])
 
-  const handleAddCardWithSave = useCallback(async (card: CardRow, board: string) => {
+  const handleAddTokenWithSave = useCallback(async (card: CardRow, board: string) => {
     handleCardAdded(card, board)
-    await fetch(`/api/decks/${deck.id}/cards`, {
+    // Use upsert endpoint — the card may not exist in DB yet (Scryfall result)
+    const scryfallId = (card as Record<string, unknown>).scryfall_id as string | undefined
+    await fetch(`/api/decks/${deck.id}/cards/add-with-upsert`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ card_id: card.id, quantity: 1, board }),
+      body: JSON.stringify({
+        scryfall_id: scryfallId || String(card.id),
+        board,
+        card_data: {
+          name: card.name,
+          mana_cost: card.mana_cost,
+          cmc: card.cmc,
+          type_line: card.type_line,
+          oracle_text: card.oracle_text,
+          colors: card.colors,
+          color_identity: card.color_identity,
+          rarity: card.rarity,
+          set_code: card.set_code,
+          set_name: card.set_name,
+          collector_number: card.collector_number,
+          image_small: card.image_small,
+          image_normal: card.image_normal,
+          image_art_crop: card.image_art_crop,
+          power: card.power,
+          toughness: card.toughness,
+          keywords: card.keywords,
+          layout: (card as Record<string, unknown>).layout ?? null,
+        },
+      }),
     })
   }, [deck.id, handleCardAdded])
 
@@ -548,7 +580,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                     tokenSearchResults.map((card) => (
                       <button
                         key={card.id}
-                        onClick={() => handleAddCardWithSave(card, 'tokens')}
+                        onClick={() => handleAddTokenWithSave(card, 'tokens')}
                         className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover border-b border-border/30 last:border-0"
                       >
                         {card.image_small && (
