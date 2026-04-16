@@ -190,6 +190,25 @@ export default function PlayGame(props: PlayGameProps) {
     load()
   }, [mode, lobbyId, userId])
 
+  // Goldfish: auto-keep mulligan for bot on mount
+  useEffect(() => {
+    if (mode !== 'goldfish') return
+    const gProps = props as PlayGameProps & { mode: 'goldfish' }
+    setGameState(prev => {
+      if (!prev?.mulliganStage) return prev
+      const botDecision = prev.mulliganStage.playerDecisions[gProps.botId]
+      if (botDecision && !botDecision.decided) {
+        return applyAction(prev, {
+          type: 'keep_hand',
+          playerId: gProps.botId,
+          data: {},
+          text: '',
+        })
+      }
+      return prev
+    })
+  }, [mode])
+
   // Fetch deck tokens for token creator
   useEffect(() => {
     if (mode !== 'multiplayer') return
