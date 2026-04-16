@@ -72,3 +72,25 @@ Cosa fare:
      -H "Authorization: Bearer una-stringa-segreta-a-tua-scelta"
    ```
 5. Le carte singole vengono comunque scaricate on-demand quando cerchi nel deck editor o importi un deck.
+
+## [STEP 9] — Abilitare Google OAuth in Supabase
+Quando: prima di testare il login con Google
+Cosa fare:
+1. Vai su Google Cloud Console → APIs & Services → Credentials
+2. Crea un OAuth 2.0 Client ID (tipo: Web application)
+3. In "Authorized redirect URIs" aggiungi: `https://wyujskkzqeexvmrwudup.supabase.co/auth/v1/callback`
+4. Copia Client ID e Client Secret
+5. Vai su Supabase Dashboard → Authentication → Providers → Google
+6. Abilita Google, incolla Client ID e Client Secret
+7. Salva
+
+## [STEP 10] — Abilitare Apple OAuth in Supabase
+Quando: prima di testare il login con Apple
+Cosa fare:
+1. Vai su Apple Developer → Certificates, Identifiers & Profiles
+2. Registra un nuovo Service ID (abilita "Sign In with Apple")
+3. Configura dominio e return URL: `https://wyujskkzqeexvmrwudup.supabase.co/auth/v1/callback`
+4. Crea una key per Sign In with Apple, scarica il file .p8
+5. Vai su Supabase Dashboard → Authentication → Providers → Apple
+6. Abilita Apple, incolla Service ID, Team ID, Key ID e il contenuto della .p8 private key
+7. Salva

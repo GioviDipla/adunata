@@ -6,6 +6,7 @@ import { Sparkles, Mail, Lock, CheckCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordStrength } from "@/components/ui/PasswordStrength";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -101,6 +102,8 @@ export default function RegisterPage() {
           icon={<Lock className="h-4 w-4" />}
           required
         />
+
+        <PasswordStrength password={password} />
 
         <Input
           label="Confirm password"
