@@ -9,6 +9,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
   const { id: lobbyId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -192,4 +193,8 @@ export async function POST(
   }
 
   return NextResponse.json({ error: 'Action conflict, please retry' }, { status: 409 })
+  } catch (err) {
+    console.error('[action route crash]', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
