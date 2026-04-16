@@ -93,9 +93,9 @@ function BattlefieldCardButton({
           </span>
         </div>
       ) : null}
-      {/* Counter badges — top-right */}
+      {/* Counter badges — bottom-left */}
       {bc.counters && bc.counters.length > 0 && (
-        <div className="absolute top-0.5 right-0.5 flex flex-col gap-0.5 pointer-events-none">
+        <div className="absolute bottom-0.5 left-0.5 flex flex-col gap-0.5 pointer-events-none">
           {bc.counters.map((c) => (
             <span key={c.name} className="rounded bg-bg-accent/90 px-1 text-[7px] font-bold text-font-white leading-tight whitespace-nowrap">
               {c.name}: {c.value}

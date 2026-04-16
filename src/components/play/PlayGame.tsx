@@ -1157,7 +1157,11 @@ export default function PlayGame(props: PlayGameProps) {
         preview={preview}
         onClose={closePreview}
         readOnly={!preview?.instanceId || !preview?.zone}
-        counters={preview?.counters}
+        counters={(() => {
+          if (!preview?.instanceId || !myState) return preview?.counters
+          const bfCard = myState.battlefield.find(c => c.instanceId === preview.instanceId)
+          return bfCard?.counters ?? preview?.counters
+        })()}
 
         {...(preview?.zone === 'hand' ? {
           onPlay: handlePlayCard,
@@ -1181,8 +1185,8 @@ export default function PlayGame(props: PlayGameProps) {
           onSetCounter: handleSetCounter,
           onSetPT: handleSetPT,
           ptMod: (() => {
-            if (!preview?.instanceId) return undefined
-            const bfCard = myState?.battlefield.find((c) => c.instanceId === preview.instanceId)
+            if (!preview?.instanceId || !myState) return undefined
+            const bfCard = myState.battlefield.find((c) => c.instanceId === preview.instanceId)
             return bfCard ? { powerMod: bfCard.powerMod ?? 0, toughnessMod: bfCard.toughnessMod ?? 0 } : undefined
           })(),
           onCopy: handleCopy,
