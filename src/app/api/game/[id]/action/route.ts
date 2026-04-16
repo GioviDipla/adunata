@@ -11,8 +11,9 @@ export async function POST(
 ) {
   const { id: lobbyId } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user
 
   // Verify user is a player in this lobby
   const { data: myPlayer } = await supabase
@@ -90,14 +91,19 @@ export async function POST(
   if (action.type === 'library_view' || action.type === 'peak' || action.type === 'chat_message') {
     const newSeq = currentState.lastActionSeq + 1
     const updatedState = { ...currentState, lastActionSeq: newSeq }
-    await admin.from('game_log').insert({
-      lobby_id: lobbyId, seq: newSeq, player_id: action.playerId,
-      action: action.type, data: (action.data as Json) ?? null, text: action.text,
-      ...(action.type === 'chat_message' ? { type: 'chat' } : {}),
+    await admin.rpc('process_game_action', {
+      p_lobby_id: lobbyId,
+      p_player_id: action.playerId,
+      p_action: action.type,
+      p_action_data: (action.data as Json) ?? null,
+      p_action_text: action.text,
+      p_action_seq: newSeq,
+      p_new_state: updatedState as unknown as Json,
+      p_turn_number: updatedState.turn ?? currentState.turn,
+      p_active_player_id: updatedState.activePlayerId ?? currentState.activePlayerId,
+      p_phase: updatedState.phase ?? currentState.phase,
+      p_log_type: action.type === 'chat_message' ? 'chat' : 'action',
     })
-    await admin.from('game_states').update({
-      state_data: updatedState as unknown as Json, updated_at: new Date().toISOString(),
-    }).eq('id', gameStateRow.id)
     return NextResponse.json({ state: updatedState, seq: newSeq })
   }
 
@@ -124,27 +130,23 @@ export async function POST(
     autoPassCount++
   }
 
-  // Append to game log
-  await admin.from('game_log').insert({
-    lobby_id: lobbyId,
-    seq: newState.lastActionSeq,
-    player_id: action.playerId,
-    action: action.type,
-    data: (action.data as Json) ?? null,
-    text: action.text,
+  // Batch log insert + state update via RPC
+  const { error: rpcError } = await admin.rpc('process_game_action', {
+    p_lobby_id: lobbyId,
+    p_player_id: action.playerId,
+    p_action: action.type,
+    p_action_data: (action.data ?? null) as Json,
+    p_action_text: action.text,
+    p_action_seq: newState.lastActionSeq,
+    p_new_state: newState as unknown as Json,
+    p_turn_number: newState.turn,
+    p_active_player_id: newState.activePlayerId,
+    p_phase: newState.phase,
   })
 
-  // Update game state
-  await admin
-    .from('game_states')
-    .update({
-      state_data: newState as unknown as Json,
-      turn_number: newState.turn,
-      active_player_id: newState.activePlayerId,
-      phase: newState.phase,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', gameStateRow.id)
+  if (rpcError) {
+    return NextResponse.json({ error: rpcError.message }, { status: 500 })
+  }
 
   return NextResponse.json({ state: newState, seq: newState.lastActionSeq })
 }

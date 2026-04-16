@@ -525,6 +525,22 @@ export interface Database {
           public_deck_count: number
         }[]
       }
+      process_game_action: {
+        Args: {
+          p_lobby_id: string
+          p_player_id: string
+          p_action: string
+          p_action_data: Json | null
+          p_action_text: string
+          p_action_seq: number
+          p_new_state: Json
+          p_turn_number: number
+          p_active_player_id: string
+          p_phase: string
+          p_log_type?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
