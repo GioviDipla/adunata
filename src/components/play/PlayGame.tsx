@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { Heart } from 'lucide-react'
+import { Heart, ChevronLeft } from 'lucide-react'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -132,7 +132,7 @@ function CommandZoneCard({
 
 type PlayGameProps = { userId: string } & (
   | { mode: 'multiplayer'; lobbyId: string }
-  | { mode: 'goldfish'; initialState: GameState; initialCardMap: CardMap; botId: string; botConfig: BotConfig; deckTokens?: { name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[] }
+  | { mode: 'goldfish'; initialState: GameState; initialCardMap: CardMap; botId: string; botConfig: BotConfig; deckId: string; deckTokens?: { name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[] }
 )
 
 export default function PlayGame(props: PlayGameProps) {
@@ -939,6 +939,14 @@ export default function PlayGame(props: PlayGameProps) {
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-bg-dark">
+      {/* Back button — goldfish only */}
+      {isGoldfish && (
+        <div className="flex items-center border-b border-border/40 px-3 py-1.5">
+          <Link href={`/decks/${(props as PlayGameProps & { mode: 'goldfish' }).deckId}`} className="flex items-center gap-1 text-font-secondary">
+            <ChevronLeft size={16} /><span className="text-xs font-medium">Deck</span>
+          </Link>
+        </div>
+      )}
       {/* Scrollable: opponent + spacer + player battlefield */}
       <div className="flex-1 overflow-y-auto flex flex-col">
         {/* Opponent field — full in multiplayer, minimal life counter in goldfish */}

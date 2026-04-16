@@ -186,6 +186,7 @@ export default async function GoldfishPage({
       initialCardMap={cardMap}
       botId={BOT_ID}
       botConfig={GHOST_BOT}
+      deckId={id}
       deckTokens={deckTokensList}
     />
   )
