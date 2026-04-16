@@ -295,6 +295,18 @@ export default function PlayGame(props: PlayGameProps) {
     if (mode === 'goldfish') {
       const gProps = props as PlayGameProps & { mode: 'goldfish' }
       setGameState(prev => prev ? applyWithBotLoop(prev, action, gProps.botId, gProps.botConfig) : prev)
+      // Local log entry
+      if (action.text) {
+        setLog(prev => [...prev, {
+          id: `local-${Date.now()}`,
+          seq: prev.length + 1,
+          playerId: action.playerId,
+          action: action.type,
+          data: action.data as Record<string, unknown> | null,
+          text: action.text,
+          createdAt: new Date().toISOString(),
+        }])
+      }
       return
     }
 
@@ -1054,10 +1066,8 @@ export default function PlayGame(props: PlayGameProps) {
         </div>
       </div>
 
-      {/* Game Log — multiplayer only */}
-      {!isGoldfish && (
-        <GameLog entries={log} myUserId={userId} onSendChat={handleSendChat} />
-      )}
+      {/* Game Log */}
+      <GameLog entries={log} myUserId={userId} onSendChat={isGoldfish ? undefined : handleSendChat} />
 
       {/* Hand + Commander Zone */}
       <div className="border-t border-border bg-bg-card px-3 py-2">
