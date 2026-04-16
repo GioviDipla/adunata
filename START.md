@@ -2,11 +2,11 @@ Leggi il file CLAUDE.md prima di fare qualsiasi cosa. Poi costruisci integralmen
 
 ---
 
-# The Gathering — Prompt per Claude Opus 4.6
+# Adunata — Prompt per Claude Opus 4.6
 
 ---
 
-Voglio che tu progetti e costruisca dall'inizio, in modo completamente autonomo, una piattaforma web chiamata **The Gathering**.
+Voglio che tu progetti e costruisca dall'inizio, in modo completamente autonomo, una piattaforma web chiamata **Adunata**.
 
 È un'applicazione per giocatori di Magic: The Gathering. Prima di scrivere una sola riga di codice, voglio che tu ragioni sull'architettura complessiva, scelga lo stack più adatto agli obiettivi che ti descrivo, e mi proponga un piano strutturato. Per il front end ci sono già degli esempi per la versione mobile (src e tailwind.config.ts), creati con pencil.ai e di cui hai anche il file.pen se puoi servirti. Poi implementa tutto, step by step, senza chiedermi conferme intermedie.
 La repo deve poi essere caricata su GitHub. 

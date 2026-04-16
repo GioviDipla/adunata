@@ -2,7 +2,7 @@
 
 ## Overview
 
-Introduces the minimum viable "social layer" for The Gathering: user profiles with stable usernames, per-deck public/private visibility, and a Community page with user search. Everything remains behind the existing auth gate — "public" means "visible to other registered users of this app", never to the open internet. No follows, likes, comments, clones, or activity feeds in this iteration.
+Introduces the minimum viable "social layer" for Adunata: user profiles with stable usernames, per-deck public/private visibility, and a Community page with user search. Everything remains behind the existing auth gate — "public" means "visible to other registered users of this app", never to the open internet. No follows, likes, comments, clones, or activity feeds in this iteration.
 
 ## Scope
 

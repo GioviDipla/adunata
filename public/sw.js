@@ -1,4 +1,4 @@
-const CACHE_NAME = 'the-gathering-v1';
+const CACHE_NAME = 'adunata-v1';
 const PRECACHE_URLS = ['/', '/login'];
 
 self.addEventListener('install', (event) => {

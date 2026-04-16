@@ -123,7 +123,7 @@ export default function LoginPage() {
         <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-bg-accent/10">
           <Sparkles className="h-7 w-7 text-font-accent" />
         </div>
-        <h1 className="text-2xl font-bold text-font-primary">The Gathering</h1>
+        <h1 className="text-2xl font-bold text-font-primary">Adunata</h1>
         <p className="text-sm text-font-secondary">Sign in to your account</p>
       </div>
 

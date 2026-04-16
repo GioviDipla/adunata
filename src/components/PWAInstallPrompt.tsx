@@ -62,7 +62,7 @@ export function PWAInstallPrompt() {
           </div>
           <div className="flex-1">
             <p className="text-sm font-semibold text-font-primary">
-              Install The Gathering
+              Install Adunata
             </p>
             <p className="text-xs text-font-secondary">
               Add to home screen for the best experience

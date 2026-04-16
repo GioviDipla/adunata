@@ -1,4 +1,4 @@
-# Decision Log — The Gathering
+# Decision Log — Adunata
 
 Questo file viene aggiornato automaticamente da Claude Code durante lo sviluppo.
 Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.

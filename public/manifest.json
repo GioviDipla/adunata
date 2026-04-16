@@ -1,6 +1,6 @@
 {
-  "name": "The Gathering",
-  "short_name": "Gathering",
+  "name": "Adunata",
+  "short_name": "Adunata",
   "description": "Your Magic: The Gathering companion",
   "start_url": "/",
   "display": "standalone",

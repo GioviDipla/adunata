@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Scryfall API client for The Gathering
+// Scryfall API client for Adunata
 // ---------------------------------------------------------------------------
 
 import type { Database } from '@/types/supabase'

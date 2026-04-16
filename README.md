@@ -1,4 +1,4 @@
-# The Gathering
+# Adunata
 
 A web platform for Magic: The Gathering players. Browse cards, build decks, test opening hands, and prepare for future multiplayer features.
 

@@ -1,4 +1,4 @@
-# Passi Manuali — The Gathering
+# Passi Manuali — Adunata
 
 Questo file raccoglie tutto ciò che richiede un'azione da parte tua.
 Claude Code lo aggiorna durante lo sviluppo ogni volta che incontra un prerequisito esterno.

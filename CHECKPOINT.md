@@ -1,4 +1,4 @@
-# Checkpoint — The Gathering
+# Checkpoint — Adunata
 
 Stato: **COMPLETATO**
 

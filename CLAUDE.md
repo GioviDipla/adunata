@@ -1,4 +1,4 @@
-# Istruzioni operative — The Gathering
+# Istruzioni operative — Adunata
 
 ## Comportamento richiesto
 
