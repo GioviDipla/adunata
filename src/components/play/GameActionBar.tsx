@@ -91,12 +91,10 @@ export default function GameActionBar({
               className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-cell py-2 text-font-secondary disabled:opacity-30">
               <Layers size={16} /><span className="text-[8px] font-bold">DRAW</span>
             </button>
-            {mode !== 'goldfish' && (
-              <button onClick={onPassPriority}
-                className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-green py-2 text-font-white">
-                <SkipForward size={16} /><span className="text-[8px] font-bold">OK</span>
-              </button>
-            )}
+            <button onClick={onPassPriority}
+              className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-green py-2 text-font-white">
+              <SkipForward size={16} /><span className="text-[8px] font-bold">{mode === 'goldfish' ? 'NEXT' : 'OK'}</span>
+            </button>
             {mode !== 'goldfish' && autoPass !== undefined && onToggleAutoPass && (
               <button onClick={onToggleAutoPass}
                 className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-2 ${
