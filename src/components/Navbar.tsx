@@ -13,6 +13,7 @@ import {
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
+  Info,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
@@ -79,8 +80,24 @@ export function Navbar() {
           })}
         </nav>
 
-        {/* Collapse toggle */}
+        {/* About / info link */}
         <div className="mt-auto border-t border-border px-3 py-2">
+          <Link
+            href="/about"
+            className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium transition-colors ${
+              isActive('/about')
+                ? 'bg-bg-accent/10 text-font-accent'
+                : 'text-font-secondary hover:bg-bg-hover hover:text-font-primary'
+            }`}
+            title="Info su Adunata"
+          >
+            <Info className="h-5 w-5 shrink-0" />
+            {!collapsed && 'Info'}
+          </Link>
+        </div>
+
+        {/* Collapse toggle */}
+        <div className="border-t border-border px-3 py-2">
           <button
             onClick={toggle}
             className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary`}
