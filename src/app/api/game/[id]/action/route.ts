@@ -9,13 +9,17 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const steps: string[] = []
   try {
   const { id: lobbyId } = await params
-  console.log('[ACTION] start, lobbyId:', lobbyId)
+  steps.push('lobbyId:' + lobbyId)
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  console.log('[ACTION] authed user:', user.id)
+  steps.push('supabase created')
+  const authResult = await supabase.auth.getUser()
+  steps.push('auth:' + (authResult.error?.message ?? 'ok'))
+  const user = authResult.data?.user
+  if (!user) { console.log('[ACTION FAIL]', steps.join(' | ')); return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  steps.push('user:' + user.id)
 
   // Verify user is a player in this lobby
   const { data: myPlayer } = await supabase
@@ -26,14 +30,17 @@ export async function POST(
     .single()
 
   if (!myPlayer) {
+    console.log('[ACTION FAIL]', steps.join(' | '))
     return NextResponse.json({ error: 'Not a player in this game' }, { status: 403 })
   }
+  steps.push('player verified')
 
   const action: GameAction = await request.json()
-  console.log('[ACTION] type:', action.type, 'player:', action.playerId)
+  steps.push('action:' + action.type)
 
   // Ensure action.playerId matches authenticated user
   if (action.playerId !== user.id) {
+    console.log('[ACTION FAIL]', steps.join(' | '))
     return NextResponse.json({ error: 'Player ID mismatch' }, { status: 403 })
   }
 
@@ -47,9 +54,10 @@ export async function POST(
     .single()
 
   if (!gameStateRow) {
+    console.log('[ACTION FAIL]', steps.join(' | '))
     return NextResponse.json({ error: 'Game not found' }, { status: 404 })
   }
-  console.log('[ACTION] got game state, seq:', (gameStateRow.state_data as Record<string, unknown>)?.lastActionSeq)
+  steps.push('state seq:' + (gameStateRow.state_data as Record<string, unknown>)?.lastActionSeq)
 
   const currentState = gameStateRow.state_data as unknown as GameState
 
@@ -201,7 +209,7 @@ export async function POST(
 
   return NextResponse.json({ error: 'Action conflict, please retry' }, { status: 409 })
   } catch (err) {
-    console.error('[action route crash]', err)
+    console.error('[ACTION CRASH] steps:', steps.join(' | '), 'error:', String(err))
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
