@@ -334,6 +334,15 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     })
   }, [])
 
+  const handleAddCardWithSave = useCallback(async (card: CardRow, board: string) => {
+    handleCardAdded(card, board)
+    await fetch(`/api/decks/${deck.id}/cards`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ card_id: card.id, quantity: 1, board }),
+    })
+  }, [deck.id, handleCardAdded])
+
   async function saveName() {
     if (!editingName.trim()) return
     setDeckName(editingName)
@@ -539,7 +548,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                     tokenSearchResults.map((card) => (
                       <button
                         key={card.id}
-                        onClick={() => handleCardAdded(card, 'tokens')}
+                        onClick={() => handleAddCardWithSave(card, 'tokens')}
                         className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover border-b border-border/30 last:border-0"
                       >
                         {card.image_small && (
