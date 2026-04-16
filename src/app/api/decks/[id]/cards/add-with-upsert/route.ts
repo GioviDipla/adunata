@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(
   request: NextRequest,
@@ -31,18 +32,24 @@ export async function POST(
     return NextResponse.json({ error: 'scryfall_id and card_data required' }, { status: 400 })
   }
 
-  // Check if card already exists by scryfall_id
-  let { data: existingCard } = await supabase
+  // Admin client bypasses RLS for inserting into the global `cards` table
+  // (users can't insert there, but upserting Scryfall metadata is safe — the
+  // fields are server-validated card data keyed by UNIQUE scryfall_id).
+  const admin = createAdminClient()
+
+  // Check if card already exists by scryfall_id (read via admin to avoid
+  // RLS-filtered empty results; cards are publicly readable anyway).
+  let { data: existingCard } = await admin
     .from('cards')
     .select('id')
     .eq('scryfall_id', scryfall_id)
-    .single()
+    .maybeSingle()
 
   if (!existingCard) {
-    // Insert the card
-    const { data: newCard, error: insertError } = await supabase
+    // Upsert on scryfall_id to tolerate concurrent inserts (UNIQUE index).
+    const { data: upserted, error: insertError } = await admin
       .from('cards')
-      .insert({
+      .upsert({
         scryfall_id,
         name: card_data.name,
         mana_cost: card_data.mana_cost ?? null,
@@ -62,36 +69,41 @@ export async function POST(
         toughness: card_data.toughness ?? null,
         keywords: card_data.keywords ?? null,
         layout: card_data.layout ?? null,
-      })
+      }, { onConflict: 'scryfall_id' })
       .select('id')
       .single()
 
-    if (insertError || !newCard) {
+    if (insertError || !upserted) {
       return NextResponse.json({ error: insertError?.message ?? 'Failed to insert card' }, { status: 500 })
     }
-    existingCard = newCard
+    existingCard = upserted
   }
 
   const cardId = existingCard.id
 
-  // Check if already in deck
   const { data: existingDeckCard } = await supabase
     .from('deck_cards')
     .select('id, quantity')
     .eq('deck_id', deckId)
     .eq('card_id', cardId)
     .eq('board', board)
-    .single()
+    .maybeSingle()
 
   if (existingDeckCard) {
-    await supabase
+    const { error: updateError } = await supabase
       .from('deck_cards')
       .update({ quantity: existingDeckCard.quantity + 1 })
       .eq('id', existingDeckCard.id)
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
   } else {
-    await supabase
+    const { error: deckInsertError } = await supabase
       .from('deck_cards')
       .insert({ deck_id: deckId, card_id: cardId, quantity: 1, board })
+    if (deckInsertError) {
+      return NextResponse.json({ error: deckInsertError.message }, { status: 500 })
+    }
   }
 
   await supabase

@@ -36,7 +36,7 @@ export default async function GoldfishPage({
       .from('deck_cards')
       .select(`id, card_id, quantity, board, created_at, card:cards!card_id(*)`)
       .eq('deck_id', id)
-      .in('board', ['main', 'commander']),
+      .in('board', ['main', 'commander', 'tokens']),
   ])
 
   if (deckError || !deck) redirect('/decks')
@@ -55,6 +55,7 @@ export default async function GoldfishPage({
 
   for (const dc of (deckCards ?? []) as unknown as DeckCardFromDB[]) {
     if (!dc.card) continue
+    if (dc.board === 'tokens') continue // tokens are handled separately in deckTokensList
     const card = dc.card
 
     if (dc.board === 'commander') {

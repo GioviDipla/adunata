@@ -408,53 +408,6 @@ export interface Database {
         }
         Relationships: []
       }
-      deck_tokens: {
-        Row: {
-          id: string
-          deck_id: string
-          name: string
-          power: string | null
-          toughness: string | null
-          colors: string[]
-          type_line: string
-          keywords: string[]
-          image_url: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          deck_id: string
-          name: string
-          power?: string | null
-          toughness?: string | null
-          colors?: string[]
-          type_line?: string
-          keywords?: string[]
-          image_url?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          deck_id?: string
-          name?: string
-          power?: string | null
-          toughness?: string | null
-          colors?: string[]
-          type_line?: string
-          keywords?: string[]
-          image_url?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "deck_tokens_deck_id_fkey"
-            columns: ["deck_id"]
-            isOneToOne: false
-            referencedRelation: "decks"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
       sync_metadata: {
         Row: {
           key: string
