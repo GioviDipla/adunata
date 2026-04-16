@@ -31,9 +31,9 @@ export const CARD_DETAIL_COLUMNS =
 /** Deck picker / combobox (Play page, Add to Deck). */
 export const DECK_PICKER_COLUMNS = 'id, name, format'
 
-/** Deck list page / profile. card_count is denormalized on the row. */
+/** Deck list page / profile. */
 export const DECK_LIST_COLUMNS =
-  'id, name, format, visibility, cover_card_id, card_count, updated_at, user_id'
+  'id, name, format, visibility, cover_card_id, updated_at, user_id'
 
 /** Full deck view — everything needed by DeckEditor / DeckView. */
 export const DECK_DETAIL_COLUMNS =

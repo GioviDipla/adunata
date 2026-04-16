@@ -5,12 +5,19 @@ import { Plus, Upload, Clock, Layers } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 
-interface DeckCover {
-  card_id: string | null
-  card_name: string | null
-  image_small: string | null
-  image_normal: string | null
-  image_art_crop: string | null
+interface DeckRow {
+  id: string
+  name: string
+  format: string
+  updated_at: string
+  card_count: number
+  cover: {
+    card_id: string | null
+    card_name: string | null
+    image_small: string | null
+    image_normal: string | null
+    image_art_crop: string | null
+  } | null
 }
 
 export default async function DecksPage() {
@@ -19,33 +26,67 @@ export default async function DecksPage() {
 
   const supabase = await createClient()
 
-  // card_count is denormalized on the decks row and kept in sync by the
-  // sync_deck_card_count trigger — pure column read, no aggregate.
-  // Cover thumbnails are fetched in parallel via the existing RPC.
-  const [{ data: decks }, { data: covers }] = await Promise.all([
-    supabase
-      .from('decks')
-      .select('id, name, format, card_count, updated_at')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false }),
-    supabase.rpc('get_deck_covers', { p_user_id: user.id }),
-  ])
+  // Single aggregated RPC: one row per deck with metadata + card_count + cover.
+  // Avoids shipping every deck_cards row to the client just to sum quantity.
+  const { data: summary, error: summaryError } = await supabase.rpc(
+    'get_my_decks_summary',
+    { p_user_id: user.id },
+  )
 
-  const coverByDeckId = new Map<string, DeckCover>()
-  for (const row of covers ?? []) {
-    coverByDeckId.set(row.deck_id, {
-      card_id: row.card_id,
-      card_name: row.card_name,
-      image_small: row.image_small,
-      image_normal: row.image_normal,
-      image_art_crop: row.image_art_crop,
-    })
+  let decksWithCount: DeckRow[] = []
+
+  if (!summaryError && summary) {
+    decksWithCount = summary.map((row) => ({
+      id: row.deck_id,
+      name: row.name,
+      format: row.format,
+      updated_at: row.updated_at,
+      card_count: Number(row.card_count ?? 0),
+      cover: row.cover_card_id
+        ? {
+            card_id: row.cover_card_id,
+            card_name: row.cover_name,
+            image_small: row.cover_image_small,
+            image_normal: row.cover_image_normal,
+            image_art_crop: row.cover_image_art_crop,
+          }
+        : null,
+    }))
+  } else {
+    // Fallback path: used if the RPC migration hasn't been applied yet.
+    // Same data, more round-trips. Remove once the migration is live in prod.
+    const [{ data: decks }, { data: covers }] = await Promise.all([
+      supabase
+        .from('decks')
+        .select('id, name, format, updated_at, deck_cards(quantity)')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false }),
+      supabase.rpc('get_deck_covers', { p_user_id: user.id }),
+    ])
+
+    const coverByDeckId = new Map<string, DeckRow['cover']>()
+    for (const row of covers ?? []) {
+      coverByDeckId.set(row.deck_id, {
+        card_id: row.card_id,
+        card_name: row.card_name,
+        image_small: row.image_small,
+        image_normal: row.image_normal,
+        image_art_crop: row.image_art_crop,
+      })
+    }
+
+    decksWithCount = (decks ?? []).map((deck) => ({
+      id: deck.id,
+      name: deck.name,
+      format: deck.format,
+      updated_at: deck.updated_at,
+      card_count: (deck.deck_cards as { quantity: number }[])?.reduce(
+        (sum: number, dc: { quantity: number }) => sum + dc.quantity,
+        0,
+      ) ?? 0,
+      cover: coverByDeckId.get(deck.id) ?? null,
+    }))
   }
-
-  const decksWithCount = (decks ?? []).map((deck) => ({
-    ...deck,
-    cover: coverByDeckId.get(deck.id) ?? null,
-  }))
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">

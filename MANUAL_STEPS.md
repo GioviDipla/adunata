@@ -49,19 +49,14 @@ Client ID + Secret configurati nel pannello Supabase → Authentication → Prov
 
 ## Step ancora aperti
 
-### [STEP_PERF_DECKS] — Applicare migration `decks_card_count_denorm`
-Quando: **prima del prossimo deploy Vercel** — il codice della pagina `/decks` legge già la colonna `card_count` direttamente; se la colonna non esiste nel DB, la pagina va in errore 500.
+### [STEP_PERF_DECKS] — Applicare migration `get_my_decks_summary`
+Quando: **appena possibile**, per rendere veloce la pagina `/decks`.
 
-Cosa fare: applicare il contenuto di `supabase/migrations/20260416240000_decks_card_count_denorm.sql` al DB (Supabase Dashboard → SQL Editor → incolla tutto → Run).
+Cosa fare: applicare il contenuto di `supabase/migrations/20260416230000_deck_summary_rpc.sql` al DB (via Supabase Dashboard → SQL Editor, oppure via MCP plugin).
 
-Che cosa fa la migration:
-1. Aggiunge `decks.card_count integer NOT NULL DEFAULT 0`.
-2. Backfilla tutti i deck esistenti con `SUM(quantity)` sui board `main` + `commander`.
-3. Crea il trigger `sync_deck_card_count_trg` su `deck_cards` (INSERT/UPDATE/DELETE) che mantiene `card_count` in sync ad ogni modifica.
+Effetto: la pagina `/decks` passa da 2 query + join con tutte le righe `deck_cards` → 1 RPC aggregata in un solo round-trip. Finché la migration non è applicata, il codice ha un fallback sulla vecchia query (funziona lo stesso, ma lento — è lo stato attuale).
 
-Effetto: la pagina `/decks` fa una `SELECT id, name, format, card_count, updated_at FROM decks` — zero aggregate, lettura pura. Istantanea.
-
-Nota: la vecchia RPC `get_my_decks_summary` (migration precedente) rimane nel DB ma non è più chiamata dal codice. Si può droppare se fastidiosa: `DROP FUNCTION public.get_my_decks_summary(uuid);`.
+Dopo aver applicato: verificare che `/decks` carichi veloce, poi rimuovere il blocco fallback in `src/app/(app)/decks/page.tsx`.
 
 ### [STEP 10] — Apple OAuth (opzionale)
 Quando: se vuoi aggiungere il login con Apple ID.

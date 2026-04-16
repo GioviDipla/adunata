@@ -150,7 +150,6 @@ export interface Database {
           format: string
           visibility: string
           cover_card_id: number | null
-          card_count: number
           created_at: string
           updated_at: string
         }
@@ -162,7 +161,6 @@ export interface Database {
           format: string
           visibility?: string
           cover_card_id?: number | null
-          card_count?: number
           created_at?: string
           updated_at?: string
         }
@@ -174,7 +172,6 @@ export interface Database {
           format?: string
           visibility?: string
           cover_card_id?: number | null
-          card_count?: number
           created_at?: string
           updated_at?: string
         }
