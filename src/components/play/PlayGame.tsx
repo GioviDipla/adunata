@@ -209,13 +209,12 @@ export default function PlayGame(props: PlayGameProps) {
     })
   }, [mode])
 
-  // Fetch deck tokens for token creator
+  // Fetch deck tokens for token creator (from deck_cards with board='tokens')
   useEffect(() => {
     if (mode !== 'multiplayer') return
     let cancelled = false
     async function fetchDeckTokens() {
       try {
-        // Get the user's deck_id from game_players
         const supabase = createClient()
         const { data: lobbyPlayer } = await supabase
           .from('game_players')
@@ -224,19 +223,30 @@ export default function PlayGame(props: PlayGameProps) {
           .eq('user_id', userId)
           .single()
         if (!lobbyPlayer?.deck_id || cancelled) return
-        const res = await fetch(`/api/decks/${lobbyPlayer.deck_id}/tokens`)
-        if (res.ok && !cancelled) {
-          const data = await res.json()
-          setDeckTokens(data.map((t: Record<string, unknown>) => ({
-            name: t.name as string,
-            power: (t.power ?? '') as string,
-            toughness: (t.toughness ?? '') as string,
-            colors: (t.colors ?? []) as string[],
-            typeLine: (t.type_line ?? 'Token Creature') as string,
-            keywords: (t.keywords ?? []) as string[],
-          })))
+        const { data: tokenCards } = await supabase
+          .from('deck_cards')
+          .select('card:cards!card_id(*)')
+          .eq('deck_id', lobbyPlayer.deck_id)
+          .eq('board', 'tokens')
+        if (tokenCards && !cancelled) {
+          const mapped = tokenCards
+            .filter((tc: Record<string, unknown>) => tc.card != null)
+            .map((tc: Record<string, unknown>) => {
+              const c = tc.card as Record<string, unknown>
+              return {
+                name: c.name as string,
+                power: (c.power ?? '') as string,
+                toughness: (c.toughness ?? '') as string,
+                colors: (c.colors ?? []) as string[],
+                typeLine: (c.type_line ?? 'Token Creature') as string,
+                keywords: (c.keywords ?? []) as string[],
+                imageSmall: (c.image_small ?? null) as string | null,
+                imageNormal: (c.image_normal ?? null) as string | null,
+              }
+            })
+          setDeckTokens(mapped)
         }
-      } catch { /* ignore - deck_tokens table may not exist yet */ }
+      } catch { /* ignore */ }
     }
     fetchDeckTokens()
     return () => { cancelled = true }
