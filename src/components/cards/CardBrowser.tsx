@@ -10,7 +10,13 @@ import CardDetail from './CardDetail'
 
 type Card = Database['public']['Tables']['cards']['Row']
 
-const PAGE_SIZE = 80
+const PAGE_SIZE = 40
+
+// Columns needed by CardGrid/CardItem + all filters. Heavy jsonb
+// (legalities, card_faces, all_parts) and oracle_text are fetched
+// lazily by CardDetail when a card is opened.
+const GRID_COLUMNS =
+  'id, name, mana_cost, type_line, image_small, image_normal, prices_usd, cmc, rarity, set_code, color_identity, colors, keywords, released_at'
 
 const CARD_TYPES = [
   'Creature', 'Instant', 'Sorcery', 'Enchantment',
@@ -51,9 +57,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const [cards, setCards] = useState<Card[]>(initialCards)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  // No "Load More" on the unfiltered landing view — the initial 80 cards are enough.
-  // Paging kicks in only when filters/search are active.
-  const [hasMore, setHasMore] = useState(false)
+  const [hasMore, setHasMore] = useState(initialCards.length === PAGE_SIZE)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [showFilters, setShowFilters] = useState(false)
 
@@ -77,7 +81,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     (offset: number) => {
       let query = supabase
         .from('cards')
-        .select('*')
+        .select(GRID_COLUMNS)
         .range(offset, offset + PAGE_SIZE - 1)
 
       if (debouncedSearch.trim()) {
@@ -159,7 +163,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
       }
 
       if (data && data.length > 0) {
-        setCards(data)
+        setCards(data as unknown as Card[])
         setHasMore(data.length === PAGE_SIZE)
         setLoading(false)
         return
@@ -183,7 +187,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
       }
 
       if (!cancelled) {
-        setCards(data ?? [])
+        setCards((data ?? []) as unknown as Card[])
         setHasMore(false)
         setLoading(false)
       }
@@ -198,7 +202,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
       fetchCards()
     } else {
       setCards(initialCards)
-      setHasMore(false)
+      setHasMore(initialCards.length === PAGE_SIZE)
       setLoading(false)
     }
 
@@ -211,7 +215,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     const { data, error } = await buildQuery(cards.length)
     if (error) console.error('Error loading more:', error)
     else {
-      setCards((prev) => [...prev, ...(data || [])])
+      setCards((prev) => [...prev, ...((data || []) as unknown as Card[])])
       setHasMore((data || []).length === PAGE_SIZE)
     }
     setLoadingMore(false)

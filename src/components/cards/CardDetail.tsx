@@ -59,11 +59,28 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   const cardFaces = displayCard.card_faces as CardFace[] | null
   const isDoubleFaced = cardFaces && cardFaces.length > 1
 
-  // Reset when card prop changes
+  // Reset when card prop changes; lazily hydrate heavy fields
+  // (oracle_text, legalities, card_faces, power, toughness, set_name,
+  // collector_number, prices_eur*, prices_usd_foil) only when the
+  // detail modal actually opens — the grid query omits them.
   useEffect(() => {
     setDisplayCard(card)
     setPrintings([])
     setShowPrintings(false)
+
+    if (card.legalities !== undefined) return
+    let aborted = false
+    ;(async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('id', card.id)
+        .single()
+      if (aborted || !data) return
+      setDisplayCard(data as Card)
+    })()
+    return () => { aborted = true }
   }, [card])
 
   // Fallback: if parent didn't pre-fetch (e.g. CardDetail used outside /cards),
