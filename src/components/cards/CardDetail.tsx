@@ -64,6 +64,30 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     setShowPrintings(false)
   }, [card])
 
+  // Preload user's decks on mount so the picker opens instantly.
+  // Uses getSession() (local, no network) instead of getUser() (JWT verify round-trip).
+  useEffect(() => {
+    let aborted = false
+    const supabase = createClient()
+    setLoadingDecks(true)
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user || aborted) {
+        if (!aborted) setLoadingDecks(false)
+        return
+      }
+      const { data } = await supabase
+        .from('decks')
+        .select('id, name, format')
+        .eq('user_id', session.user.id)
+        .order('updated_at', { ascending: false })
+      if (aborted) return
+      setMyDecks((data as DeckSummary[]) ?? [])
+      setLoadingDecks(false)
+    })()
+    return () => { aborted = true }
+  }, [])
+
   async function loadPrintings() {
     if (printings.length > 0) {
       setShowPrintings(!showPrintings)
@@ -90,27 +114,8 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     onPrintingSelect?.(printing)
   }
 
-  async function toggleDeckPicker() {
-    if (showDeckPicker) {
-      setShowDeckPicker(false)
-      return
-    }
-    setShowDeckPicker(true)
-    if (myDecks.length > 0) return // already loaded
-    setLoadingDecks(true)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data } = await supabase
-          .from('decks')
-          .select('id, name, format')
-          .eq('user_id', user.id)
-          .order('updated_at', { ascending: false })
-        setMyDecks((data as DeckSummary[]) ?? [])
-      }
-    } catch { /* ignore */ }
-    setLoadingDecks(false)
+  function toggleDeckPicker() {
+    setShowDeckPicker((v) => !v)
   }
 
   async function addCardToDeck(deckId: string) {
