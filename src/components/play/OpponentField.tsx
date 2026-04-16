@@ -117,7 +117,7 @@ function OpponentCard({
       className={`relative overflow-hidden rounded border transition-transform ${
         card.tapped ? 'rotate-90 border-font-muted' : 'border-border'
       } ${card.attacking ? 'ring-1 ring-bg-red' : ''} ${card.highlighted === 'red' ? 'ring-2 ring-bg-red' : ''}`}
-      style={size}
+      style={{ ...size, touchAction: 'manipulation' }}
       title={data?.name ?? 'Unknown'}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}

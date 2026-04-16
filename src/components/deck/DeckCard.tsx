@@ -115,6 +115,7 @@ export default function DeckCard({
       onPointerCancel={onMoveToBoard ? longPress.onPointerCancel : undefined}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
+      style={{ touchAction: 'manipulation' }}
     >
       {/* Quantity controls */}
       <div className="flex items-center gap-0.5 sm:gap-1">

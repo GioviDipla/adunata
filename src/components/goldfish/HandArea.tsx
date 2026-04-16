@@ -69,6 +69,7 @@ function HandCardButton({
         height: 100,
         marginLeft: index > 0 ? -8 : 0,
         zIndex: index,
+        touchAction: 'manipulation',
       }}
       title={`${hc.card.name} — tap to ${selectable ? 'select' : 'play'}, hold to preview`}
     >

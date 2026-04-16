@@ -98,7 +98,7 @@ export default function DeckGridView({
             onPointerUp={() => longPress.cancel()}
             onPointerLeave={() => longPress.cancel()}
             onPointerCancel={() => longPress.cancel()}
-            style={{ touchAction: onMoveToBoard ? 'none' : undefined }}
+            style={{ touchAction: 'manipulation' }}
           >
             {/* Card image */}
             {entry.card.image_normal ? (

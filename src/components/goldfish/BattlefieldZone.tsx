@@ -58,7 +58,7 @@ function BattlefieldCardButton({
           ? 'rotate-90 border-font-muted'
           : 'border-border hover:border-bg-accent'
       }`}
-      style={{ width: 68, height: 95 }}
+      style={{ width: 68, height: 95, touchAction: 'manipulation' }}
       title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''} — hold to preview, right-click for options`}
     >
       {bc.card.image_small ? (

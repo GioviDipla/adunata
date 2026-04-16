@@ -67,7 +67,7 @@ function ZoneCard({
         onPointerLeave={handlePointerUp}
         onPointerCancel={handlePointerUp}
         className="w-full overflow-hidden rounded-lg border border-border select-none"
-        style={{ touchAction: 'none' }}
+        style={{ touchAction: 'manipulation' }}
       >
         {entry.card.image_small ? (
           <img

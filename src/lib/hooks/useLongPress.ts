@@ -29,6 +29,8 @@ export function useLongPress({ onLongPress, delay = 500 }: UseLongPressOptions) 
     onPointerUp: cancel,
     onPointerLeave: cancel,
     onPointerCancel: cancel,
+    /** Allows scroll/pinch-zoom while keeping pointer events for long-press */
+    style: { touchAction: 'manipulation' as const },
     /** true if the long press fired — use to suppress the click */
     wasLongPress: () => triggered.current,
   }
