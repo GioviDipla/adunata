@@ -126,46 +126,70 @@ export async function POST(
     return NextResponse.json({ state: updatedState, seq: newSeq })
   }
 
-  // Apply action through the engine
-  let newState = applyAction(currentState, action)
+  // Apply action with optimistic concurrency control (retry on stale state)
+  let retries = 0
+  let stateToProcess = currentState
+  while (retries < 3) {
+    const expectedSeq = stateToProcess.lastActionSeq
 
-  // Auto-pass loop: chain pass_priority for players with autoPass enabled
-  let autoPassCount = 0
-  while (
-    autoPassCount < 50 &&
-    newState.priorityPlayerId &&
-    newState.players[newState.priorityPlayerId]?.autoPass &&
-    !newState.pendingCommanderChoice &&
-    !newState.mulliganStage &&
-    !newState.players[newState.priorityPlayerId]?.revealedCards
-  ) {
-    const autoAction: GameAction = {
-      type: 'pass_priority',
-      playerId: newState.priorityPlayerId,
-      data: {},
-      text: 'Auto-pass',
+    // Apply action through the engine
+    let newState = applyAction(stateToProcess, action)
+
+    // Auto-pass loop: chain pass_priority for players with autoPass enabled
+    let autoPassCount = 0
+    while (
+      autoPassCount < 50 &&
+      newState.priorityPlayerId &&
+      newState.players[newState.priorityPlayerId]?.autoPass &&
+      !newState.pendingCommanderChoice &&
+      !newState.mulliganStage &&
+      !newState.players[newState.priorityPlayerId]?.revealedCards
+    ) {
+      newState = applyAction(newState, {
+        type: 'pass_priority',
+        playerId: newState.priorityPlayerId,
+        data: {},
+        text: 'Auto-pass',
+      })
+      autoPassCount++
     }
-    newState = applyAction(newState, autoAction)
-    autoPassCount++
+
+    // Batch log insert + state update via RPC with OCC check
+    const { data: rpcResult, error: rpcError } = await admin.rpc('process_game_action', {
+      p_lobby_id: lobbyId,
+      p_player_id: action.playerId,
+      p_action: action.type,
+      p_action_data: (action.data ?? null) as Json,
+      p_action_text: action.text,
+      p_action_seq: newState.lastActionSeq,
+      p_new_state: newState as unknown as Json,
+      p_turn_number: newState.turn,
+      p_active_player_id: newState.activePlayerId,
+      p_phase: newState.phase,
+      p_expected_seq: expectedSeq,
+    })
+
+    if (rpcError) {
+      return NextResponse.json({ error: rpcError.message }, { status: 500 })
+    }
+
+    // Check for stale state conflict
+    const result = rpcResult as { error?: string; ok?: boolean } | null
+    if (result?.error === 'stale_state') {
+      // Re-read fresh state and retry
+      const { data: freshRow } = await admin
+        .from('game_states')
+        .select('*')
+        .eq('lobby_id', lobbyId)
+        .single()
+      if (!freshRow) return NextResponse.json({ error: 'Game not found' }, { status: 404 })
+      stateToProcess = freshRow.state_data as unknown as GameState
+      retries++
+      continue
+    }
+
+    return NextResponse.json({ state: newState, seq: newState.lastActionSeq })
   }
 
-  // Batch log insert + state update via RPC
-  const { error: rpcError } = await admin.rpc('process_game_action', {
-    p_lobby_id: lobbyId,
-    p_player_id: action.playerId,
-    p_action: action.type,
-    p_action_data: (action.data ?? null) as Json,
-    p_action_text: action.text,
-    p_action_seq: newState.lastActionSeq,
-    p_new_state: newState as unknown as Json,
-    p_turn_number: newState.turn,
-    p_active_player_id: newState.activePlayerId,
-    p_phase: newState.phase,
-  })
-
-  if (rpcError) {
-    return NextResponse.json({ error: rpcError.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ state: newState, seq: newState.lastActionSeq })
+  return NextResponse.json({ error: 'Action conflict, please retry' }, { status: 409 })
 }

@@ -541,6 +541,7 @@ export interface Database {
           p_active_player_id: string
           p_phase: string
           p_log_type?: string
+          p_expected_seq?: number
         }
         Returns: Json
       }
