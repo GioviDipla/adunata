@@ -92,7 +92,7 @@ export function Navbar() {
             title="Info su Adunata"
           >
             <Info className="h-5 w-5 shrink-0" />
-            {!collapsed && 'Info'}
+            {!collapsed && 'Leggi qui!'}
           </Link>
         </div>
 
