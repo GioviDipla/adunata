@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 html, body {
-  height: 100dvh;
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
