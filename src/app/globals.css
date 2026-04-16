@@ -26,16 +26,24 @@ img {
   user-select: none;
 }
 
-/* Mobile bottom navbar: hide smoothly when virtual keyboard is open */
+/* Mobile bottom navbar.
+   iOS Safari's address bar shrinks smoothly as the user scrolls, but
+   position:fixed is anchored to the layout viewport (static) not the
+   visual viewport, so a plain `bottom: 0` nav ends up floating above
+   the bottom edge during scroll. MobileViewportFix writes the current
+   visual-viewport bottom inset into --vv-bottom-inset via rAF, and
+   `bottom: var(--vv-bottom-inset)` keeps the nav glued to the visible
+   bottom edge frame-by-frame. */
+.mobile-navbar {
+  bottom: var(--vv-bottom-inset, 0px);
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.15s ease-out;
+  will-change: transform, bottom;
+}
+
 body.keyboard-open .mobile-navbar {
   transform: translate3d(0, 100%, 0);
   pointer-events: none;
-}
-
-.mobile-navbar {
-  transform: translate3d(0, 0, 0);
-  transition: transform 0.15s ease-out;
-  will-change: transform;
 }
 
 @theme {
