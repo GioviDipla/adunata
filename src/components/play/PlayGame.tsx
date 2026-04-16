@@ -1066,8 +1066,10 @@ export default function PlayGame(props: PlayGameProps) {
         </div>
       </div>
 
-      {/* Game Log */}
-      <GameLog entries={log} myUserId={userId} onSendChat={isGoldfish ? undefined : handleSendChat} />
+      {/* Game Log — multiplayer only */}
+      {!isGoldfish && (
+        <GameLog entries={log} myUserId={userId} onSendChat={handleSendChat} />
+      )}
 
       {/* Hand + Commander Zone */}
       <div className="border-t border-border bg-bg-card px-3 py-2">
