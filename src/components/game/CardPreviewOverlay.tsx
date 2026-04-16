@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   Play,
   Trash2,
@@ -77,6 +78,86 @@ function ActionBtn({
   )
 }
 
+const QUICK_COUNTERS = ['+1/+1', '-1/-1', 'Loyalty', 'Charge']
+
+function CounterSection({
+  counters,
+  onAdd,
+  onRemove,
+}: {
+  counters: { name: string; value: number }[]
+  onAdd: (name: string) => void
+  onRemove: (name: string) => void
+}) {
+  const [customName, setCustomName] = useState('')
+
+  return (
+    <div className="w-full rounded-xl bg-bg-surface p-2">
+      <p className="text-[10px] font-bold text-font-muted mb-1">COUNTERS</p>
+      {counters.map((c) => (
+        <div key={c.name} className="flex items-center justify-between py-0.5">
+          <span className="text-xs text-font-primary">
+            {c.name}: {c.value}
+          </span>
+          <div className="flex gap-1">
+            <button
+              onClick={() => onRemove(c.name)}
+              className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
+            >
+              -
+            </button>
+            <button
+              onClick={() => onAdd(c.name)}
+              className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      ))}
+      {/* Quick-add buttons for common counter types */}
+      <div className="flex flex-wrap gap-1 mt-1.5">
+        {QUICK_COUNTERS.filter(qc => !counters.some(c => c.name === qc)).map((qc) => (
+          <button
+            key={qc}
+            onClick={() => onAdd(qc)}
+            className="rounded bg-bg-cell px-2 py-1 text-[10px] font-medium text-font-secondary active:bg-bg-hover"
+          >
+            + {qc}
+          </button>
+        ))}
+      </div>
+      {/* Custom counter name input */}
+      <div className="flex gap-1 mt-1.5">
+        <input
+          type="text"
+          value={customName}
+          onChange={(e) => setCustomName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && customName.trim()) {
+              onAdd(customName.trim())
+              setCustomName('')
+            }
+          }}
+          placeholder="Custom counter..."
+          className="flex-1 rounded bg-bg-cell px-2 py-1 text-[10px] text-font-primary placeholder:text-font-muted outline-none"
+        />
+        <button
+          onClick={() => {
+            if (customName.trim()) {
+              onAdd(customName.trim())
+              setCustomName('')
+            }
+          }}
+          className="rounded bg-bg-accent px-2 py-1 text-[10px] font-bold text-font-white"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Universal card preview overlay — action hub for ALL card interactions.
  * The caller decides which actions to provide; this component renders them all in a grid.
@@ -131,7 +212,7 @@ export default function CardPreviewOverlay({
   }
 
   const displayCounters = counters ?? preview.counters
-  const showCounters = !readOnly && id && displayCounters && displayCounters.length > 0 && onAddCounter
+  const showCounters = !readOnly && id && onAddCounter
 
   return (
     <div
@@ -189,39 +270,11 @@ export default function CardPreviewOverlay({
 
         {/* Counter section */}
         {showCounters && (
-          <div className="w-full rounded-xl bg-bg-surface p-2">
-            <p className="text-[10px] font-bold text-font-muted mb-1">COUNTERS</p>
-            {displayCounters.map((c) => (
-              <div key={c.name} className="flex items-center justify-between py-0.5">
-                <span className="text-xs text-font-primary">
-                  {c.name}: {c.value}
-                </span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => onRemoveCounter?.(id!, c.name)}
-                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
-                  >
-                    -
-                  </button>
-                  <button
-                    onClick={() => onAddCounter!(id!, c.name)}
-                    className="px-1.5 py-0.5 rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            ))}
-            <button
-              onClick={() => {
-                const name = prompt('Counter name (e.g. +1/+1, Loyalty, Charge):')
-                if (name?.trim() && id) onAddCounter!(id, name.trim())
-              }}
-              className="mt-1 text-[10px] text-font-accent hover:underline"
-            >
-              + Add Counter
-            </button>
-          </div>
+          <CounterSection
+            counters={displayCounters ?? []}
+            onAdd={(name) => onAddCounter!(id!, name)}
+            onRemove={(name) => onRemoveCounter?.(id!, name)}
+          />
         )}
       </div>
     </div>
