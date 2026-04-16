@@ -35,12 +35,13 @@ export function MobileViewportFix() {
         const diff = window.innerHeight - vv.height
         const keyboardOpen = diff > KEYBOARD_THRESHOLD
         document.body.classList.toggle('keyboard-open', keyboardOpen)
-        // When the keyboard is open we don't want the navbar to ride up on
-        // top of it — CSS hides the nav entirely, so the inset doesn't
-        // matter. Force 0 so the translation from the keyboard rule is clean.
+        // Negative px: shift the navbar UP by `bottomInset` so it tracks
+        // the visual viewport bottom. When the keyboard rule takes over it
+        // replaces this transform entirely (100%), so we force 0 here to
+        // avoid any combined state.
         document.documentElement.style.setProperty(
-          '--vv-bottom-inset',
-          keyboardOpen ? '0px' : `${bottomInset}px`,
+          '--vv-nav-translate',
+          keyboardOpen ? '0px' : `-${bottomInset}px`,
         )
       })
     }

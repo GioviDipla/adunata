@@ -27,18 +27,17 @@ img {
 }
 
 /* Mobile bottom navbar.
-   iOS Safari's address bar shrinks smoothly as the user scrolls, but
-   position:fixed is anchored to the layout viewport (static) not the
-   visual viewport, so a plain `bottom: 0` nav ends up floating above
-   the bottom edge during scroll. MobileViewportFix writes the current
-   visual-viewport bottom inset into --vv-bottom-inset via rAF, and
-   `bottom: var(--vv-bottom-inset)` keeps the nav glued to the visible
-   bottom edge frame-by-frame. */
+   iOS Safari's address bar shrinks smoothly during scroll, but
+   position:fixed is anchored to the layout viewport — fixed elements
+   stay glued to the static bottom and float away from the visible
+   bottom edge. MobileViewportFix writes the viewport delta each frame
+   into --vv-nav-translate (in px, negative). We apply it as `transform`
+   to stay on the compositor thread (no layout/paint), and the keyboard
+   rule fully overrides the transform to slide the nav off-screen. */
 .mobile-navbar {
-  bottom: var(--vv-bottom-inset, 0px);
-  transform: translate3d(0, 0, 0);
-  transition: transform 0.15s ease-out;
-  will-change: transform, bottom;
+  bottom: 0;
+  transform: translate3d(0, var(--vv-nav-translate, 0px), 0);
+  will-change: transform;
 }
 
 body.keyboard-open .mobile-navbar {
