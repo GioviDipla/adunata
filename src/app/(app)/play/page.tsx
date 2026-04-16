@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import CreateLobby from '@/components/play/CreateLobby'
 import JoinLobby from '@/components/play/JoinLobby'
 import ActiveLobbiesList from '@/components/play/ActiveLobbiesList'
+import GameHistoryList from '@/components/play/GameHistoryList'
 
 export default async function PlayPage() {
   const user = await getAuthenticatedUser()
@@ -37,6 +38,17 @@ export default async function PlayPage() {
       ).data ?? []
     : []
 
+  const finishedLobbies = lobbyIds.length > 0
+    ? (await supabase
+        .from('game_lobbies')
+        .select('id, name, lobby_code, winner_id, updated_at')
+        .in('id', lobbyIds)
+        .eq('status', 'finished')
+        .order('updated_at', { ascending: false })
+        .limit(50)
+      ).data ?? []
+    : []
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <h1 className="mb-6 text-2xl font-bold text-font-primary">Play</h1>
@@ -48,6 +60,9 @@ export default async function PlayPage() {
         <CreateLobby decks={decks ?? []} />
         <JoinLobby decks={decks ?? []} />
       </div>
+
+      {/* Game history */}
+      <GameHistoryList games={finishedLobbies} userId={user.id} />
     </div>
   )
 }
