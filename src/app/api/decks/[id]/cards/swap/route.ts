@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { DECK_CARD_COLUMNS } from '@/lib/supabase/columns'
 
 export async function PUT(
   request: NextRequest,
@@ -44,7 +45,7 @@ export async function PUT(
     .update({ card_id: new_card_id })
     .eq('deck_id', deckId)
     .eq('card_id', old_card_id)
-    .select('*')
+    .select(DECK_CARD_COLUMNS)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

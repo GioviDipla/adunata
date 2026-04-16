@@ -59,3 +59,6 @@ export const GAME_PLAYER_COLUMNS =
 /** game_log: replay / history. */
 export const GAME_LOG_COLUMNS =
   'id, seq, player_id, action, data, text, type, created_at'
+
+/** deck_cards: full row (all 6 columns). Returned from insert/update to the client. */
+export const DECK_CARD_COLUMNS = 'id, deck_id, card_id, quantity, board, created_at'

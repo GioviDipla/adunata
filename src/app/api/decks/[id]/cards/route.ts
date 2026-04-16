@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { DECK_CARD_COLUMNS } from '@/lib/supabase/columns'
 
 async function verifyDeckOwnership(supabase: Awaited<ReturnType<typeof createClient>>, deckId: string, userId: string) {
   const { data: deck } = await supabase
@@ -49,7 +50,7 @@ export async function POST(
       .from('deck_cards')
       .update({ quantity: existing.quantity + quantity })
       .eq('id', existing.id)
-      .select('*')
+      .select(DECK_CARD_COLUMNS)
       .single()
 
     if (error) {
@@ -69,7 +70,7 @@ export async function POST(
   const { data: deckCard, error } = await supabase
     .from('deck_cards')
     .insert({ deck_id: deckId, card_id, quantity, board })
-    .select('*')
+    .select(DECK_CARD_COLUMNS)
     .single()
 
   if (error) {
@@ -139,7 +140,7 @@ export async function PUT(
     .eq('deck_id', deckId)
     .eq('card_id', card_id)
     .eq('board', body.current_board || board || 'main')
-    .select('*')
+    .select(DECK_CARD_COLUMNS)
     .single()
 
   if (error) {
