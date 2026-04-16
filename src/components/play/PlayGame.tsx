@@ -334,7 +334,12 @@ export default function PlayGame(props: PlayGameProps) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(action),
-    }).catch(() => {})
+    }).then(async (res) => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        console.error('[sendAction] server error:', res.status, body)
+      }
+    }).catch((err) => console.error('[sendAction] network error:', err))
   }, [mode, lobbyId, props])
 
   // Derived state

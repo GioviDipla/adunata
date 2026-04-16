@@ -209,7 +209,8 @@ export async function POST(
 
   return NextResponse.json({ error: 'Action conflict, please retry' }, { status: 409 })
   } catch (err) {
-    console.error('[ACTION CRASH] steps:', steps.join(' | '), 'error:', String(err))
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    const msg = err instanceof Error ? err.message + ' | ' + err.stack?.split('\n').slice(0, 3).join(' ') : String(err)
+    console.error('[ACTION CRASH]', msg)
+    return NextResponse.json({ error: msg, steps: steps.join(' | ') }, { status: 500 })
   }
 }
