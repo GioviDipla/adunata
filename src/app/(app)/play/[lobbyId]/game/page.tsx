@@ -24,5 +24,5 @@ export default async function GamePage({ params }: { params: Promise<{ lobbyId: 
   if (!lobby || lobby.status !== 'playing') redirect('/play')
   if (!player) redirect('/play')
 
-  return <PlayGame lobbyId={lobbyId} userId={user.id} />
+  return <PlayGame mode="multiplayer" lobbyId={lobbyId} userId={user.id} />
 }

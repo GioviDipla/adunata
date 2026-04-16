@@ -15,6 +15,8 @@ import {
   createShuffleIntoLibrary, createCopyCard, createTakeControl,
 } from '@/lib/game/actions'
 import { applyAction } from '@/lib/game/engine'
+import { applyWithBotLoop } from '@/lib/game/bot'
+import type { BotConfig } from '@/lib/game/bot'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
 import type { Database } from '@/types/supabase'
@@ -127,7 +129,15 @@ function CommandZoneCard({
   )
 }
 
-export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId: string }) {
+type PlayGameProps = { userId: string } & (
+  | { mode: 'multiplayer'; lobbyId: string }
+  | { mode: 'goldfish'; initialState: GameState; initialCardMap: CardMap; botId: string; botConfig: BotConfig; deckTokens?: { name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[] }
+)
+
+export default function PlayGame(props: PlayGameProps) {
+  const { userId } = props
+  const mode = props.mode
+  const lobbyId = mode === 'multiplayer' ? props.lobbyId : null
   const [gameState, setGameState] = useState<GameState | null>(null)
   const [cardMap, setCardMap] = useState<CardMap>({})
   const [log, setLog] = useState<LogEntry[]>([])
@@ -144,8 +154,19 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
   const [deckTokens, setDeckTokens] = useState<{ name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[]>([])
   const libraryViewLoggedRef = useRef(false)
 
-  // Fetch initial state
+  // Fetch initial state (multiplayer) or set from props (goldfish)
   useEffect(() => {
+    if (mode === 'goldfish') {
+      const gProps = props as PlayGameProps & { mode: 'goldfish' }
+      setGameState(gProps.initialState)
+      setCardMap(gProps.initialCardMap)
+      setPlayerNames({ [userId]: 'You', [gProps.botId]: gProps.botConfig.name })
+      if (gProps.deckTokens) setDeckTokens(gProps.deckTokens)
+      setLoading(false)
+      return
+    }
+
+    // Multiplayer: fetch from API
     async function load() {
       const res = await fetch(`/api/game/${lobbyId}`)
       if (res.ok) {
@@ -166,10 +187,11 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       setLoading(false)
     }
     load()
-  }, [lobbyId])
+  }, [mode, lobbyId, userId])
 
   // Fetch deck tokens for token creator
   useEffect(() => {
+    if (mode !== 'multiplayer') return
     let cancelled = false
     async function fetchDeckTokens() {
       try {
@@ -178,7 +200,7 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
         const { data: lobbyPlayer } = await supabase
           .from('game_players')
           .select('deck_id')
-          .eq('lobby_id', lobbyId)
+          .eq('lobby_id', lobbyId!)
           .eq('user_id', userId)
           .single()
         if (!lobbyPlayer?.deck_id || cancelled) return
@@ -198,10 +220,11 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
     }
     fetchDeckTokens()
     return () => { cancelled = true }
-  }, [lobbyId, userId])
+  }, [mode, lobbyId, userId])
 
   // Realtime subscription
   useEffect(() => {
+    if (mode !== 'multiplayer' || !lobbyId) return
     const supabase = createClient()
     const channel = supabase
       .channel(`game-${lobbyId}`)
@@ -245,11 +268,17 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [lobbyId])
+  }, [mode, lobbyId])
 
   // Send action helper
   const sendAction = useCallback(async (action: ReturnType<typeof createPassPriority>) => {
-    // Optimistic update: apply action locally for instant UI feedback
+    if (mode === 'goldfish') {
+      const gProps = props as PlayGameProps & { mode: 'goldfish' }
+      setGameState(prev => prev ? applyWithBotLoop(prev, action, gProps.botId, gProps.botConfig) : prev)
+      return
+    }
+
+    // Multiplayer: optimistic update + POST
     const isStateMutating = action.type !== 'chat_message'
       && action.type !== 'library_view'
       && action.type !== 'peak'
@@ -259,16 +288,12 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
       setGameState(prev => prev ? applyAction(prev, action) : prev)
     }
 
-    // Send to server in background — Realtime will reconcile if needed
     fetch(`/api/game/${lobbyId}/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(action),
-    }).catch(() => {
-      // On network error, Realtime will deliver the correct state
-      // No rollback needed — the subscription overwrites on next server update
-    })
-  }, [lobbyId])
+    }).catch(() => {})
+  }, [mode, lobbyId, props])
 
   // Derived state
   const myState = gameState?.players[userId]
