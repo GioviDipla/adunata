@@ -40,12 +40,16 @@ export default function CardItem({ card, onSelect }: CardItemProps) {
           </div>
         )}
 
-        {/* Price badge */}
-        {card.prices_usd != null && (
+        {/* Price badge — EUR (Cardmarket) primary, USD fallback */}
+        {card.prices_eur != null ? (
+          <div className="absolute top-1.5 right-1.5 bg-black/75 backdrop-blur-sm text-font-primary text-xs font-medium px-1.5 py-0.5 rounded">
+            €{Number(card.prices_eur).toFixed(2)}
+          </div>
+        ) : card.prices_usd != null ? (
           <div className="absolute top-1.5 right-1.5 bg-black/75 backdrop-blur-sm text-font-primary text-xs font-medium px-1.5 py-0.5 rounded">
             ${Number(card.prices_usd).toFixed(2)}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Card info */}
