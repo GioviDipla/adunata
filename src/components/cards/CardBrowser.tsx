@@ -10,7 +10,7 @@ import CardDetail from './CardDetail'
 
 type Card = Database['public']['Tables']['cards']['Row']
 
-const PAGE_SIZE = 40
+const PAGE_SIZE = 80
 
 const CARD_TYPES = [
   'Creature', 'Instant', 'Sorcery', 'Enchantment',
@@ -51,7 +51,9 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const [cards, setCards] = useState<Card[]>(initialCards)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(initialCards.length === PAGE_SIZE)
+  // No "Load More" on the unfiltered landing view — the initial 80 cards are enough.
+  // Paging kicks in only when filters/search are active.
+  const [hasMore, setHasMore] = useState(false)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [showFilters, setShowFilters] = useState(false)
 
@@ -196,7 +198,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
       fetchCards()
     } else {
       setCards(initialCards)
-      setHasMore(initialCards.length === PAGE_SIZE)
+      setHasMore(false)
       setLoading(false)
     }
 

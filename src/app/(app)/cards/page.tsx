@@ -17,7 +17,7 @@ export default async function CardsPage() {
       .select('*')
       .not('released_at', 'is', null)
       .order('released_at', { ascending: false })
-      .limit(40),
+      .limit(80),
     supabase
       .rpc('get_distinct_sets'),
     user
