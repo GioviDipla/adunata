@@ -122,7 +122,7 @@ export function Navbar() {
       </aside>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-stretch border-t border-border bg-bg-surface md:hidden safe-area-bottom">
+      <nav className="mobile-navbar fixed bottom-0 left-0 right-0 z-50 flex items-stretch border-t border-border bg-bg-surface md:hidden">
         {navItems.map((item, idx) => {
           const Icon = item.icon;
           const active = isActive(item.href);
