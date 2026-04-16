@@ -87,7 +87,7 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
                     {isClosing ? (
                       <Loader2 size={11} className="animate-spin" />
                     ) : (
-                      'Confirm'
+                      lobby.status === 'playing' ? 'Termina' : 'Elimina'
                     )}
                   </button>
                   <button
@@ -102,7 +102,7 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
                 <button
                   onClick={() => setConfirming(lobby.id)}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-font-muted transition-colors hover:bg-bg-red/10 hover:text-bg-red"
-                  title={lobby.status === 'playing' ? 'Concede and close' : 'Cancel lobby'}
+                  title={lobby.status === 'playing' ? 'Termina la partita' : 'Elimina lobby'}
                   aria-label="Close lobby"
                 >
                   <X size={16} />
