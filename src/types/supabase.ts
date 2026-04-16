@@ -539,7 +539,7 @@ export interface Database {
           p_phase: string
           p_log_type?: string
         }
-        Returns: undefined
+        Returns: Json
       }
     }
     Enums: {
