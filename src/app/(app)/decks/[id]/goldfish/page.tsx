@@ -159,24 +159,19 @@ export default async function GoldfishPage({
     },
   }
 
-  // Fetch deck tokens
-  let deckTokensList: { name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[] = []
-  try {
-    const { data: tokens } = await supabase
-      .from('deck_tokens')
-      .select('name, power, toughness, colors, type_line, keywords')
-      .eq('deck_id', id)
-    if (tokens) {
-      deckTokensList = tokens.map(t => ({
-        name: t.name,
-        power: t.power ?? '',
-        toughness: t.toughness ?? '',
-        colors: t.colors ?? [],
-        typeLine: t.type_line ?? 'Token Creature',
-        keywords: t.keywords ?? [],
-      }))
-    }
-  } catch { /* deck_tokens table may not exist */ }
+  // Build deck tokens list from deck_cards with board='tokens'
+  const deckTokensList = ((deckCards ?? []) as unknown as DeckCardFromDB[])
+    .filter(dc => dc.board === 'tokens' && dc.card)
+    .map(dc => ({
+      name: dc.card.name,
+      power: dc.card.power ?? '',
+      toughness: dc.card.toughness ?? '',
+      colors: dc.card.colors ?? [],
+      typeLine: dc.card.type_line ?? 'Token Creature',
+      keywords: dc.card.keywords ?? [],
+      imageSmall: dc.card.image_small ?? null,
+      imageNormal: dc.card.image_normal ?? null,
+    }))
 
   return (
     <PlayGame

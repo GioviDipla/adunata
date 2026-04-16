@@ -3,13 +3,15 @@
 import { useState } from 'react'
 import { X, Plus } from 'lucide-react'
 
-interface TokenDefinition {
+export interface TokenDefinition {
   name: string
   power: string
   toughness: string
   colors: string[]
   typeLine: string
   keywords: string[]
+  imageSmall?: string | null
+  imageNormal?: string | null
 }
 
 interface TokenCreatorProps {
@@ -87,11 +89,19 @@ export default function TokenCreator({ deckTokens, onCreateToken, onClose }: Tok
               deckTokens.map((t, i) => (
                 <button key={i} onClick={() => onCreateToken(t, quantity)}
                   className="flex w-full items-center gap-3 rounded-lg bg-bg-cell px-3 py-2.5 text-left hover:bg-bg-hover">
-                  <div className="flex-1">
-                    <span className="text-sm font-medium text-font-primary">{t.name}</span>
-                    <span className="ml-2 text-xs text-font-muted">{t.power}/{t.toughness} · {t.typeLine}</span>
+                  {t.imageSmall ? (
+                    <img src={t.imageSmall} alt={t.name} className="h-14 w-auto rounded" draggable={false} />
+                  ) : (
+                    <div className="flex h-14 w-10 items-center justify-center rounded bg-bg-card text-[8px] text-font-muted">{t.power}/{t.toughness}</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-font-primary truncate">{t.name}</div>
+                    <div className="text-[10px] text-font-muted">
+                      {t.typeLine}
+                      {t.power && t.toughness ? ` · ${t.power}/${t.toughness}` : ''}
+                    </div>
                   </div>
-                  <Plus size={14} className="text-font-accent" />
+                  <Plus size={14} className="text-font-accent shrink-0" />
                 </button>
               ))
             )}

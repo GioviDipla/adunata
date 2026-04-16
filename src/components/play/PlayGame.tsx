@@ -34,7 +34,7 @@ import CardPreviewOverlay, { type PreviewState, type PreviewZone } from '@/compo
 import CombatAttackers from './CombatAttackers'
 import CombatBlockers from './CombatBlockers'
 import DiscardSelector from './DiscardSelector'
-import TokenCreator from './TokenCreator'
+import TokenCreator, { type TokenDefinition } from './TokenCreator'
 import CommanderChoiceModal from './CommanderChoiceModal'
 import SpecialActionsMenu from './SpecialActionsMenu'
 import RevealedCardsChooser from './RevealedCardsChooser'
@@ -132,7 +132,7 @@ function CommandZoneCard({
 
 type PlayGameProps = { userId: string } & (
   | { mode: 'multiplayer'; lobbyId: string }
-  | { mode: 'goldfish'; initialState: GameState; initialCardMap: CardMap; botId: string; botConfig: BotConfig; deckId: string; deckTokens?: { name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[] }
+  | { mode: 'goldfish'; initialState: GameState; initialCardMap: CardMap; botId: string; botConfig: BotConfig; deckId: string; deckTokens?: TokenDefinition[] }
 )
 
 export default function PlayGame(props: PlayGameProps) {
@@ -152,7 +152,7 @@ export default function PlayGame(props: PlayGameProps) {
   const [showTokenCreator, setShowTokenCreator] = useState(false)
   const [showSpecialActions, setShowSpecialActions] = useState(false)
   const [peakCards, setPeakCards] = useState<{ instanceId: string; card: CardRow }[] | null>(null)
-  const [deckTokens, setDeckTokens] = useState<{ name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }[]>([])
+  const [deckTokens, setDeckTokens] = useState<TokenDefinition[]>([])
   const libraryViewLoggedRef = useRef(false)
 
   // Fetch initial state (multiplayer) or set from props (goldfish)
@@ -696,24 +696,22 @@ export default function PlayGame(props: PlayGameProps) {
   }, [sendAction, userId, myName])
 
   // Token creation handler
-  const handleCreateToken = useCallback((token: { name: string; power: string; toughness: string; colors: string[]; typeLine: string; keywords: string[] }, quantity: number) => {
+  const handleCreateToken = useCallback((token: TokenDefinition, quantity: number) => {
     const now = Date.now()
     const tokens: { instanceId: string; cardId: number }[] = []
-    // Use a synthetic negative cardId so it doesn't collide with real card IDs
     const syntheticCardId = -(now % 1000000)
 
     for (let i = 0; i < quantity; i++) {
       const instanceId = `tk-${now}-${i}`
       tokens.push({ instanceId, cardId: syntheticCardId })
 
-      // Add to local cardMap so the token renders on battlefield
       setCardMap(prev => ({
         ...prev,
         [instanceId]: {
           cardId: syntheticCardId,
           name: token.name,
-          imageSmall: null,
-          imageNormal: null,
+          imageSmall: token.imageSmall ?? null,
+          imageNormal: token.imageNormal ?? null,
           typeLine: token.typeLine,
           manaCost: null,
           power: token.power || null,
