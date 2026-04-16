@@ -119,15 +119,22 @@ function CounterSection({
 }) {
   const [customName, setCustomName] = useState('')
 
-  // Show all counter types that have a value > 0, plus buttons to add new ones
-  const activeCounters = counters.filter(c => c.value > 0)
-  const inactiveTypes = COUNTER_TYPES.filter(t => !activeCounters.some(c => c.name === t))
+  // Build full list: all predefined types (with value from counters or 0) + any custom counters
+  const allRows: { name: string; value: number }[] = COUNTER_TYPES.map(t => {
+    const existing = counters.find(c => c.name === t)
+    return { name: t, value: existing?.value ?? 0 }
+  })
+  // Add any custom counters not in the predefined list
+  for (const c of counters) {
+    if (!COUNTER_TYPES.includes(c.name)) {
+      allRows.push(c)
+    }
+  }
 
   return (
     <div className="w-full rounded-xl bg-bg-surface p-2">
       <p className="text-[10px] font-bold text-font-muted mb-1">COUNTERS</p>
-      {/* Active counters with +/- and manual input */}
-      {activeCounters.map((c) => (
+      {allRows.map((c) => (
         <CounterRow
           key={c.name}
           name={c.name}
@@ -137,18 +144,6 @@ function CounterSection({
           onRemove={() => onRemove(c.name)}
         />
       ))}
-      {/* Inactive counter types — tap to add */}
-      <div className="flex flex-wrap gap-1 mt-1.5">
-        {inactiveTypes.map((t) => (
-          <button
-            key={t}
-            onClick={() => onAdd(t)}
-            className="rounded bg-bg-cell px-2 py-1 text-[9px] font-medium text-font-muted active:bg-bg-hover"
-          >
-            + {t}
-          </button>
-        ))}
-      </div>
       {/* Custom counter input */}
       <div className="flex gap-1 mt-1.5">
         <input

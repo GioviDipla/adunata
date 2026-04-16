@@ -373,7 +373,7 @@ export default function PlayGame(props: PlayGameProps) {
       const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
       if (!data) continue
       const row = toCardRow(c.cardId, data)
-      const entry: BattlefieldCard = { instanceId: c.instanceId, card: row, tapped: c.tapped, counters: c.counters }
+      const entry: BattlefieldCard = { instanceId: c.instanceId, card: row, tapped: c.tapped, counters: c.counters, powerMod: c.powerMod ?? 0, toughnessMod: c.toughnessMod ?? 0 }
 
       // Tokens go to their own zone
       if (data.isToken) {
