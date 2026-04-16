@@ -26,22 +26,20 @@ img {
   user-select: none;
 }
 
-/* Mobile bottom navbar.
-   iOS Safari's address bar shrinks smoothly during scroll, but
-   position:fixed is anchored to the layout viewport — fixed elements
-   stay glued to the static bottom and float away from the visible
-   bottom edge. MobileViewportFix writes the viewport delta each frame
-   into --vv-nav-translate (in px, negative). We apply it as `transform`
-   to stay on the compositor thread (no layout/paint), and the keyboard
-   rule fully overrides the transform to slide the nav off-screen. */
+/* Mobile bottom navbar — anchored to the visual viewport via top-positioning.
+   MobileViewportFix writes `vv.offsetTop + vv.height - navHeight` into
+   --vv-nav-top each frame, so the navbar's bottom edge sits exactly on
+   the visible bottom edge regardless of Safari chrome state. Uses `top`
+   rather than `bottom`/`transform` to avoid depending on window.innerHeight,
+   which iOS can report stale by a pixel or two after keyboard toggles. */
 .mobile-navbar {
-  bottom: 0;
-  transform: translate3d(0, var(--vv-nav-translate, 0px), 0);
-  will-change: transform;
+  top: var(--vv-nav-top, auto);
+  bottom: auto;
+  will-change: top;
 }
 
 body.keyboard-open .mobile-navbar {
-  transform: translate3d(0, 100%, 0);
+  visibility: hidden;
   pointer-events: none;
 }
 

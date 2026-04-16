@@ -17,25 +17,25 @@ export function MobileViewportFix() {
 
     const KEYBOARD_THRESHOLD = 150
 
-    // Track the distance between the bottom of the visual viewport and the
-    // bottom of the layout viewport. position:fixed is anchored to the
-    // layout viewport on iOS Safari, so fixed elements float away from the
-    // visible bottom edge whenever Safari's chrome shrinks. We write the
-    // offset into a CSS var and apply it as a transform on .mobile-navbar.
+    // Anchor the mobile navbar to the bottom of the VISUAL viewport using
+    // top-positioning, so we only depend on visualViewport readings:
+    //   top = vv.offsetTop + vv.height - navHeight
+    // We deliberately avoid window.innerHeight — on iOS Safari it can be
+    // cached or off by a pixel or two after a keyboard toggle, which made
+    // the older `innerHeight - (offsetTop + vv.height)` formula produce a
+    // visibly misaligned navbar as the address bar contracted on scroll.
     let rafId: number | null = null
     const update = () => {
       rafId = null
-      const bottomInset = Math.max(
-        0,
-        window.innerHeight - (vv.offsetTop + vv.height),
-      )
+      const navbar = document.querySelector<HTMLElement>('.mobile-navbar')
       const diff = window.innerHeight - vv.height
       const keyboardOpen = diff > KEYBOARD_THRESHOLD
       document.body.classList.toggle('keyboard-open', keyboardOpen)
-      document.documentElement.style.setProperty(
-        '--vv-nav-translate',
-        keyboardOpen ? '0px' : `-${bottomInset}px`,
-      )
+      if (!navbar) return
+      const navHeight = navbar.offsetHeight
+      if (navHeight === 0) return
+      const topPx = vv.offsetTop + vv.height - navHeight
+      document.documentElement.style.setProperty('--vv-nav-top', `${topPx}px`)
     }
     const schedule = () => {
       if (rafId != null) return
