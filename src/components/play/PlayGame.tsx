@@ -14,6 +14,7 @@ import {
   createCommanderChoice, createToggleAutoPass,
   createShuffleIntoLibrary, createCopyCard, createTakeControl,
 } from '@/lib/game/actions'
+import { applyAction } from '@/lib/game/engine'
 import { getOpponentId } from '@/lib/game/phases'
 import type { GameState, GameActionType, CardMap, LogEntry } from '@/lib/game/types'
 import type { Database } from '@/types/supabase'
@@ -105,7 +106,7 @@ function CommandZoneCard({
       }}
       {...longPress}
       className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card select-none"
-      style={{ width: 48, height: 67 }}
+      style={{ width: 48, height: 67, touchAction: 'manipulation' }}
       title={`${data?.name ?? '?'} — tap to preview & cast`}
     >
       {data?.imageSmall ? (
@@ -248,10 +249,24 @@ export default function PlayGame({ lobbyId, userId }: { lobbyId: string; userId:
 
   // Send action helper
   const sendAction = useCallback(async (action: ReturnType<typeof createPassPriority>) => {
-    await fetch(`/api/game/${lobbyId}/action`, {
+    // Optimistic update: apply action locally for instant UI feedback
+    const isStateMutating = action.type !== 'chat_message'
+      && action.type !== 'library_view'
+      && action.type !== 'peak'
+      && action.type !== 'concede'
+
+    if (isStateMutating) {
+      setGameState(prev => prev ? applyAction(prev, action) : prev)
+    }
+
+    // Send to server in background — Realtime will reconcile if needed
+    fetch(`/api/game/${lobbyId}/action`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(action),
+    }).catch(() => {
+      // On network error, Realtime will deliver the correct state
+      // No rollback needed — the subscription overwrites on next server update
     })
   }, [lobbyId])
 
