@@ -54,10 +54,30 @@ export async function POST(
     const playerIds = Object.keys(currentState.players)
     const winnerId = playerIds.find((id) => id !== user.id)!
 
+    // Auto-generate game name
+    const { data: gamePlayers } = await admin
+      .from('game_players')
+      .select('user_id, deck_id, seat_position')
+      .eq('lobby_id', lobbyId)
+      .order('seat_position')
+
+    let gameName = `Game ${lobbyId.slice(0, 6)}`
+    if (gamePlayers && gamePlayers.length >= 2) {
+      const parts: string[] = []
+      for (const p of gamePlayers) {
+        const { data: userData } = await admin.auth.admin.getUserById(p.user_id)
+        const pName = userData?.user?.email?.split('@')[0] ?? 'Player'
+        const { data: deck } = await admin.from('decks').select('name').eq('id', p.deck_id).single()
+        parts.push(`${deck?.name ?? 'Unknown'} — ${pName}`)
+      }
+      const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      gameName = `${parts[0]} vs ${parts[1]} — ${date}`
+    }
+
     // Update lobby with winner and finished status
     await admin
       .from('game_lobbies')
-      .update({ winner_id: winnerId, status: 'finished' })
+      .update({ winner_id: winnerId, status: 'finished', name: gameName })
       .eq('id', lobbyId)
 
     // Append concede to game log

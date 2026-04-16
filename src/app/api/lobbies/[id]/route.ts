@@ -7,6 +7,28 @@ import type { Json } from '@/types/supabase'
 // so we don't need to pull in the full GameState type.
 type GameStateLike = { lastActionSeq?: number } & Record<string, unknown>
 
+async function generateGameName(admin: ReturnType<typeof createAdminClient>, lobbyId: string): Promise<string> {
+  const { data: players } = await admin
+    .from('game_players')
+    .select('user_id, deck_id, seat_position')
+    .eq('lobby_id', lobbyId)
+    .order('seat_position')
+
+  if (!players || players.length < 2) return `Game ${lobbyId.slice(0, 6)}`
+
+  const names: string[] = []
+  for (const p of players) {
+    const { data: userData } = await admin.auth.admin.getUserById(p.user_id)
+    const playerName = userData?.user?.email?.split('@')[0] ?? 'Player'
+    const { data: deck } = await admin.from('decks').select('name').eq('id', p.deck_id).single()
+    const deckName = deck?.name ?? 'Unknown Deck'
+    names.push(`${deckName} — ${playerName}`)
+  }
+
+  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return `${names[0]} vs ${names[1]} — ${date}`
+}
+
 /**
  * DELETE /api/lobbies/[id]
  *
@@ -53,12 +75,14 @@ export async function DELETE(
     return NextResponse.json({ error: 'Not a participant in this lobby' }, { status: 403 })
   }
 
-  // Idempotent: already finished → nothing to do.
-  if (lobby.status === 'finished') {
-    return NextResponse.json({ status: 'finished', noop: true })
-  }
-
   const admin = createAdminClient()
+
+  // Finished lobbies → hard-delete
+  if (lobby.status === 'finished') {
+    const { error } = await admin.from('game_lobbies').delete().eq('id', lobbyId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ deleted: true })
+  }
 
   // ── Waiting lobbies ──────────────────────────────────────────────────
   if (lobby.status === 'waiting') {
@@ -95,9 +119,10 @@ export async function DELETE(
       allPlayers?.find((p) => p.user_id !== user.id)?.user_id ?? null
 
     // Mark lobby finished with opponent as winner
+    const gameName = await generateGameName(admin, lobbyId)
     const { error: lobbyErr } = await admin
       .from('game_lobbies')
-      .update({ status: 'finished', winner_id: opponentId })
+      .update({ status: 'finished', winner_id: opponentId, name: gameName })
       .eq('id', lobbyId)
 
     if (lobbyErr) {
@@ -134,4 +159,41 @@ export async function DELETE(
   }
 
   return NextResponse.json({ error: 'Invalid lobby status' }, { status: 400 })
+}
+
+/**
+ * PATCH /api/lobbies/[id]
+ * Rename a game. Only participants can rename.
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: lobbyId } = await params
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: myPlayer } = await supabase
+    .from('game_players')
+    .select('id')
+    .eq('lobby_id', lobbyId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!myPlayer) return NextResponse.json({ error: 'Not a participant' }, { status: 403 })
+
+  const { name } = await request.json() as { name: string }
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('game_lobbies')
+    .update({ name: name.trim() })
+    .eq('id', lobbyId)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }
