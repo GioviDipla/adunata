@@ -126,7 +126,7 @@ export default function DeckView({
             onClick={() => setShowProxyPrint(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-secondary transition-colors hover:bg-bg-hover"
           >
-            <Printer className="h-3.5 w-3.5" /> Print Proxies
+            <Printer className="h-3.5 w-3.5" /> Proxy
           </button>
           {copyError && (
             <span className="text-[11px] text-bg-red">{copyError}</span>

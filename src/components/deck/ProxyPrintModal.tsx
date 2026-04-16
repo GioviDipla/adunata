@@ -23,8 +23,19 @@ type Paper = 'a4' | 'letter'
 type GapOption = 0 | 0.2 | 0.5 | 1.0
 type ScaleOption = 100 | 95 | 90
 
+const SECTIONS: { key: string; label: string }[] = [
+  { key: 'main', label: 'Maindeck' },
+  { key: 'sideboard', label: 'Sideboard' },
+  { key: 'maybeboard', label: 'Maybeboard' },
+  { key: 'tokens', label: 'Tokens' },
+]
+
 function isBasicLand(card: CardRow): boolean {
   return (card.type_line ?? '').includes('Basic Land')
+}
+
+function cardKey(entry: CardEntry): string {
+  return `${entry.card.id}-${entry.board}`
 }
 
 export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrintModalProps) {
@@ -35,14 +46,22 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   const [deselected, setDeselected] = useState<Set<string>>(() => {
     const set = new Set<string>()
     for (const entry of cards) {
-      if (isBasicLand(entry.card)) {
-        set.add(`${entry.card.id}-${entry.board}`)
-      }
+      if (isBasicLand(entry.card)) set.add(cardKey(entry))
     }
     return set
   })
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
+
+  // Group and sort cards by section, alphabetically
+  const sections = useMemo(() => {
+    return SECTIONS.map((s) => ({
+      ...s,
+      cards: cards
+        .filter((e) => e.board === s.key || (s.key === 'main' && e.board === 'commander'))
+        .sort((a, b) => a.card.name.localeCompare(b.card.name)),
+    })).filter((s) => s.cards.length > 0)
+  }, [cards])
 
   const toggleCard = useCallback((key: string) => {
     setDeselected((prev) => {
@@ -53,29 +72,47 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     })
   }, [])
 
-  // When skip basic lands is toggled, update deselected set
   const handleSkipBasicLands = useCallback((checked: boolean) => {
     setSkipBasicLands(checked)
     setDeselected((prev) => {
       const next = new Set(prev)
       for (const entry of cards) {
-        const key = `${entry.card.id}-${entry.board}`
         if (isBasicLand(entry.card)) {
-          if (checked) next.add(key)
-          else next.delete(key)
+          if (checked) next.add(cardKey(entry))
+          else next.delete(cardKey(entry))
         }
       }
       return next
     })
   }, [cards])
 
-  const selectAll = useCallback(() => setDeselected(new Set()), [])
-  const deselectAll = useCallback(() => {
-    setDeselected(new Set(cards.map((e) => `${e.card.id}-${e.board}`)))
+  const selectSection = useCallback((sectionKey: string) => {
+    setDeselected((prev) => {
+      const next = new Set(prev)
+      for (const entry of cards) {
+        if (entry.board === sectionKey || (sectionKey === 'main' && entry.board === 'commander')) {
+          if (skipBasicLands && isBasicLand(entry.card)) continue
+          next.delete(cardKey(entry))
+        }
+      }
+      return next
+    })
+  }, [cards, skipBasicLands])
+
+  const deselectSection = useCallback((sectionKey: string) => {
+    setDeselected((prev) => {
+      const next = new Set(prev)
+      for (const entry of cards) {
+        if (entry.board === sectionKey || (sectionKey === 'main' && entry.board === 'commander')) {
+          next.add(cardKey(entry))
+        }
+      }
+      return next
+    })
   }, [cards])
 
   const selectedCards = useMemo(() => {
-    return cards.filter((e) => !deselected.has(`${e.card.id}-${e.board}`))
+    return cards.filter((e) => !deselected.has(cardKey(e)))
   }, [cards, deselected])
 
   const totalCards = useMemo(() => {
@@ -129,73 +166,97 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
             <Printer size={16} className="text-font-accent" />
             <h2 className="text-sm font-bold text-font-primary">Print Proxies</h2>
           </div>
-          <button onClick={onClose} className="rounded p-1 text-font-muted hover:bg-bg-hover hover:text-font-primary">
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Select/Deselect all */}
-        <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-          <button onClick={selectAll} className="text-[11px] font-medium text-font-accent hover:underline">Select All</button>
-          <span className="text-font-muted">·</span>
-          <button onClick={deselectAll} className="text-[11px] font-medium text-font-accent hover:underline">Deselect All</button>
-          <span className="ml-auto text-[11px] text-font-muted">
-            {totalCards} card{totalCards !== 1 ? 's' : ''} · {pages} page{pages !== 1 ? 's' : ''}
-          </span>
-        </div>
-
-        {/* Card grid */}
-        <div className="flex-1 overflow-y-auto px-3 py-3">
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-            {cards.map((entry) => {
-              const key = `${entry.card.id}-${entry.board}`
-              const selected = !deselected.has(key)
-              return (
-                <button
-                  key={key}
-                  onClick={() => toggleCard(key)}
-                  className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-                    selected
-                      ? 'border-bg-accent ring-1 ring-bg-accent/30'
-                      : 'border-border opacity-40'
-                  }`}
-                  style={{ touchAction: 'manipulation' }}
-                >
-                  {entry.card.image_small ? (
-                    <img
-                      src={entry.card.image_small}
-                      alt={entry.card.name}
-                      className="w-full h-auto"
-                      loading="lazy"
-                      draggable={false}
-                    />
-                  ) : (
-                    <div className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2">
-                      <span className="text-center text-[9px] text-font-muted">{entry.card.name}</span>
-                    </div>
-                  )}
-                  {/* Quantity badge */}
-                  <div className="absolute top-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-dark/80 px-1 text-[10px] font-bold text-font-primary backdrop-blur-sm">
-                    {entry.quantity}x
-                  </div>
-                  {/* Checkbox icon */}
-                  <div className="absolute top-1 right-1">
-                    {selected ? (
-                      <CheckSquare size={14} className="text-bg-accent" />
-                    ) : (
-                      <Square size={14} className="text-font-muted" />
-                    )}
-                  </div>
-                  {/* Board label */}
-                  {entry.board !== 'main' && (
-                    <div className="absolute bottom-1 left-1 rounded bg-bg-dark/80 px-1.5 py-0.5 text-[8px] font-medium text-font-secondary backdrop-blur-sm">
-                      {entry.board === 'sideboard' ? 'SB' : 'MB'}
-                    </div>
-                  )}
-                </button>
-              )
-            })}
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-font-muted">
+              {totalCards} card{totalCards !== 1 ? 's' : ''} · {pages} page{pages !== 1 ? 's' : ''}
+            </span>
+            <button onClick={onClose} className="rounded p-1 text-font-muted hover:bg-bg-hover hover:text-font-primary">
+              <X size={16} />
+            </button>
           </div>
+        </div>
+
+        {/* Card sections */}
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          {sections.map((section) => {
+            const sectionSelected = section.cards.filter((e) => !deselected.has(cardKey(e))).length
+            const sectionTotal = section.cards.length
+            return (
+              <div key={section.key} className="mb-4 last:mb-0">
+                {/* Section header */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-font-secondary tracking-wide uppercase">
+                    {section.label} ({sectionSelected}/{sectionTotal})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => selectSection(section.key)}
+                      className="text-[10px] font-medium text-font-accent hover:underline"
+                    >
+                      All
+                    </button>
+                    <span className="text-font-muted text-[10px]">·</span>
+                    <button
+                      onClick={() => deselectSection(section.key)}
+                      className="text-[10px] font-medium text-font-accent hover:underline"
+                    >
+                      None
+                    </button>
+                  </div>
+                </div>
+
+                {/* Cards grid */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {section.cards.map((entry) => {
+                    const key = cardKey(entry)
+                    const selected = !deselected.has(key)
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => toggleCard(key)}
+                        className={`relative overflow-hidden rounded-lg border-2 transition-all ${
+                          selected
+                            ? 'border-bg-accent ring-1 ring-bg-accent/30'
+                            : 'border-border opacity-40'
+                        }`}
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        {entry.card.image_small ? (
+                          <img
+                            src={entry.card.image_small}
+                            alt={entry.card.name}
+                            className="w-full h-auto"
+                            loading="lazy"
+                            draggable={false}
+                          />
+                        ) : (
+                          <div className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2">
+                            <span className="text-center text-[9px] text-font-muted">{entry.card.name}</span>
+                          </div>
+                        )}
+                        {/* Quantity badge */}
+                        <div className="absolute top-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-dark/80 px-1 text-[10px] font-bold text-font-primary backdrop-blur-sm">
+                          {entry.quantity}x
+                        </div>
+                        {/* Checkbox icon */}
+                        <div className="absolute top-1 right-1">
+                          {selected ? (
+                            <CheckSquare size={14} className="text-bg-accent" />
+                          ) : (
+                            <Square size={14} className="text-font-muted" />
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+
+          {sections.length === 0 && (
+            <p className="text-sm text-font-muted text-center py-8">No cards in this deck.</p>
+          )}
         </div>
 
         {/* Options bar */}

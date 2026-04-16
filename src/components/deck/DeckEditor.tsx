@@ -42,16 +42,6 @@ interface DeckEditorProps {
   initialCards: DeckCardEntry[]
 }
 
-interface TokenDef {
-  id: string
-  name: string
-  power: string | null
-  toughness: string | null
-  colors: string[]
-  type_line: string
-  keywords: string[]
-}
-
 type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens'
 
 export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
@@ -68,27 +58,9 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [showImport, setShowImport] = useState(false)
   const [showExpandedStats, setShowExpandedStats] = useState(false)
-  const [tokens, setTokens] = useState<TokenDef[]>([])
   const [tokenSearch, setTokenSearch] = useState('')
   const [tokenSearchResults, setTokenSearchResults] = useState<CardRow[]>([])
   const [searchingTokens, setSearchingTokens] = useState(false)
-
-  // Fetch tokens when tokens tab is active
-  useEffect(() => {
-    if (activeTab !== 'tokens') return
-    let cancelled = false
-    async function fetchTokens() {
-      try {
-        const res = await fetch(`/api/decks/${deck.id}/tokens`)
-        if (res.ok && !cancelled) {
-          const data = await res.json()
-          setTokens(data)
-        }
-      } catch { /* ignore */ }
-    }
-    fetchTokens()
-    return () => { cancelled = true }
-  }, [activeTab, deck.id])
 
   // Search tokens from DB + Scryfall
   useEffect(() => {
@@ -97,11 +69,9 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
       return
     }
     const controller = new AbortController()
-    let timeout: ReturnType<typeof setTimeout>
-    timeout = setTimeout(async () => {
+    const timeout = setTimeout(async () => {
       setSearchingTokens(true)
       try {
-        // Search local DB for tokens
         const supabase = createClient()
         const { data: localTokens } = await supabase
           .from('cards')
@@ -118,7 +88,6 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           return
         }
 
-        // Fallback to Scryfall search for tokens
         const res = await fetch(
           `https://api.scryfall.com/cards/search?q=t:token+${encodeURIComponent(tokenSearch.trim())}&unique=cards`,
           { signal: controller.signal }
@@ -149,36 +118,6 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     return () => { controller.abort(); clearTimeout(timeout) }
   }, [tokenSearch])
 
-  const handleAddTokenFromSearch = useCallback(async (card: CardRow) => {
-    const body = {
-      name: card.name,
-      power: card.power ?? null,
-      toughness: card.toughness ?? null,
-      colors: card.colors ?? [],
-      type_line: card.type_line ?? 'Token',
-      keywords: card.keywords ?? [],
-      image_url: card.image_small ?? card.image_normal ?? null,
-    }
-    const res = await fetch(`/api/decks/${deck.id}/tokens`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (res.ok) {
-      const token = await res.json()
-      setTokens(prev => [...prev, token])
-    }
-  }, [deck.id])
-
-  const handleDeleteToken = useCallback(async (tokenId: string) => {
-    await fetch(`/api/decks/${deck.id}/tokens`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tokenId }),
-    })
-    setTokens(prev => prev.filter(t => t.id !== tokenId))
-  }, [deck.id])
-
   // Extract commander cards
   const commanderCards = useMemo(
     () => cards.filter((c) => c.board === 'commander'),
@@ -207,6 +146,9 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         .reduce((s, c) => s + c.quantity, 0),
       maybeboard: cards
         .filter((c) => c.board === 'maybeboard')
+        .reduce((s, c) => s + c.quantity, 0),
+      tokens: cards
+        .filter((c) => c.board === 'tokens')
         .reduce((s, c) => s + c.quantity, 0),
     }),
     [cards]
@@ -505,8 +447,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             onClick={() => setShowProxyPrint(true)}
           >
             <Printer className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Print</span>
-            <span className="sm:hidden">Prt</span>
+            Proxy
           </Button>
           <Button
             variant="danger"
@@ -568,25 +509,16 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                 <span className="hidden sm:inline">
                   {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : 'Tokens'}
                 </span>
-                {tab !== 'tokens' && (
-                  <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                    ({tabCounts[tab]})
-                  </span>
-                )}
-                {tab === 'tokens' && (
-                  <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                    ({tokens.length})
-                  </span>
-                )}
+                <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                  ({tabCounts[tab]})
+                </span>
               </button>
             ))}
           </div>
 
-          {activeTab === 'tokens' ? (
-            <div className="rounded-xl border border-border bg-bg-surface p-4">
-              <h3 className="text-sm font-semibold text-font-primary mb-3">Deck Tokens</h3>
-
-              {/* Search bar */}
+          {activeTab === 'tokens' && (
+            <div className="mb-3">
+              {/* Token search bar */}
               <div className="mb-3">
                 <input
                   value={tokenSearch}
@@ -598,7 +530,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
 
               {/* Search results */}
               {tokenSearch.trim().length >= 2 && (
-                <div className="mb-4 max-h-60 overflow-y-auto rounded-lg border border-border bg-bg-card">
+                <div className="max-h-60 overflow-y-auto rounded-lg border border-border bg-bg-card">
                   {searchingTokens ? (
                     <div className="flex items-center justify-center py-4 text-sm text-font-muted">Searching...</div>
                   ) : tokenSearchResults.length === 0 ? (
@@ -607,7 +539,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                     tokenSearchResults.map((card) => (
                       <button
                         key={card.id}
-                        onClick={() => handleAddTokenFromSearch(card)}
+                        onClick={() => handleCardAdded(card, 'tokens')}
                         className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover border-b border-border/30 last:border-0"
                       >
                         {card.image_small && (
@@ -626,30 +558,9 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
                   )}
                 </div>
               )}
-
-              {/* Current tokens list */}
-              {tokens.length === 0 && tokenSearch.trim().length < 2 && (
-                <p className="text-sm text-font-muted text-center py-6">
-                  No tokens yet. Search above to add tokens your deck can create.
-                </p>
-              )}
-
-              {tokens.map((token) => (
-                <div key={token.id} className="flex items-center justify-between rounded-lg bg-bg-cell px-3 py-2 mb-1.5">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-font-primary">{token.name}</span>
-                    {(token.power || token.toughness) && (
-                      <span className="ml-2 text-xs text-font-muted">{token.power ?? '?'}/{token.toughness ?? '?'}</span>
-                    )}
-                    <span className="ml-2 text-xs text-font-secondary">{token.type_line}</span>
-                  </div>
-                  <button onClick={() => handleDeleteToken(token.id)} className="text-font-muted hover:text-bg-red ml-2">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
             </div>
-          ) : (
+          )}
+
           <DeckContent
             cards={filteredCards}
             commanderCards={commanderCards}
@@ -657,10 +568,9 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             onCardClick={setSelectedDetailCard}
             onQuantityChange={handleQuantityChange}
             onRemove={handleRemove}
-            onToggleCommander={handleToggleCommander}
-            onMoveToBoard={handleMoveToBoard}
+            onToggleCommander={activeTab !== 'tokens' ? handleToggleCommander : undefined}
+            onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
           />
-          )}
         </div>
 
         {/* Right panel: Full stats — only on lg+ */}
