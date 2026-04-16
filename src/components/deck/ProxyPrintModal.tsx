@@ -1,0 +1,282 @@
+'use client'
+
+import { useState, useMemo, useCallback } from 'react'
+import { X, Printer, CheckSquare, Square } from 'lucide-react'
+import { generateProxyPdf } from '@/lib/proxyPdf'
+import type { Database } from '@/types/supabase'
+
+type CardRow = Database['public']['Tables']['cards']['Row']
+
+interface CardEntry {
+  card: CardRow
+  quantity: number
+  board: string
+}
+
+interface ProxyPrintModalProps {
+  deckName: string
+  cards: CardEntry[]
+  onClose: () => void
+}
+
+type Paper = 'a4' | 'letter'
+type GapOption = 0 | 0.2 | 0.5 | 1.0
+type ScaleOption = 100 | 95 | 90
+
+function isBasicLand(card: CardRow): boolean {
+  return (card.type_line ?? '').includes('Basic Land')
+}
+
+export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrintModalProps) {
+  const [skipBasicLands, setSkipBasicLands] = useState(true)
+  const [paper, setPaper] = useState<Paper>('a4')
+  const [gap, setGap] = useState<GapOption>(0)
+  const [scale, setScale] = useState<ScaleOption>(100)
+  const [deselected, setDeselected] = useState<Set<string>>(() => {
+    const set = new Set<string>()
+    for (const entry of cards) {
+      if (isBasicLand(entry.card)) {
+        set.add(`${entry.card.id}-${entry.board}`)
+      }
+    }
+    return set
+  })
+  const [generating, setGenerating] = useState(false)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
+
+  const toggleCard = useCallback((key: string) => {
+    setDeselected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  // When skip basic lands is toggled, update deselected set
+  const handleSkipBasicLands = useCallback((checked: boolean) => {
+    setSkipBasicLands(checked)
+    setDeselected((prev) => {
+      const next = new Set(prev)
+      for (const entry of cards) {
+        const key = `${entry.card.id}-${entry.board}`
+        if (isBasicLand(entry.card)) {
+          if (checked) next.add(key)
+          else next.delete(key)
+        }
+      }
+      return next
+    })
+  }, [cards])
+
+  const selectAll = useCallback(() => setDeselected(new Set()), [])
+  const deselectAll = useCallback(() => {
+    setDeselected(new Set(cards.map((e) => `${e.card.id}-${e.board}`)))
+  }, [cards])
+
+  const selectedCards = useMemo(() => {
+    return cards.filter((e) => !deselected.has(`${e.card.id}-${e.board}`))
+  }, [cards, deselected])
+
+  const totalCards = useMemo(() => {
+    return selectedCards.reduce((sum, e) => sum + e.quantity, 0)
+  }, [selectedCards])
+
+  const handleGenerate = useCallback(async () => {
+    const cardsWithImages = selectedCards
+      .filter((e) => e.card.image_normal)
+      .map((e) => ({ imageUrl: e.card.image_normal!, quantity: e.quantity }))
+
+    if (cardsWithImages.length === 0) return
+
+    setGenerating(true)
+    setProgress({ done: 0, total: 0 })
+
+    try {
+      const blob = await generateProxyPdf({
+        paper,
+        gap,
+        scale: scale / 100,
+        cards: cardsWithImages,
+        onProgress: (done, total) => setProgress({ done, total }),
+      })
+
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${deckName}-proxies.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      onClose()
+    } catch {
+      // silently fail
+    } finally {
+      setGenerating(false)
+    }
+  }, [selectedCards, paper, gap, scale, deckName, onClose])
+
+  const pages = Math.ceil(totalCards / 9)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-bg-dark/80" onClick={onClose}>
+      <div
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl sm:rounded-xl border border-border bg-bg-surface shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Printer size={16} className="text-font-accent" />
+            <h2 className="text-sm font-bold text-font-primary">Print Proxies</h2>
+          </div>
+          <button onClick={onClose} className="rounded p-1 text-font-muted hover:bg-bg-hover hover:text-font-primary">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Select/Deselect all */}
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2">
+          <button onClick={selectAll} className="text-[11px] font-medium text-font-accent hover:underline">Select All</button>
+          <span className="text-font-muted">·</span>
+          <button onClick={deselectAll} className="text-[11px] font-medium text-font-accent hover:underline">Deselect All</button>
+          <span className="ml-auto text-[11px] text-font-muted">
+            {totalCards} card{totalCards !== 1 ? 's' : ''} · {pages} page{pages !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Card grid */}
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {cards.map((entry) => {
+              const key = `${entry.card.id}-${entry.board}`
+              const selected = !deselected.has(key)
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleCard(key)}
+                  className={`relative overflow-hidden rounded-lg border-2 transition-all ${
+                    selected
+                      ? 'border-bg-accent ring-1 ring-bg-accent/30'
+                      : 'border-border opacity-40'
+                  }`}
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  {entry.card.image_small ? (
+                    <img
+                      src={entry.card.image_small}
+                      alt={entry.card.name}
+                      className="w-full h-auto"
+                      loading="lazy"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2">
+                      <span className="text-center text-[9px] text-font-muted">{entry.card.name}</span>
+                    </div>
+                  )}
+                  {/* Quantity badge */}
+                  <div className="absolute top-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-dark/80 px-1 text-[10px] font-bold text-font-primary backdrop-blur-sm">
+                    {entry.quantity}x
+                  </div>
+                  {/* Checkbox icon */}
+                  <div className="absolute top-1 right-1">
+                    {selected ? (
+                      <CheckSquare size={14} className="text-bg-accent" />
+                    ) : (
+                      <Square size={14} className="text-font-muted" />
+                    )}
+                  </div>
+                  {/* Board label */}
+                  {entry.board !== 'main' && (
+                    <div className="absolute bottom-1 left-1 rounded bg-bg-dark/80 px-1.5 py-0.5 text-[8px] font-medium text-font-secondary backdrop-blur-sm">
+                      {entry.board === 'sideboard' ? 'SB' : 'MB'}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Options bar */}
+        <div className="border-t border-border px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {/* Skip basic lands toggle */}
+            <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={skipBasicLands}
+                onChange={(e) => handleSkipBasicLands(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
+              />
+              Skip basic lands
+            </label>
+
+            {/* Paper */}
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Paper
+              <select
+                value={paper}
+                onChange={(e) => setPaper(e.target.value as Paper)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                <option value="a4">A4</option>
+                <option value="letter">Letter</option>
+              </select>
+            </label>
+
+            {/* Gap */}
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Gap
+              <select
+                value={gap}
+                onChange={(e) => setGap(Number(e.target.value) as GapOption)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                <option value={0}>0.0mm</option>
+                <option value={0.2}>0.2mm</option>
+                <option value={0.5}>0.5mm</option>
+                <option value={1.0}>1.0mm</option>
+              </select>
+            </label>
+
+            {/* Scale */}
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Scale
+              <select
+                value={scale}
+                onChange={(e) => setScale(Number(e.target.value) as ScaleOption)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                <option value={100}>100%</option>
+                <option value={95}>95%</option>
+                <option value={90}>90%</option>
+              </select>
+            </label>
+          </div>
+
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={generating || totalCards === 0}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-bg-accent px-4 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {generating ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-font-white/30 border-t-font-white" />
+                {progress.total > 0
+                  ? `Loading images… ${progress.done}/${progress.total}`
+                  : 'Generating…'}
+              </>
+            ) : (
+              <>
+                <Printer size={16} />
+                Generate PDF
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

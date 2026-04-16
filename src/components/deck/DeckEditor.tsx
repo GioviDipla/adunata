@@ -11,6 +11,7 @@ import {
   Fish,
   FileText,
   Plus,
+  Printer,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -18,6 +19,7 @@ import { Button } from '@/components/ui/Button'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
 import DeckExport from './DeckExport'
+import ProxyPrintModal from './ProxyPrintModal'
 import AddCardSearch from './AddCardSearch'
 import CardDetail from '@/components/cards/CardDetail'
 import ImportCardsModal from './ImportCardsModal'
@@ -60,6 +62,7 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const [deckName, setDeckName] = useState(deck.name)
   const [editingName, setEditingName] = useState(deck.name)
   const [showExport, setShowExport] = useState(false)
+  const [showProxyPrint, setShowProxyPrint] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
@@ -497,6 +500,15 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
             <span className="sm:hidden">Exp</span>
           </Button>
           <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowProxyPrint(true)}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Print</span>
+            <span className="sm:hidden">Prt</span>
+          </Button>
+          <Button
             variant="danger"
             size="sm"
             onClick={() => setShowDeleteConfirm(true)}
@@ -668,6 +680,15 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           deckName={deckName}
           cards={statsCards}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {/* Proxy print modal */}
+      {showProxyPrint && (
+        <ProxyPrintModal
+          deckName={deckName}
+          cards={statsCards}
+          onClose={() => setShowProxyPrint(false)}
         />
       )}
 

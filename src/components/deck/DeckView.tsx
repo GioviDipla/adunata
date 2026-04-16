@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { Copy, Check, Globe } from 'lucide-react'
+import { Copy, Check, Globe, Printer } from 'lucide-react'
 import DeckContent, { type DeckCardEntry } from './DeckContent'
+import ProxyPrintModal from './ProxyPrintModal'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
 import CardDetail from '@/components/cards/CardDetail'
@@ -32,6 +33,7 @@ export default function DeckView({
   const [copyError, setCopyError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<BoardTab>('main')
   const [showExpandedStats, setShowExpandedStats] = useState(false)
+  const [showProxyPrint, setShowProxyPrint] = useState(false)
 
   const commanderCards = useMemo(
     () => cards.filter((c) => c.board === 'commander'),
@@ -120,6 +122,12 @@ export default function DeckView({
               <><Copy className="h-3.5 w-3.5" /> Copy list</>
             )}
           </button>
+          <button
+            onClick={() => setShowProxyPrint(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-secondary transition-colors hover:bg-bg-hover"
+          >
+            <Printer className="h-3.5 w-3.5" /> Print Proxies
+          </button>
           {copyError && (
             <span className="text-[11px] text-bg-red">{copyError}</span>
           )}
@@ -195,6 +203,14 @@ export default function DeckView({
         <CardDetail
           card={selectedDetailCard}
           onClose={() => setSelectedDetailCard(null)}
+        />
+      )}
+
+      {showProxyPrint && (
+        <ProxyPrintModal
+          deckName={deck.name}
+          cards={cards}
+          onClose={() => setShowProxyPrint(false)}
         />
       )}
     </div>
