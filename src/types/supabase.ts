@@ -450,6 +450,22 @@ export interface Database {
           image_art_crop: string | null
         }[]
       }
+      get_my_decks_summary: {
+        Args: { p_user_id: string }
+        Returns: {
+          deck_id: string
+          name: string
+          format: string
+          visibility: string
+          updated_at: string
+          card_count: number
+          cover_card_id: string | null
+          cover_name: string | null
+          cover_image_small: string | null
+          cover_image_normal: string | null
+          cover_image_art_crop: string | null
+        }[]
+      }
       get_profile_stats: {
         Args: { p_username: string }
         Returns: {

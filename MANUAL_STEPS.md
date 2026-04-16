@@ -49,6 +49,15 @@ Client ID + Secret configurati nel pannello Supabase → Authentication → Prov
 
 ## Step ancora aperti
 
+### [STEP_PERF_DECKS] — Applicare migration `get_my_decks_summary`
+Quando: **appena possibile**, per rendere veloce la pagina `/decks`.
+
+Cosa fare: applicare il contenuto di `supabase/migrations/20260416230000_deck_summary_rpc.sql` al DB (via Supabase Dashboard → SQL Editor, oppure via MCP plugin).
+
+Effetto: la pagina `/decks` passa da 2 query + join con tutte le righe `deck_cards` → 1 RPC aggregata in un solo round-trip. Finché la migration non è applicata, il codice ha un fallback sulla vecchia query (funziona lo stesso, ma lento — è lo stato attuale).
+
+Dopo aver applicato: verificare che `/decks` carichi veloce, poi rimuovere il blocco fallback in `src/app/(app)/decks/page.tsx`.
+
 ### [STEP 10] — Apple OAuth (opzionale)
 Quando: se vuoi aggiungere il login con Apple ID.
 
