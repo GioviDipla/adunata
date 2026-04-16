@@ -33,12 +33,19 @@ interface SetInfo {
   latest_release: string
 }
 
+interface DeckSummary {
+  id: string
+  name: string
+  format: string
+}
+
 interface CardBrowserProps {
   initialCards: Card[]
   sets?: SetInfo[]
+  userDecks?: DeckSummary[]
 }
 
-export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProps) {
+export default function CardBrowser({ initialCards, sets = [], userDecks = [] }: CardBrowserProps) {
   const supabase = createClient()
 
   const [cards, setCards] = useState<Card[]>(initialCards)
@@ -463,7 +470,7 @@ export default function CardBrowser({ initialCards, sets = [] }: CardBrowserProp
         </div>
       )}
 
-      {selectedCard && <CardDetail card={selectedCard} onClose={() => setSelectedCard(null)} />}
+      {selectedCard && <CardDetail card={selectedCard} onClose={() => setSelectedCard(null)} userDecks={userDecks} />}
     </div>
   )
 }

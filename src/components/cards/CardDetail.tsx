@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { X, Plus, ChevronDown, Loader2, Check, Layers } from 'lucide-react'
+import { X, Plus, ChevronDown, Loader2, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
@@ -38,17 +38,19 @@ interface CardDetailProps {
   onPrintingSelect?: (printing: Card) => void
   /** If provided, called after adding card to a deck (for local state update in deck editor) */
   onAddToDeck?: (card: Card) => void
+  /** Pre-fetched user decks (server-rendered). If omitted, falls back to client fetch. */
+  userDecks?: DeckSummary[]
 }
 
-export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDeck }: CardDetailProps) {
+export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDeck, userDecks }: CardDetailProps) {
   const [displayCard, setDisplayCard] = useState<Card>(card)
   const [printings, setPrintings] = useState<Card[]>([])
   const [loadingPrintings, setLoadingPrintings] = useState(false)
   const [showPrintings, setShowPrintings] = useState(false)
 
-  // Add to deck state
+  // Add to deck state — prefer pre-fetched decks from parent (server-rendered, instant).
   const [showDeckPicker, setShowDeckPicker] = useState(false)
-  const [myDecks, setMyDecks] = useState<DeckSummary[]>([])
+  const [myDecks, setMyDecks] = useState<DeckSummary[]>(userDecks ?? [])
   const [loadingDecks, setLoadingDecks] = useState(false)
   const [addedToDeckId, setAddedToDeckId] = useState<string | null>(null)
   const [addingToDeck, setAddingToDeck] = useState<string | null>(null)
@@ -64,9 +66,10 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     setShowPrintings(false)
   }, [card])
 
-  // Preload user's decks on mount so the picker opens instantly.
-  // Uses getSession() (local, no network) instead of getUser() (JWT verify round-trip).
+  // Fallback: if parent didn't pre-fetch (e.g. CardDetail used outside /cards),
+  // load decks on mount using getSession() — no JWT round-trip.
   useEffect(() => {
+    if (userDecks !== undefined) return
     let aborted = false
     const supabase = createClient()
     setLoadingDecks(true)
@@ -86,7 +89,7 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
       setLoadingDecks(false)
     })()
     return () => { aborted = true }
-  }, [])
+  }, [userDecks])
 
   async function loadPrintings() {
     if (printings.length > 0) {
@@ -366,7 +369,6 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                           disabled={addingToDeck === deck.id}
                           className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors hover:bg-bg-hover disabled:opacity-50"
                         >
-                          <Layers size={14} className="shrink-0 text-font-muted" />
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-medium text-font-primary">{deck.name}</div>
                             <div className="text-[10px] text-font-muted">{deck.format}</div>

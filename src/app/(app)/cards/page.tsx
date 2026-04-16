@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import CardBrowser from '@/components/cards/CardBrowser'
 
 export const metadata = {
@@ -8,8 +9,9 @@ export const metadata = {
 
 export default async function CardsPage() {
   const supabase = await createClient()
+  const user = await getAuthenticatedUser()
 
-  const [{ data: initialCards }, { data: sets }] = await Promise.all([
+  const [{ data: initialCards }, { data: sets }, { data: userDecks }] = await Promise.all([
     supabase
       .from('cards')
       .select('*')
@@ -18,6 +20,13 @@ export default async function CardsPage() {
       .limit(40),
     supabase
       .rpc('get_distinct_sets'),
+    user
+      ? supabase
+          .from('decks')
+          .select('id, name, format')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false })
+      : Promise.resolve({ data: [] as { id: string; name: string; format: string }[] }),
   ])
 
   return (
@@ -27,6 +36,7 @@ export default async function CardsPage() {
         <CardBrowser
           initialCards={initialCards || []}
           sets={(sets as { set_code: string; set_name: string; latest_release: string }[]) || []}
+          userDecks={userDecks || []}
         />
       </div>
     </div>
