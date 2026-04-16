@@ -6,6 +6,7 @@ import { GAME_PHASES } from '@/lib/game/phases'
 import type { GamePhase } from '@/lib/game/types'
 
 interface GameActionBarProps {
+  mode?: 'multiplayer' | 'goldfish'
   phase: GamePhase
   turn: number
   life: number
@@ -26,6 +27,7 @@ interface GameActionBarProps {
 }
 
 export default function GameActionBar({
+  mode = 'multiplayer',
   phase, turn, life, libraryCount, graveyardCount, exileCount,
   hasPriority, isActivePlayer, onPassPriority, onLifeChange, onDraw,
   onViewZone, onConcede, onConfirmUntap, autoPass, onToggleAutoPass, onSpecialActions,
@@ -47,7 +49,7 @@ export default function GameActionBar({
       <div className="flex items-center justify-between border-t border-border/50 px-3 py-1.5">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold text-font-muted">T{turn}</span>
-          <PriorityIndicator hasPriority={hasPriority} />
+          {mode !== 'goldfish' && <PriorityIndicator hasPriority={hasPriority} />}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -89,11 +91,13 @@ export default function GameActionBar({
               className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-cell py-2 text-font-secondary disabled:opacity-30">
               <Layers size={16} /><span className="text-[8px] font-bold">DRAW</span>
             </button>
-            <button onClick={onPassPriority}
-              className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-green py-2 text-font-white">
-              <SkipForward size={16} /><span className="text-[8px] font-bold">OK</span>
-            </button>
-            {onToggleAutoPass && (
+            {mode !== 'goldfish' && (
+              <button onClick={onPassPriority}
+                className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-green py-2 text-font-white">
+                <SkipForward size={16} /><span className="text-[8px] font-bold">OK</span>
+              </button>
+            )}
+            {mode !== 'goldfish' && autoPass !== undefined && onToggleAutoPass && (
               <button onClick={onToggleAutoPass}
                 className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-2 ${
                   autoPass ? 'bg-bg-green text-font-white' : 'bg-bg-cell text-font-secondary'
@@ -110,7 +114,7 @@ export default function GameActionBar({
             )}
             <button onClick={onConcede}
               className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-cell px-3 py-2 text-font-muted">
-              <Flag size={14} /><span className="text-[8px] font-bold">GG</span>
+              <Flag size={14} /><span className="text-[8px] font-bold">{mode === 'goldfish' ? 'RESTART' : 'GG'}</span>
             </button>
           </>
         ) : autoPass ? (

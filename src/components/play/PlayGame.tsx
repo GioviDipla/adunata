@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { Heart } from 'lucide-react'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -302,6 +303,9 @@ export default function PlayGame(props: PlayGameProps) {
   const hasPriority = gameState?.priorityPlayerId === userId
   const isActivePlayer = gameState?.activePlayerId === userId
   const myName = playerNames[userId] ?? 'Player'
+
+  const isGoldfish = mode === 'goldfish'
+  const botId = isGoldfish ? (props as PlayGameProps & { mode: 'goldfish' }).botId : null
 
   const handleSendChat = useCallback((message: string) => {
     sendAction({
@@ -904,26 +908,38 @@ export default function PlayGame(props: PlayGameProps) {
       )
     }
 
-    // Waiting for opponent to finish
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg-dark">
-        <span className="text-sm text-font-muted">Waiting for opponent to finish mulligan...</span>
-      </div>
-    )
+    // Waiting for opponent to finish (multiplayer only — ghost auto-keeps)
+    if (!isGoldfish) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg-dark">
+          <span className="text-sm text-font-muted">Waiting for opponent to finish mulligan...</span>
+        </div>
+      )
+    }
   }
 
   return (
     <div className="relative flex h-[100dvh] flex-col bg-bg-dark">
       {/* Scrollable: opponent + spacer + player battlefield */}
       <div className="flex-1 overflow-y-auto flex flex-col">
-        {/* Opponent field */}
-        <OpponentField
-          state={opponentState}
-          cardMap={cardMap}
-          expanded={opponentExpanded}
-          onToggleExpand={() => setOpponentExpanded((v) => !v)}
-          onCardPreview={(card, instanceId) => setPreview({ card, zone: 'opponentBattlefield' as PreviewZone, instanceId })}
-        />
+        {/* Opponent field — full in multiplayer, minimal life counter in goldfish */}
+        {!isGoldfish ? (
+          <OpponentField
+            state={opponentState}
+            cardMap={cardMap}
+            expanded={opponentExpanded}
+            onToggleExpand={() => setOpponentExpanded((v) => !v)}
+            onCardPreview={(card, instanceId) => setPreview({ card, zone: 'opponentBattlefield' as PreviewZone, instanceId })}
+          />
+        ) : opponentState ? (
+          <div className="flex items-center justify-center gap-3 px-3 py-2">
+            <span className="text-[10px] font-bold text-font-muted uppercase tracking-wider">{playerNames[botId!] ?? 'Goldfish'}</span>
+            <div className="flex items-center gap-1">
+              <Heart className="h-3.5 w-3.5 text-red-400" fill="currentColor" />
+              <span className="text-sm font-bold text-font-primary">{opponentState.life}</span>
+            </div>
+          </div>
+        ) : null}
 
         {/* Divider */}
         <div className="mx-3 border-t border-border/40" />
@@ -999,8 +1015,10 @@ export default function PlayGame(props: PlayGameProps) {
         </div>
       </div>
 
-      {/* Game Log */}
-      <GameLog entries={log} myUserId={userId} onSendChat={handleSendChat} />
+      {/* Game Log — multiplayer only */}
+      {!isGoldfish && (
+        <GameLog entries={log} myUserId={userId} onSendChat={handleSendChat} />
+      )}
 
       {/* Hand + Commander Zone */}
       <div className="border-t border-border bg-bg-card px-3 py-2">
@@ -1037,6 +1055,7 @@ export default function PlayGame(props: PlayGameProps) {
 
       {/* Action Bar at bottom */}
       <GameActionBar
+        mode={mode}
         phase={gameState.phase}
         turn={gameState.turn}
         life={myState.life}
@@ -1049,7 +1068,14 @@ export default function PlayGame(props: PlayGameProps) {
         onLifeChange={(amount) => sendAction(createLifeChange(userId, myName, userId, myName, amount))}
         onDraw={() => sendAction(createDraw(userId, myName))}
         onViewZone={setViewingZone}
-        onConcede={() => sendAction(createConcede(userId, myName))}
+        onConcede={isGoldfish
+          ? () => {
+            const gProps = props as PlayGameProps & { mode: 'goldfish' }
+            setGameState(structuredClone(gProps.initialState))
+            setGameOver(null)
+          }
+          : () => sendAction(createConcede(userId, myName))
+        }
         onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
         autoPass={myState.autoPass}
         onToggleAutoPass={() => sendAction(createToggleAutoPass(userId, myName, myState.autoPass))}
