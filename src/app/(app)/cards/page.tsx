@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import CardBrowser from '@/components/cards/CardBrowser'
 
 export const metadata = {
-  title: 'Card Database - Adunata',
+  title: 'Card Database - Adunata!!!',
   description: 'Browse and search Magic: The Gathering cards',
 }
 

@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Adunata",
+  title: "Adunata!!!",
   description: "Your Magic: The Gathering companion",
   manifest: "/manifest.json",
 };

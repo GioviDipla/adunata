@@ -51,7 +51,7 @@ export function Navbar() {
           <Sparkles className="h-6 w-6 shrink-0 text-font-accent" />
           {!collapsed && (
             <span className="text-lg font-bold text-font-primary">
-              Adunata
+              Adunata!!!
             </span>
           )}
         </div>
