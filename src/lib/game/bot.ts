@@ -59,6 +59,18 @@ export function applyWithBotLoop(
       // Future bot types: decision logic goes here
     }
 
+    // During bot's turn, auto-pass for human too (nothing to respond to on ghost's empty turn)
+    if (s.activePlayerId === botId && s.priorityPlayerId !== botId) {
+      s = applyAction(s, {
+        type: 'pass_priority',
+        playerId: s.priorityPlayerId,
+        data: {},
+        text: '',
+      })
+      iterations++
+      continue
+    }
+
     break
   }
 
