@@ -11,9 +11,8 @@ export async function POST(
 ) {
   const { id: lobbyId } = await params
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const user = session.user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Verify user is a player in this lobby
   const { data: myPlayer } = await supabase
