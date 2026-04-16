@@ -9,13 +9,13 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  console.log('[ACTION ROUTE] handler entered')
   try {
   const { id: lobbyId } = await params
-  console.log('[ACTION ROUTE] lobbyId:', lobbyId)
+  console.log('[ACTION] start, lobbyId:', lobbyId)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  console.log('[ACTION] authed user:', user.id)
 
   // Verify user is a player in this lobby
   const { data: myPlayer } = await supabase
@@ -30,6 +30,7 @@ export async function POST(
   }
 
   const action: GameAction = await request.json()
+  console.log('[ACTION] type:', action.type, 'player:', action.playerId)
 
   // Ensure action.playerId matches authenticated user
   if (action.playerId !== user.id) {
@@ -48,6 +49,7 @@ export async function POST(
   if (!gameStateRow) {
     return NextResponse.json({ error: 'Game not found' }, { status: 404 })
   }
+  console.log('[ACTION] got game state, seq:', (gameStateRow.state_data as Record<string, unknown>)?.lastActionSeq)
 
   const currentState = gameStateRow.state_data as unknown as GameState
 
@@ -130,13 +132,16 @@ export async function POST(
   }
 
   // Apply action with optimistic concurrency control (retry on stale state)
+  console.log('[ACTION] entering engine, action:', action.type)
   let retries = 0
   let stateToProcess = currentState
   while (retries < 3) {
     const expectedSeq = stateToProcess.lastActionSeq
+    console.log('[ACTION] retry:', retries, 'expectedSeq:', expectedSeq)
 
     // Apply action through the engine
     let newState = applyAction(stateToProcess, action)
+    console.log('[ACTION] engine applied, newSeq:', newState.lastActionSeq, 'mulligan:', !!newState.mulliganStage)
 
     // Auto-pass loop: chain pass_priority for players with autoPass enabled
     let autoPassCount = 0
