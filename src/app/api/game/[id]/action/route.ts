@@ -10,17 +10,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const steps: string[] = []
   try {
   const { id: lobbyId } = await params
-  steps.push('lobbyId:' + lobbyId)
   const supabase = await createClient()
-  steps.push('supabase created')
-  const authResult = await supabase.auth.getUser()
-  steps.push('auth:' + (authResult.error?.message ?? 'ok'))
-  const user = authResult.data?.user
-  if (!user) { console.log('[ACTION FAIL]', steps.join(' | ')); return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  steps.push('user:' + user.id)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   // Verify user is a player in this lobby
   const { data: myPlayer } = await supabase
@@ -31,17 +25,13 @@ export async function POST(
     .single()
 
   if (!myPlayer) {
-    console.log('[ACTION FAIL]', steps.join(' | '))
     return NextResponse.json({ error: 'Not a player in this game' }, { status: 403 })
   }
-  steps.push('player verified')
 
   const action: GameAction = await request.json()
-  steps.push('action:' + action.type)
 
   // Ensure action.playerId matches authenticated user
   if (action.playerId !== user.id) {
-    console.log('[ACTION FAIL]', steps.join(' | '))
     return NextResponse.json({ error: 'Player ID mismatch' }, { status: 403 })
   }
 
@@ -55,10 +45,8 @@ export async function POST(
     .single()
 
   if (!gameStateRow) {
-    console.log('[ACTION FAIL]', steps.join(' | '))
     return NextResponse.json({ error: 'Game not found' }, { status: 404 })
   }
-  steps.push('state seq:' + (gameStateRow.state_data as Record<string, unknown>)?.lastActionSeq)
 
   const currentState = gameStateRow.state_data as unknown as GameState
 
@@ -141,16 +129,13 @@ export async function POST(
   }
 
   // Apply action with optimistic concurrency control (retry on stale state)
-  console.log('[ACTION] entering engine, action:', action.type)
   let retries = 0
   let stateToProcess = currentState
   while (retries < 3) {
     const expectedSeq = stateToProcess.lastActionSeq
-    console.log('[ACTION] retry:', retries, 'expectedSeq:', expectedSeq)
 
     // Apply action through the engine
     let newState = applyAction(stateToProcess, action)
-    console.log('[ACTION] engine applied, newSeq:', newState.lastActionSeq, 'mulligan:', !!newState.mulliganStage)
 
     // Auto-pass loop: chain pass_priority for players with autoPass enabled
     let autoPassCount = 0
@@ -210,8 +195,8 @@ export async function POST(
 
   return NextResponse.json({ error: 'Action conflict, please retry' }, { status: 409 })
   } catch (err) {
-    const msg = err instanceof Error ? err.message + ' | ' + err.stack?.split('\n').slice(0, 3).join(' ') : String(err)
-    console.error('[ACTION CRASH]', msg)
-    return NextResponse.json({ error: msg, steps: steps.join(' | ') }, { status: 500 })
+    console.error('[action route crash]', err)
+    const msg = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
