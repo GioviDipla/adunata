@@ -26,21 +26,14 @@ img {
   user-select: none;
 }
 
-/* Mobile bottom navbar — anchored to the visual viewport via top-positioning.
-   MobileViewportFix writes `vv.offsetTop + vv.height - navHeight` into
-   --vv-nav-top each frame, so the navbar's bottom edge sits exactly on
-   the visible bottom edge regardless of Safari chrome state. Uses `top`
-   rather than `bottom`/`transform` to avoid depending on window.innerHeight,
-   which iOS can report stale by a pixel or two after keyboard toggles. */
+/* Mobile bottom navbar — locked to the native viewport bottom.
+   We deliberately do NOT chase visualViewport: that approach drifted
+   during iOS Safari's address-bar animations. iOS handles fixed bottom
+   natively well enough; the small misalignment with the retracting
+   address bar is acceptable vs. the janky drift we had before. */
 .mobile-navbar {
-  top: var(--vv-nav-top, auto);
-  bottom: auto;
-  will-change: top;
-}
-
-body.keyboard-open .mobile-navbar {
-  visibility: hidden;
-  pointer-events: none;
+  bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 @theme {
