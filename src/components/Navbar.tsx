@@ -156,22 +156,26 @@ export function Navbar() {
         {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
 
-      {/* Mobile drawer — slides in from the left when hamburger is tapped */}
+      {/* Mobile drawer — slides in from the left when hamburger is tapped.
+          Transparent backdrop (click-capture only) + transparent panel,
+          so the icons and labels float over page content just like on desktop. */}
       <div
         className={`fixed inset-0 z-40 md:hidden ${mobileOpen ? "pointer-events-auto" : "pointer-events-none"}`}
         aria-hidden={!mobileOpen}
       >
         <div
-          className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-200 ${
-            mobileOpen ? "opacity-100" : "opacity-0"
-          }`}
+          className="absolute inset-0"
           onClick={() => setMobileOpen(false)}
         />
         <aside
           className={`absolute left-0 top-0 flex h-full w-72 flex-col transition-transform duration-200 ${
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           }`}
-          style={{ paddingTop: "env(safe-area-inset-top)" }}
+          style={{
+            paddingTop: "env(safe-area-inset-top)",
+            // Leave room under Sign out so the close-FAB (hamburger → X) sits below both bottom rows.
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 5.5rem)",
+          }}
         >
           <div className="flex h-16 items-center gap-2 px-6">
             <Sparkles className="h-6 w-6 shrink-0 text-font-accent" />
