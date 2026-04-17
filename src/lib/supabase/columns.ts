@@ -37,7 +37,7 @@ export const DECK_LIST_COLUMNS =
 
 /** Full deck view — everything needed by DeckEditor / DeckView. */
 export const DECK_DETAIL_COLUMNS =
-  'id, user_id, name, description, format, visibility, cover_card_id, created_at, updated_at'
+  'id, user_id, name, description, format, visibility, cover_card_id, card_count, created_at, updated_at'
 
 // ── game ──────────────────────────────────────────────────────────────────
 
