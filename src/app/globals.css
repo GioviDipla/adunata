@@ -26,14 +26,11 @@ img {
   user-select: none;
 }
 
-/* Mobile bottom navbar — locked to the native viewport bottom.
-   We deliberately do NOT chase visualViewport: that approach drifted
-   during iOS Safari's address-bar animations. iOS handles fixed bottom
-   natively well enough; the small misalignment with the retracting
-   address bar is acceptable vs. the janky drift we had before. */
+/* Mobile floating icon dock — locked to the native viewport bottom.
+   Transparent container by design: each icon is a self-contained pill,
+   so any iOS Safari address-bar drift is visually invisible. */
 .mobile-navbar {
-  bottom: 0;
-  padding-bottom: env(safe-area-inset-bottom);
+  bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
 }
 
 @theme {

@@ -121,25 +121,25 @@ export function Navbar() {
         </div>
       </aside>
 
-      {/* Mobile bottom tab bar — positioned via .mobile-navbar (visualViewport-tracked) */}
-      <nav className="mobile-navbar fixed left-0 right-0 z-50 flex items-stretch border-t border-border bg-bg-surface md:hidden">
-        {navItems.map((item, idx) => {
+      {/* Mobile floating icon dock — transparent container, each icon is a
+          self-contained pill. No background = no visible misalignment when
+          iOS Safari's address bar animates. */}
+      <nav className="mobile-navbar fixed left-0 right-0 z-50 flex justify-around items-center pointer-events-none md:hidden">
+        {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-[11px] font-medium transition-colors ${
-                idx > 0 ? "border-l border-border/40" : ""
-              } ${
+              aria-label={item.label}
+              className={`pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md transition-colors ${
                 active
-                  ? "text-font-accent bg-bg-accent/5"
-                  : "text-font-muted active:bg-bg-hover"
+                  ? "bg-bg-accent/80 text-font-white ring-1 ring-font-white/30"
+                  : "bg-bg-dark/60 text-font-primary ring-1 ring-white/10"
               }`}
             >
               <Icon className="h-5 w-5" />
-              <span className="truncate max-w-[4rem]">{item.label}</span>
             </Link>
           );
         })}
