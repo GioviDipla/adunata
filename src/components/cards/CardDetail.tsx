@@ -15,6 +15,9 @@ interface CardFace {
   mana_cost?: string
   type_line?: string
   oracle_text?: string
+  /** Scryfall stores per-face images under image_uris. Older mapping
+      used a flattened `image_normal` — keep both for compatibility. */
+  image_uris?: { small?: string; normal?: string; large?: string }
   image_normal?: string
   power?: string
   toughness?: string
@@ -187,7 +190,15 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
               <div className="flex gap-3">
                 {isDoubleFaced ? (
                   cardFaces.map((face, i) => {
-                    const src = face.image_normal || displayCard.image_normal || ''
+                    const src =
+                      face.image_uris?.normal ||
+                      face.image_uris?.large ||
+                      face.image_uris?.small ||
+                      face.image_normal ||
+                      // Only fall back to the top-level image for the front (index 0)
+                      // — using it for index 1 would show the same face twice.
+                      (i === 0 ? displayCard.image_normal : '') ||
+                      ''
                     return src ? (
                       <Image
                         key={i}
