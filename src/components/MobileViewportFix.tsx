@@ -17,63 +17,70 @@ export function MobileViewportFix() {
 
     const KEYBOARD_THRESHOLD = 150
 
-    // Anchor the mobile navbar to the bottom of the VISUAL viewport using
-    // top-positioning, so we only depend on visualViewport readings:
+    // Anchor the mobile navbar to the bottom of the VISUAL viewport:
     //   top = vv.offsetTop + vv.height - navHeight
-    // We deliberately avoid window.innerHeight — on iOS Safari it can be
-    // cached or off by a pixel or two after a keyboard toggle, which made
-    // the older `innerHeight - (offsetTop + vv.height)` formula produce a
-    // visibly misaligned navbar as the address bar contracted on scroll.
+    //
+    // iOS Safari emits visualViewport.scroll/resize events only sparsely
+    // while the address bar is animating, so an event-driven rAF leaves
+    // the navbar lagging behind the true visible bottom during address-bar
+    // retraction (scroll-down). To fix this, any event kicks off a
+    // continuous rAF loop that reads vv fresh each frame and keeps running
+    // for a short tail of inactivity before parking itself.
     let rafId: number | null = null
+    let lastTick = 0
+    const IDLE_MS = 300
     const update = () => {
-      rafId = null
       const navbar = document.querySelector<HTMLElement>('.mobile-navbar')
       const diff = window.innerHeight - vv.height
       const keyboardOpen = diff > KEYBOARD_THRESHOLD
       document.body.classList.toggle('keyboard-open', keyboardOpen)
-      if (!navbar) return
-      const navHeight = navbar.offsetHeight
-      if (navHeight === 0) return
-      const topPx = vv.offsetTop + vv.height - navHeight
-      document.documentElement.style.setProperty('--vv-nav-top', `${topPx}px`)
+      if (navbar) {
+        const navHeight = navbar.offsetHeight
+        if (navHeight > 0) {
+          const topPx = vv.offsetTop + vv.height - navHeight
+          document.documentElement.style.setProperty('--vv-nav-top', `${topPx}px`)
+        }
+      }
+
+      if (performance.now() - lastTick < IDLE_MS) {
+        rafId = requestAnimationFrame(update)
+      } else {
+        rafId = null
+      }
     }
-    const schedule = () => {
-      if (rafId != null) return
-      rafId = requestAnimationFrame(update)
+    const kick = () => {
+      lastTick = performance.now()
+      if (rafId == null) rafId = requestAnimationFrame(update)
     }
 
-    schedule()
-    vv.addEventListener('resize', schedule)
-    vv.addEventListener('scroll', schedule)
-    window.addEventListener('orientationchange', schedule)
+    kick()
+    vv.addEventListener('resize', kick)
+    vv.addEventListener('scroll', kick)
+    window.addEventListener('orientationchange', kick)
+    window.addEventListener('scroll', kick, { passive: true })
 
-    // iOS Safari bug: after the virtual keyboard toggles, visualViewport.scroll
-    // events can go silent — the nav then freezes at whatever translate it
-    // had when the keyboard closed. Listening to window.scroll as well
-    // gives us a reliable tick source, and the rAF coalescing keeps us at
-    // 1 update/frame regardless of how many sources fire.
-    window.addEventListener('scroll', schedule, { passive: true })
-
-    // When the keyboard closes (blur on an input), schedule a few deferred
-    // updates: Safari commits the viewport change over a couple of frames,
-    // and a single update at focusout time often reads stale values.
+    // Safari commits post-keyboard viewport changes over several frames,
+    // and route changes / long-press can also momentarily skew readings.
+    // A burst of deferred kicks catches the final settled value.
     const timeouts: ReturnType<typeof setTimeout>[] = []
-    const onFocusOut = () => {
-      schedule()
-      timeouts.push(setTimeout(schedule, 50))
-      timeouts.push(setTimeout(schedule, 200))
-      timeouts.push(setTimeout(schedule, 500))
+    const burstKick = () => {
+      kick()
+      timeouts.push(setTimeout(kick, 50))
+      timeouts.push(setTimeout(kick, 200))
+      timeouts.push(setTimeout(kick, 500))
     }
-    document.addEventListener('focusout', onFocusOut)
+    document.addEventListener('focusout', burstKick)
+    document.addEventListener('touchend', kick, { passive: true })
 
     return () => {
       if (rafId != null) cancelAnimationFrame(rafId)
       for (const t of timeouts) clearTimeout(t)
-      vv.removeEventListener('resize', schedule)
-      vv.removeEventListener('scroll', schedule)
-      window.removeEventListener('orientationchange', schedule)
-      window.removeEventListener('scroll', schedule)
-      document.removeEventListener('focusout', onFocusOut)
+      vv.removeEventListener('resize', kick)
+      vv.removeEventListener('scroll', kick)
+      window.removeEventListener('orientationchange', kick)
+      window.removeEventListener('scroll', kick)
+      document.removeEventListener('focusout', burstKick)
+      document.removeEventListener('touchend', kick)
     }
   }, [])
 
