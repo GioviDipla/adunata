@@ -1,15 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
+import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
 import CardBrowser from '@/components/cards/CardBrowser'
 import type { Database } from '@/types/supabase'
 
 type Card = Database['public']['Tables']['cards']['Row']
-
-// Columns needed by the grid + filters. Heavy jsonb columns
-// (legalities, card_faces, all_parts) and oracle_text are omitted —
-// CardDetail refetches the full row when a card is opened.
-const GRID_COLUMNS =
-  'id, name, mana_cost, type_line, image_small, image_normal, prices_usd, cmc, rarity, set_code, color_identity, colors, keywords, released_at'
 
 export const metadata = {
   title: 'Card Database - Adunata!!!',
@@ -23,7 +18,7 @@ export default async function CardsPage() {
   const [{ data: initialCards }, { data: sets }, { data: userDecks }] = await Promise.all([
     supabase
       .from('cards')
-      .select(GRID_COLUMNS)
+      .select(CARD_GRID_COLUMNS)
       .not('released_at', 'is', null)
       .order('released_at', { ascending: false })
       .limit(40),
