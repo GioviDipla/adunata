@@ -195,10 +195,10 @@ export function Navbar() {
                   }`}
                 >
                   <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 transition-colors ${
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                       active
                         ? "bg-bg-accent/80 text-font-white ring-font-white/30"
-                        : "bg-bg-dark/60 text-font-primary ring-white/10 group-hover:bg-white/10"
+                        : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
                     }`}
                   >
                     <Icon className="h-5 w-5" />
@@ -217,10 +217,10 @@ export function Navbar() {
               }`}
             >
               <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 transition-colors ${
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                   isActive("/about")
                     ? "bg-bg-accent/80 text-font-white ring-font-white/30"
-                    : "bg-bg-dark/60 text-font-primary ring-white/10 group-hover:bg-white/10"
+                    : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
                 }`}
               >
                 <Info className="h-5 w-5" />
@@ -234,7 +234,7 @@ export function Navbar() {
               onClick={handleLogout}
               className="group flex w-full items-center gap-3 text-sm font-medium text-font-secondary transition-colors hover:text-font-primary"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg-dark/60 text-font-primary ring-1 ring-white/10 transition-colors group-hover:bg-white/10">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-font-primary ring-1 ring-white/25 backdrop-blur-xl transition-colors group-hover:bg-white/25">
                 <LogOut className="h-5 w-5" />
               </span>
               Sign out

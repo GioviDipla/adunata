@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Search, Loader2, ChevronDown, ChevronUp, X, ArrowUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import CardGrid from './CardGrid'
@@ -11,12 +12,6 @@ import CardDetail from './CardDetail'
 type Card = Database['public']['Tables']['cards']['Row']
 
 const PAGE_SIZE = 40
-
-// Columns needed by CardGrid/CardItem + all filters. Heavy jsonb
-// (legalities, card_faces, all_parts) and oracle_text are fetched
-// lazily by CardDetail when a card is opened.
-const GRID_COLUMNS =
-  'id, name, mana_cost, type_line, image_small, image_normal, prices_usd, cmc, rarity, set_code, color_identity, colors, keywords, released_at'
 
 const CARD_TYPES = [
   'Creature', 'Instant', 'Sorcery', 'Enchantment',
@@ -81,7 +76,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     (offset: number) => {
       let query = supabase
         .from('cards')
-        .select(GRID_COLUMNS)
+        .select(CARD_GRID_COLUMNS)
         .range(offset, offset + PAGE_SIZE - 1)
 
       if (debouncedSearch.trim()) {
