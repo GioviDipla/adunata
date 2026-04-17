@@ -22,16 +22,16 @@ export default function CardItem({ card, onSelect }: CardItemProps) {
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
     >
-      {/* Card image */}
+      {/* Card image — use image_normal (488×680) for deck-grid-quality rendering */}
       <div className="relative overflow-hidden rounded-lg bg-bg-card border border-border transition-all duration-200 group-hover:scale-[1.03] group-hover:shadow-xl group-hover:border-border-light">
-        {card.image_small ? (
+        {card.image_normal || card.image_small ? (
           <Image
-            src={card.image_small}
+            src={(card.image_normal ?? card.image_small)!}
             alt={card.name}
-            width={146}
-            height={204}
+            width={488}
+            height={680}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 20vw"
-            className="w-full aspect-[5/7] object-cover"
+            className="w-full aspect-[488/680] object-cover"
             loading="lazy"
           />
         ) : (

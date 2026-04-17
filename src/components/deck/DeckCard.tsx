@@ -165,12 +165,16 @@ export default function DeckCard({
         {card.type_line?.split('—')[0]?.trim()}
       </span>
 
-      {/* Price */}
-      {card.prices_usd && (
+      {/* Price — EUR (Cardmarket) primary, USD fallback */}
+      {card.prices_eur != null ? (
         <span className="hidden text-xs text-font-secondary sm:inline">
-          ${(card.prices_usd * quantity).toFixed(2)}
+          €{(Number(card.prices_eur) * quantity).toFixed(2)}
         </span>
-      )}
+      ) : card.prices_usd != null ? (
+        <span className="hidden text-xs text-font-secondary sm:inline">
+          ${(Number(card.prices_usd) * quantity).toFixed(2)}
+        </span>
+      ) : null}
 
       {/* Commander toggle button */}
       {onToggleCommander && (
