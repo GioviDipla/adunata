@@ -162,15 +162,16 @@ export function Navbar() {
         aria-hidden={!mobileOpen}
       >
         <div
-          className={`absolute inset-0 bg-black/50 transition-opacity duration-200 ${
+          className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-200 ${
             mobileOpen ? "opacity-100" : "opacity-0"
           }`}
           onClick={() => setMobileOpen(false)}
         />
         <aside
-          className={`absolute left-0 top-0 flex h-full w-72 flex-col bg-bg-dark/95 backdrop-blur-xl ring-1 ring-white/10 transition-transform duration-200 ${
+          className={`absolute left-0 top-0 flex h-full w-72 flex-col transition-transform duration-200 ${
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           }`}
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
         >
           <div className="flex h-16 items-center gap-2 px-6">
             <Sparkles className="h-6 w-6 shrink-0 text-font-accent" />
