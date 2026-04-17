@@ -71,6 +71,7 @@ export default async function DeckDetailPage({
       cards={formattedCards}
       ownerUsername={ownerProfile.username}
       ownerDisplayName={ownerProfile.display_name}
+      viewerId={user.id}
     />
   )
 }

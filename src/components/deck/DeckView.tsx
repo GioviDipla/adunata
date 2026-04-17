@@ -7,6 +7,7 @@ import DeckContent, { type DeckCardEntry } from './DeckContent'
 import ProxyPrintModal from './ProxyPrintModal'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
+import DeckEngagement from './DeckEngagement'
 import CardDetail from '@/components/cards/CardDetail'
 import type { Database } from '@/types/supabase'
 
@@ -20,6 +21,7 @@ interface DeckViewProps {
   cards: DeckCardEntry[]
   ownerUsername: string
   ownerDisplayName: string
+  viewerId: string | null
 }
 
 export default function DeckView({
@@ -27,6 +29,7 @@ export default function DeckView({
   cards,
   ownerUsername,
   ownerDisplayName,
+  viewerId,
 }: DeckViewProps) {
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [copied, setCopied] = useState(false)
@@ -185,6 +188,12 @@ export default function DeckView({
             commanderCards={commanderCards}
             isCommander={isCommander}
             onCardClick={setSelectedDetailCard}
+          />
+
+          <DeckEngagement
+            deckId={deck.id}
+            viewerId={viewerId}
+            deckOwnerId={deck.user_id}
           />
         </div>
 

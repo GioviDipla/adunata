@@ -411,6 +411,81 @@ export interface Database {
         }
         Relationships: []
       }
+      deck_likes: {
+        Row: {
+          deck_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          deck_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          deck_id?: string
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_likes_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deck_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      deck_comments: {
+        Row: {
+          id: string
+          deck_id: string
+          user_id: string
+          body: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          deck_id: string
+          user_id: string
+          body: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          deck_id?: string
+          user_id?: string
+          body?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_comments_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deck_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       sync_metadata: {
         Row: {
           key: string
