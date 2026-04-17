@@ -164,7 +164,9 @@ export function Navbar() {
         aria-hidden={!mobileOpen}
       >
         <div
-          className="absolute inset-0"
+          className={`absolute inset-0 bg-black/0 backdrop-blur-0 transition-all duration-200 ${
+            mobileOpen ? "bg-black/30 backdrop-blur-md" : ""
+          }`}
           onClick={() => setMobileOpen(false)}
         />
         <aside
