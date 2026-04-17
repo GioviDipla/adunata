@@ -3,84 +3,80 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
-import { useLongPress } from '@/lib/hooks/useLongPress'
 import CardPreviewOverlay from '@/components/game/CardPreviewOverlay'
 import type { PreviewState } from '@/components/game/CardPreviewOverlay'
 import type { LogEntry, CardMap } from '@/lib/game/types'
 import type { Database } from '@/types/supabase'
+import LogText from './log/LogText'
+import { styleForEntry, toneClasses } from './log/LogEntryStyle'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
-function toCardRow(cardId: number, data: CardMap[string]): CardRow {
-  return {
-    id: cardId, scryfall_id: '', name: data.name, mana_cost: data.manaCost ?? null,
-    cmc: 0, type_line: data.typeLine, oracle_text: data.oracleText ?? null,
-    colors: null, color_identity: [], rarity: '', set_code: '', set_name: '',
-    collector_number: '', image_small: data.imageSmall ?? null, image_normal: data.imageNormal ?? null,
-    image_art_crop: null, prices_usd: null, prices_usd_foil: null, prices_eur: null,
-    prices_eur_foil: null, released_at: null, legalities: null, power: data.power ?? null,
-    toughness: data.toughness ?? null, keywords: null, produced_mana: null, layout: null,
-    card_faces: null, search_vector: null, created_at: '', updated_at: '',
-  }
-}
-
-function LogEntryRow({ entry, cardMap, userId, onCardPreview }: {
+function LogEntryRow({
+  entry,
+  cardMap,
+  playerNames,
+  userId,
+  onCardPreview,
+}: {
   entry: LogEntry
   cardMap: CardMap
+  playerNames: Record<string, string>
   userId: string
   onCardPreview: (card: CardRow) => void
 }) {
-  const instanceId = (entry.data as Record<string, unknown> | null)?.instanceId as string | undefined
-  const hasCard = !!(instanceId && cardMap[instanceId])
-
-  const longPress = useLongPress({
-    onLongPress: () => {
-      if (hasCard) {
-        const d = cardMap[instanceId!]
-        onCardPreview(toCardRow(d.cardId, d))
-      }
-    },
-    delay: 400,
+  const style = styleForEntry(entry, userId)
+  const time = new Date(entry.createdAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
   })
 
-  const { wasLongPress, style: lpStyle, ...lpHandlers } = longPress
-
-  const handleClick = () => {
-    if (wasLongPress()) return
-  }
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault()
-    if (hasCard) {
-      const d = cardMap[instanceId!]
-      onCardPreview(toCardRow(d.cardId, d))
-    }
+  if (style.banner) {
+    return (
+      <div className={`my-1 flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs ${toneClasses(style.banner.tone)}`}>
+        <span className="text-[13px] leading-none">{style.glyph ?? '•'}</span>
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider">
+          {style.banner.label}
+        </span>
+        <span className="flex-1 text-font-primary">
+          <LogText
+            text={entry.text}
+            cardMap={cardMap}
+            playerNames={playerNames}
+            onCardPreview={onCardPreview}
+          />
+        </span>
+        <span className="shrink-0 text-[10px] text-font-muted tabular-nums">{time}</span>
+      </div>
+    )
   }
 
   return (
-    <div
-      onClick={handleClick}
-      onContextMenu={handleContextMenu}
-      {...lpHandlers}
-      style={lpStyle}
-      className={`flex gap-2 py-1 text-xs ${hasCard ? 'cursor-pointer active:bg-bg-hover rounded' : ''}`}
-    >
-      <span className="shrink-0 text-font-muted w-16 text-right">
-        {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-      </span>
-      <span className={
-        entry.type === 'chat' || entry.action === 'chat_message'
-          ? 'italic text-yellow-400'
-          : entry.playerId === userId ? 'text-font-accent' : 'text-font-primary'
-      }>
-        {entry.text}
+    <div className="flex gap-2 py-1 text-xs leading-relaxed">
+      {style.glyph && <span className="text-font-muted">{style.glyph}</span>}
+      <span className="shrink-0 text-font-muted tabular-nums">{time}</span>
+      <span className={`flex-1 ${style.textClass}`}>
+        <LogText
+          text={entry.text}
+          cardMap={cardMap}
+          playerNames={playerNames}
+          onCardPreview={onCardPreview}
+        />
       </span>
     </div>
   )
 }
 
 export default function GameHistoryView({
-  gameName, winnerId, playerNames, userId, log, cardMap, startedAt, finishedAt,
+  gameName,
+  winnerId,
+  playerNames,
+  userId,
+  log,
+  cardMap,
+  startedAt,
+  finishedAt: _finishedAt,
 }: {
   gameName: string
   winnerId: string | null
@@ -96,23 +92,32 @@ export default function GameHistoryView({
   const winnerName = winnerId ? (playerNames[winnerId] ?? 'Unknown') : null
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
+    <div className="mx-auto max-w-3xl px-4 py-6">
       {/* Header */}
       <div className="mb-6">
         <Link href="/play" className="flex items-center gap-1 text-font-secondary mb-3">
-          <ChevronLeft size={16} /><span className="text-xs font-medium">Back to Play</span>
+          <ChevronLeft size={16} />
+          <span className="text-xs font-medium">Back to Play</span>
         </Link>
         <h1 className="text-lg font-bold text-font-primary">{gameName}</h1>
         <div className="flex items-center gap-3 mt-1">
           {startedAt && (
             <span className="text-[10px] text-font-muted">
-              {new Date(startedAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              {new Date(startedAt).toLocaleDateString('it-IT', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </span>
           )}
           {winnerName && (
-            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
-              won ? 'bg-bg-green/20 text-bg-green' : 'bg-bg-red/20 text-bg-red'
-            }`}>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                won ? 'bg-bg-green/20 text-bg-green' : 'bg-bg-red/20 text-bg-red'
+              }`}
+            >
               {won ? 'Victory' : `${winnerName} wins`}
             </span>
           )}
@@ -128,6 +133,7 @@ export default function GameHistoryView({
               key={entry.id}
               entry={entry}
               cardMap={cardMap}
+              playerNames={playerNames}
               userId={userId}
               onCardPreview={(card) => setPreview({ card })}
             />
@@ -135,12 +141,8 @@ export default function GameHistoryView({
         </div>
       </div>
 
-      {/* Card preview overlay (read-only) */}
-      <CardPreviewOverlay
-        preview={preview}
-        onClose={() => setPreview(null)}
-        readOnly
-      />
+      {/* Card preview modal (mobile long-press / right-click) */}
+      <CardPreviewOverlay preview={preview} onClose={() => setPreview(null)} readOnly />
     </div>
   )
 }

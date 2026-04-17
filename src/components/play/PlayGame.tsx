@@ -1081,7 +1081,14 @@ export default function PlayGame(props: PlayGameProps) {
 
       {/* Game Log — multiplayer only */}
       {!isGoldfish && (
-        <GameLog entries={log} myUserId={userId} onSendChat={handleSendChat} />
+        <GameLog
+          entries={log}
+          myUserId={userId}
+          cardMap={cardMap}
+          playerNames={playerNames}
+          onSendChat={handleSendChat}
+          onCardPreview={(card) => setPreview({ card })}
+        />
       )}
 
       {/* Hand + Commander Zone */}
