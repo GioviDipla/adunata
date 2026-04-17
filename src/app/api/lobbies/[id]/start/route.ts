@@ -119,7 +119,12 @@ export async function POST(
     firstPlayerId,
     combat: { phase: null, attackers: [], blockers: [], damageAssigned: false, damageApplied: false },
     players: playerStates,
-    lastActionSeq: 0,
+    // The game_start entry below is inserted at seq=1, so the initial
+    // lastActionSeq must match — otherwise applyAction's first ++ produces
+    // seq=1 again, and process_game_action's INSERT to game_log collides
+    // with the game_start row on the UNIQUE(lobby_id, seq) constraint,
+    // rolling back the entire action transaction.
+    lastActionSeq: 1,
     mulliganStage: { playerDecisions: mulliganDecisions },
   }
 
