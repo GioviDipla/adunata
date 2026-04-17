@@ -30,7 +30,9 @@ img {
    Transparent container by design: each icon is a self-contained pill,
    so any iOS Safari address-bar drift is visually invisible. */
 .mobile-navbar {
-  bottom: env(safe-area-inset-bottom);
+  /* 1.5rem extra clears the home indicator even after the +12px arc offset
+     applied to the outermost icons. */
+  bottom: calc(env(safe-area-inset-bottom) + 1.5rem);
 }
 
 @theme {
