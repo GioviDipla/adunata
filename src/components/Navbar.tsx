@@ -182,7 +182,7 @@ export function Navbar() {
             <span className="text-lg font-bold text-font-primary">Adunata!!!</span>
           </div>
 
-          <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
+          <nav className="flex flex-1 flex-col gap-2 px-3 py-4">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
@@ -195,15 +195,23 @@ export function Navbar() {
                   }`}
                 >
                   <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
+                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                       active
                         ? "bg-bg-accent/80 text-font-white ring-font-white/30"
                         : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className="h-7 w-7" />
                   </span>
-                  {item.label}
+                  <span
+                    className={`rounded-full px-3 py-1.5 text-sm ring-1 backdrop-blur-xl transition-colors ${
+                      active
+                        ? "bg-bg-accent/80 text-font-white ring-font-white/30"
+                        : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
+                    }`}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
@@ -217,15 +225,23 @@ export function Navbar() {
               }`}
             >
               <span
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                   isActive("/about")
                     ? "bg-bg-accent/80 text-font-white ring-font-white/30"
                     : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
                 }`}
               >
-                <Info className="h-5 w-5" />
+                <Info className="h-7 w-7" />
               </span>
-              Leggi qui!
+              <span
+                className={`rounded-full px-3 py-1.5 text-sm ring-1 backdrop-blur-xl transition-colors ${
+                  isActive("/about")
+                    ? "bg-bg-accent/80 text-font-white ring-font-white/30"
+                    : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
+                }`}
+              >
+                Leggi qui!
+              </span>
             </Link>
           </div>
 
@@ -234,10 +250,12 @@ export function Navbar() {
               onClick={handleLogout}
               className="group flex w-full items-center gap-3 text-sm font-medium text-font-secondary transition-colors hover:text-font-primary"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-font-primary ring-1 ring-white/25 backdrop-blur-xl transition-colors group-hover:bg-white/25">
-                <LogOut className="h-5 w-5" />
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/15 text-font-primary ring-1 ring-white/25 backdrop-blur-xl transition-colors group-hover:bg-white/25">
+                <LogOut className="h-7 w-7" />
               </span>
-              Sign out
+              <span className="rounded-full bg-white/15 text-font-primary ring-1 ring-white/25 backdrop-blur-xl px-3 py-1.5 text-sm transition-colors group-hover:bg-white/25">
+                Sign out
+              </span>
             </button>
           </div>
         </aside>
