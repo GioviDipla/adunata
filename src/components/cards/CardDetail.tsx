@@ -339,55 +339,53 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
               </div>
 
               {/* Prices */}
-              {(displayCard.prices_eur != null || displayCard.prices_usd != null) && (
-                <div>
-                  <p className="text-sm text-font-muted mb-1">Prices</p>
-                  <div className="flex flex-col gap-1.5">
-                    {/* Cardmarket (EUR) — primary. Label links to the product page on cardmarket.com. */}
-                    {(displayCard.prices_eur != null || displayCard.prices_eur_foil != null) && (
-                      <div className="flex items-center gap-3">
-                        <a
-                          href={cardmarketUrl(displayCard.name)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex w-20 items-center gap-1 text-xs text-font-muted transition-colors hover:text-font-accent"
-                        >
-                          Cardmarket
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                        {displayCard.prices_eur != null && (
-                          <span className="text-font-primary font-medium">
-                            €{Number(displayCard.prices_eur).toFixed(2)}
-                          </span>
-                        )}
-                        {displayCard.prices_eur_foil != null && (
-                          <span className="text-font-accent text-sm">
-                            €{Number(displayCard.prices_eur_foil).toFixed(2)}{' '}
-                            <span className="text-font-muted text-xs">Foil</span>
-                          </span>
-                        )}
-                      </div>
+              <div>
+                <p className="text-sm text-font-muted mb-1">Prices</p>
+                <div className="flex flex-col gap-1.5">
+                  {/* Cardmarket (EUR) — primary. Label always links to the product page on cardmarket.com. */}
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={cardmarketUrl(displayCard.name)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex w-20 items-center gap-1 text-xs text-font-muted transition-colors hover:text-font-accent"
+                    >
+                      Cardmarket
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                    {displayCard.prices_eur != null ? (
+                      <span className="text-font-primary font-medium">
+                        €{Number(displayCard.prices_eur).toFixed(2)}
+                      </span>
+                    ) : (
+                      <span className="text-font-muted text-sm">—</span>
                     )}
-                    {/* TCGPlayer (USD) — secondary */}
-                    {(displayCard.prices_usd != null || displayCard.prices_usd_foil != null) && (
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-font-muted w-20">TCGPlayer</span>
-                        {displayCard.prices_usd != null && (
-                          <span className="text-font-secondary">
-                            ${Number(displayCard.prices_usd).toFixed(2)}
-                          </span>
-                        )}
-                        {displayCard.prices_usd_foil != null && (
-                          <span className="text-font-secondary text-sm">
-                            ${Number(displayCard.prices_usd_foil).toFixed(2)}{' '}
-                            <span className="text-font-muted text-xs">Foil</span>
-                          </span>
-                        )}
-                      </div>
+                    {displayCard.prices_eur_foil != null && (
+                      <span className="text-font-accent text-sm">
+                        €{Number(displayCard.prices_eur_foil).toFixed(2)}{' '}
+                        <span className="text-font-muted text-xs">Foil</span>
+                      </span>
                     )}
                   </div>
+                  {/* TCGPlayer (USD) — secondary */}
+                  {(displayCard.prices_usd != null || displayCard.prices_usd_foil != null) && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-font-muted w-20">TCGPlayer</span>
+                      {displayCard.prices_usd != null && (
+                        <span className="text-font-secondary">
+                          ${Number(displayCard.prices_usd).toFixed(2)}
+                        </span>
+                      )}
+                      {displayCard.prices_usd_foil != null && (
+                        <span className="text-font-secondary text-sm">
+                          ${Number(displayCard.prices_usd_foil).toFixed(2)}{' '}
+                          <span className="text-font-muted text-xs">Foil</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Add to Deck */}
               <div className="relative">
