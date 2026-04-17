@@ -45,10 +45,10 @@ export function Navbar() {
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className={`hidden md:flex ${collapsed ? 'md:w-16' : 'md:w-60'} md:flex-col md:fixed md:inset-y-0 border-r border-border bg-bg-surface transition-all duration-200`}>
+      {/* Desktop sidebar — transparent, same visual treatment as the mobile dock */}
+      <aside className={`hidden md:flex ${collapsed ? 'md:w-16' : 'md:w-60'} md:flex-col md:fixed md:inset-y-0 transition-all duration-200`}>
         {/* Logo */}
-        <div className={`flex h-16 items-center gap-2 border-b border-border ${collapsed ? 'justify-center px-2' : 'px-6'}`}>
+        <div className={`flex h-16 items-center gap-2 ${collapsed ? 'justify-center px-2' : 'px-6'}`}>
           <Sparkles className="h-6 w-6 shrink-0 text-font-accent" />
           {!collapsed && (
             <span className="text-lg font-bold text-font-primary">
@@ -68,8 +68,8 @@ export function Navbar() {
                 href={item.href}
                 className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium transition-colors ${
                   active
-                    ? "bg-bg-accent/10 text-font-accent"
-                    : "text-font-secondary hover:bg-bg-hover hover:text-font-primary"
+                    ? "bg-bg-accent/20 text-font-accent ring-1 ring-bg-accent/30"
+                    : "text-font-secondary hover:bg-white/5 hover:text-font-primary"
                 }`}
                 title={item.label}
               >
@@ -81,13 +81,13 @@ export function Navbar() {
         </nav>
 
         {/* About / info link */}
-        <div className="mt-auto border-t border-border px-3 py-2">
+        <div className="mt-auto px-3 py-2">
           <Link
             href="/about"
             className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium transition-colors ${
               isActive('/about')
-                ? 'bg-bg-accent/10 text-font-accent'
-                : 'text-font-secondary hover:bg-bg-hover hover:text-font-primary'
+                ? 'bg-bg-accent/20 text-font-accent ring-1 ring-bg-accent/30'
+                : 'text-font-secondary hover:bg-white/5 hover:text-font-primary'
             }`}
             title="Info su Adunata"
           >
@@ -97,10 +97,10 @@ export function Navbar() {
         </div>
 
         {/* Collapse toggle */}
-        <div className="border-t border-border px-3 py-2">
+        <div className="px-3 py-2">
           <button
             onClick={toggle}
-            className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary`}
+            className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium text-font-secondary transition-colors hover:bg-white/5 hover:text-font-primary`}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
@@ -109,10 +109,10 @@ export function Navbar() {
         </div>
 
         {/* Logout */}
-        <div className="border-t border-border px-3 py-4">
+        <div className="px-3 py-4">
           <button
             onClick={handleLogout}
-            className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary`}
+            className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-lg ${collapsed ? 'px-0 py-2.5' : 'px-3 py-2.5'} text-sm font-medium text-font-secondary transition-colors hover:bg-white/5 hover:text-font-primary`}
             title="Sign out"
           >
             <LogOut className="h-5 w-5 shrink-0" />
