@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { X, Plus, ChevronDown, Loader2, Check } from 'lucide-react'
+import { X, Plus, ChevronDown, Loader2, Check, ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CARD_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
@@ -21,6 +21,22 @@ interface CardFace {
   image_normal?: string
   power?: string
   toughness?: string
+}
+
+/**
+ * Build a Cardmarket product URL from a card name.
+ * Example: "Anikthea, Hand of Erebos" → ".../Anikthea-Hand-of-Erebos"
+ * For double-faced cards, Cardmarket indexes only the front-face name.
+ */
+function cardmarketUrl(cardName: string): string {
+  const frontName = cardName.split('//')[0].trim()
+  const slug = frontName
+    // Strip punctuation that doesn't appear in Cardmarket slugs.
+    .replace(/[,'":!?.()]/g, '')
+    // Collapse whitespace to single hyphens.
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+  return `https://www.cardmarket.com/it/Magic/Cards/${slug}`
 }
 
 const LEGALITY_COLORS: Record<string, string> = {
@@ -327,10 +343,18 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                 <div>
                   <p className="text-sm text-font-muted mb-1">Prices</p>
                   <div className="flex flex-col gap-1.5">
-                    {/* Cardmarket (EUR) — primary */}
+                    {/* Cardmarket (EUR) — primary. Label links to the product page on cardmarket.com. */}
                     {(displayCard.prices_eur != null || displayCard.prices_eur_foil != null) && (
                       <div className="flex items-center gap-3">
-                        <span className="text-xs text-font-muted w-20">Cardmarket</span>
+                        <a
+                          href={cardmarketUrl(displayCard.name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex w-20 items-center gap-1 text-xs text-font-muted transition-colors hover:text-font-accent"
+                        >
+                          Cardmarket
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
                         {displayCard.prices_eur != null && (
                           <span className="text-font-primary font-medium">
                             €{Number(displayCard.prices_eur).toFixed(2)}
