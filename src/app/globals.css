@@ -30,7 +30,7 @@ img {
    Transparent container by design: each icon is a self-contained pill,
    so any iOS Safari address-bar drift is visually invisible. */
 .mobile-navbar {
-  bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  bottom: env(safe-area-inset-bottom);
 }
 
 @theme {

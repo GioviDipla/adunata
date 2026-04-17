@@ -122,17 +122,22 @@ export function Navbar() {
       </aside>
 
       {/* Mobile floating icon dock — transparent container, each icon is a
-          self-contained pill. No background = no visible misalignment when
-          iOS Safari's address bar animates. */}
+          self-contained pill. Parabolic vertical offset per index gives a
+          horizon arc (outer icons sit lower than center). */}
       <nav className="mobile-navbar fixed left-0 right-0 z-50 flex justify-around items-center pointer-events-none md:hidden">
-        {navItems.map((item) => {
+        {navItems.map((item, idx) => {
           const Icon = item.icon;
           const active = isActive(item.href);
+          const center = (navItems.length - 1) / 2;
+          const half = center;
+          const normalized = Math.abs(idx - center) / half;
+          const arcPx = normalized * normalized * 12;
           return (
             <Link
               key={item.href}
               href={item.href}
               aria-label={item.label}
+              style={{ transform: `translateY(${arcPx}px)` }}
               className={`pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md transition-colors ${
                 active
                   ? "bg-bg-accent/80 text-font-white ring-1 ring-font-white/30"
