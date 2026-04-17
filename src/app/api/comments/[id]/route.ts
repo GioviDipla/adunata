@@ -24,29 +24,38 @@ export async function PATCH(
   const mentions = extractMentions(raw)
   if (mentions.length > 0) {
     const ids = mentions.map((m) => m.cardId)
-    const { data: found } = await supabase.from('cards').select('id').in('id', ids as unknown as number[])
+    const { data: found } = await supabase
+      .from('cards')
+      .select('id')
+      .in('id', ids as unknown as number[])
     const foundIds = new Set((found ?? []).map((c) => c.id as unknown as string))
     if (foundIds.size !== ids.length) {
       return NextResponse.json({ error: 'Invalid card mention' }, { status: 400 })
     }
   }
 
-  const { data, error } = await supabase
+  const { data: row, error } = await supabase
     .from('deck_comments')
     .update({ body: raw })
     .eq('id', commentId)
     .eq('user_id', user.id)
-    .select('id, deck_id, user_id, body, created_at, updated_at, author:profiles!user_id(id, username, display_name)')
+    .select('id, deck_id, user_id, body, created_at, updated_at')
     .single()
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  if (!data) {
+  if (!row) {
     return NextResponse.json({ error: 'Comment not found' }, { status: 404 })
   }
 
-  return NextResponse.json({ comment: data })
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, username, display_name')
+    .eq('id', row.user_id)
+    .maybeSingle()
+
+  return NextResponse.json({ comment: { ...row, author: profile ?? null } })
 }
 
 export async function DELETE(
