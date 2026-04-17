@@ -26,9 +26,13 @@ export default function CardChip({
   const { wasLongPress, style, ...lpHandlers } = longPress
 
   const handleClick = (e: React.MouseEvent) => {
+    // The long-press already fired the preview — swallow the tap that follows.
     if (wasLongPress()) {
       e.stopPropagation()
+      return
     }
+    e.stopPropagation()
+    onPreview()
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
