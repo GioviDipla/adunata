@@ -190,24 +190,24 @@ export function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`group flex items-center gap-3 text-sm font-medium transition-colors ${
+                  className={`group flex items-center gap-3 text-base font-medium transition-colors ${
                     active ? "text-font-primary" : "text-font-secondary hover:text-font-primary"
                   }`}
                 >
                   <span
-                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
+                    className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                       active
-                        ? "bg-bg-accent/80 text-font-white ring-font-white/30"
-                        : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
+                        ? "bg-bg-accent/85 text-font-white ring-font-white/40"
+                        : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
                     }`}
                   >
-                    <Icon className="h-7 w-7" />
+                    <Icon className="h-8 w-8" />
                   </span>
                   <span
-                    className={`rounded-full px-3 py-1.5 text-sm ring-1 backdrop-blur-xl transition-colors ${
+                    className={`rounded-full px-4 py-2 text-base ring-1 backdrop-blur-xl transition-colors ${
                       active
-                        ? "bg-bg-accent/80 text-font-white ring-font-white/30"
-                        : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
+                        ? "bg-bg-accent/85 text-font-white ring-font-white/40"
+                        : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
                     }`}
                   >
                     {item.label}
@@ -220,24 +220,24 @@ export function Navbar() {
           <div className="mt-auto px-3 py-2">
             <Link
               href="/about"
-              className={`group flex w-full items-center gap-3 text-sm font-medium transition-colors ${
+              className={`group flex w-full items-center gap-3 text-base font-medium transition-colors ${
                 isActive("/about") ? "text-font-primary" : "text-font-secondary hover:text-font-primary"
               }`}
             >
               <span
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
+                className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                   isActive("/about")
-                    ? "bg-bg-accent/80 text-font-white ring-font-white/30"
-                    : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
+                    ? "bg-bg-accent/85 text-font-white ring-font-white/40"
+                    : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
                 }`}
               >
-                <Info className="h-7 w-7" />
+                <Info className="h-8 w-8" />
               </span>
               <span
-                className={`rounded-full px-3 py-1.5 text-sm ring-1 backdrop-blur-xl transition-colors ${
+                className={`rounded-full px-4 py-2 text-base ring-1 backdrop-blur-xl transition-colors ${
                   isActive("/about")
-                    ? "bg-bg-accent/80 text-font-white ring-font-white/30"
-                    : "bg-white/15 text-font-primary ring-white/25 group-hover:bg-white/25"
+                    ? "bg-bg-accent/85 text-font-white ring-font-white/40"
+                    : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
                 }`}
               >
                 Leggi qui!
@@ -248,12 +248,12 @@ export function Navbar() {
           <div className="px-3 py-4">
             <button
               onClick={handleLogout}
-              className="group flex w-full items-center gap-3 text-sm font-medium text-font-secondary transition-colors hover:text-font-primary"
+              className="group flex w-full items-center gap-3 text-base font-medium text-font-secondary transition-colors hover:text-font-primary"
             >
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/15 text-font-primary ring-1 ring-white/25 backdrop-blur-xl transition-colors group-hover:bg-white/25">
-                <LogOut className="h-7 w-7" />
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/25 text-font-primary ring-1 ring-white/40 backdrop-blur-xl transition-colors group-hover:bg-white/35">
+                <LogOut className="h-8 w-8" />
               </span>
-              <span className="rounded-full bg-white/15 text-font-primary ring-1 ring-white/25 backdrop-blur-xl px-3 py-1.5 text-sm transition-colors group-hover:bg-white/25">
+              <span className="rounded-full bg-white/25 text-font-primary ring-1 ring-white/40 backdrop-blur-xl px-4 py-2 text-base transition-colors group-hover:bg-white/35">
                 Sign out
               </span>
             </button>
