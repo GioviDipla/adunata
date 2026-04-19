@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { ChevronRight, Heart } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import CreateLobby from '@/components/play/CreateLobby'
@@ -52,6 +54,25 @@ export default async function PlayPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <h1 className="mb-6 text-2xl font-bold text-font-primary">Play</h1>
+
+      {/* Life counter for in-person games */}
+      <Link
+        href="/play/life-counter"
+        className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-surface p-4 transition-colors hover:bg-bg-hover"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-red/20">
+            <Heart className="h-5 w-5 text-bg-red" />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-font-primary">Life Counter</div>
+            <div className="text-xs text-font-muted">
+              Conta i punti vita durante le partite dal vivo
+            </div>
+          </div>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-font-muted" />
+      </Link>
 
       {/* Active games */}
       <ActiveLobbiesList lobbies={activeLobbies} />
