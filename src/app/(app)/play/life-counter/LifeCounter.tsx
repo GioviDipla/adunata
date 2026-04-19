@@ -1,13 +1,17 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   ChevronLeft,
+  Coins,
+  Dices,
+  Droplet,
   Heart,
   Minus,
   Plus,
   RotateCcw,
+  Skull,
   Undo2,
   Users,
 } from 'lucide-react'
@@ -27,10 +31,27 @@ const PLAYER_ACCENTS = [
 interface Player {
   id: number
   life: number
+  poison: number
+}
+
+interface DiceRoll {
+  label: string
+  value: string
+  /** key to force React to replay the overlay animation on repeat rolls */
+  key: number
 }
 
 function makePlayers(n: number, life: number): Player[] {
-  return Array.from({ length: n }, (_, i) => ({ id: i + 1, life }))
+  return Array.from({ length: n }, (_, i) => ({ id: i + 1, life, poison: 0 }))
+}
+
+function clampLife(v: number) {
+  // Life can go negative in MTG for interaction tracking; we let it.
+  return v
+}
+
+function clampPoison(v: number) {
+  return Math.max(0, v)
 }
 
 export default function LifeCounter() {
@@ -38,6 +59,22 @@ export default function LifeCounter() {
   const [startingLife, setStartingLife] = useState<number>(20)
   const [players, setPlayers] = useState<Player[]>(() => makePlayers(2, 20))
   const [history, setHistory] = useState<Player[][]>([])
+  const [hubOpen, setHubOpen] = useState(false)
+  const [showPoison, setShowPoison] = useState(false)
+  const [dice, setDice] = useState<DiceRoll | null>(null)
+
+  // Close the hub menu on outside click.
+  const hubRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!hubOpen) return
+    const close = (e: MouseEvent) => {
+      if (hubRef.current && !hubRef.current.contains(e.target as Node)) {
+        setHubOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [hubOpen])
 
   const pushHistory = useCallback(() => {
     setHistory((h) => [...h.slice(-30), players])
@@ -46,7 +83,19 @@ export default function LifeCounter() {
   const updateLife = useCallback(
     (id: number, delta: number) => {
       pushHistory()
-      setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, life: p.life + delta } : p)))
+      setPlayers((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, life: clampLife(p.life + delta) } : p)),
+      )
+    },
+    [pushHistory],
+  )
+
+  const updatePoison = useCallback(
+    (id: number, delta: number) => {
+      pushHistory()
+      setPlayers((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, poison: clampPoison(p.poison + delta) } : p)),
+      )
     },
     [pushHistory],
   )
@@ -77,31 +126,48 @@ export default function LifeCounter() {
     setHistory([])
   }
 
-  // Keep screen awake while the counter is open (web-tab compatible — users
-  // typically keep the phone on the table during the game).
+  const rollDie = (sides: number) => {
+    const value = Math.floor(Math.random() * sides) + 1
+    setDice({ label: `d${sides}`, value: String(value), key: Date.now() })
+    setHubOpen(false)
+  }
+
+  const flipCoin = () => {
+    const value = Math.random() < 0.5 ? 'Heads' : 'Tails'
+    setDice({ label: 'Coin', value, key: Date.now() })
+    setHubOpen(false)
+  }
+
+  // Dice overlay auto-dismiss
+  useEffect(() => {
+    if (!dice) return
+    const t = setTimeout(() => setDice(null), 2200)
+    return () => clearTimeout(t)
+  }, [dice])
+
+  // Keep screen awake while the counter is open.
   useEffect(() => {
     interface WakeLockLike {
       release: () => Promise<void>
     }
     let wakeLock: WakeLockLike | null = null
-
     async function request() {
       try {
-        const nav = navigator as unknown as { wakeLock?: { request: (type: string) => Promise<WakeLockLike> } }
+        const nav = navigator as unknown as {
+          wakeLock?: { request: (type: string) => Promise<WakeLockLike> }
+        }
         if (nav.wakeLock) {
           wakeLock = await nav.wakeLock.request('screen')
         }
       } catch {
-        /* wake lock not supported or denied — continue silently */
+        /* silently fall back */
       }
     }
     request()
-
     const onVisibility = () => {
       if (document.visibilityState === 'visible' && !wakeLock) request()
     }
     document.addEventListener('visibilitychange', onVisibility)
-
     return () => {
       wakeLock?.release().catch(() => {})
       document.removeEventListener('visibilitychange', onVisibility)
@@ -114,8 +180,6 @@ export default function LifeCounter() {
     return 'grid grid-cols-2 grid-rows-2'
   }, [playerCount])
 
-  // Players in the top row (or top half) are rotated 180° so they face the
-  // opponent sitting across the table.
   const isRotated = (idx: number) => {
     if (playerCount === 2) return idx === 0
     if (playerCount === 3) return idx < 2
@@ -178,31 +242,98 @@ export default function LifeCounter() {
           >
             <Undo2 size={14} />
           </button>
-
-          <button
-            onClick={reset}
-            className="flex items-center gap-1 rounded-md bg-bg-card px-2 py-1.5 text-font-secondary transition-colors hover:text-font-primary"
-            aria-label="Reset"
-            title="Reset all"
-          >
-            <RotateCcw size={14} />
-          </button>
         </div>
       </div>
 
       {/* Player panels */}
-      <div className={`flex-1 gap-1 p-1 ${layoutClass}`}>
-        {players.map((p, idx) => (
-          <PlayerPanel
-            key={p.id}
-            index={idx}
-            player={p}
-            rotated={isRotated(idx)}
-            onChange={(delta) => updateLife(p.id, delta)}
-          />
-        ))}
+      <div className="relative flex-1">
+        <div className={`absolute inset-0 gap-1 p-1 ${layoutClass}`}>
+          {players.map((p, idx) => (
+            <PlayerPanel
+              key={p.id}
+              index={idx}
+              player={p}
+              rotated={isRotated(idx)}
+              showPoison={showPoison}
+              onLife={(delta) => updateLife(p.id, delta)}
+              onPoison={(delta) => updatePoison(p.id, delta)}
+            />
+          ))}
+        </div>
+
+        {/* Central hub: floating FAB that opens dice / coin / poison / reset */}
+        <div
+          ref={hubRef}
+          className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
+        >
+          <button
+            onClick={() => setHubOpen((v) => !v)}
+            aria-label="Game tools"
+            className={`flex h-14 w-14 items-center justify-center rounded-full bg-bg-surface text-font-primary shadow-xl ring-2 transition-all ${
+              hubOpen ? 'ring-bg-accent scale-105' : 'ring-border hover:ring-border-light'
+            }`}
+          >
+            <Dices className="h-6 w-6" />
+          </button>
+          {hubOpen && (
+            <div className="absolute left-1/2 top-full mt-3 w-56 -translate-x-1/2 rounded-xl border border-border bg-bg-surface p-2 shadow-2xl">
+              <HubItem icon={Dices} label="Tira 1d6" onClick={() => rollDie(6)} />
+              <HubItem icon={Dices} label="Tira 1d20" onClick={() => rollDie(20)} />
+              <HubItem icon={Coins} label="Testa o croce" onClick={flipCoin} />
+              <div className="my-1 h-px bg-border" />
+              <HubItem
+                icon={Skull}
+                label={showPoison ? 'Nascondi poison' : 'Mostra poison'}
+                onClick={() => setShowPoison((v) => !v)}
+                active={showPoison}
+              />
+              <HubItem icon={RotateCcw} label="Reset partita" onClick={reset} danger />
+            </div>
+          )}
+        </div>
+
+        {/* Dice result overlay */}
+        {dice && (
+          <div
+            key={dice.key}
+            className="pointer-events-none absolute left-1/2 top-1/2 z-30 flex -translate-x-1/2 -translate-y-[calc(50%+4rem)] flex-col items-center gap-1 rounded-2xl bg-black/80 px-8 py-5 shadow-2xl backdrop-blur-md duration-500 animate-in fade-in zoom-in-95"
+          >
+            <div className="text-xs font-medium uppercase tracking-widest text-font-muted">
+              {dice.label}
+            </div>
+            <div className="text-5xl font-bold tabular-nums text-font-primary">
+              {dice.value}
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  )
+}
+
+interface HubItemProps {
+  icon: React.ComponentType<{ className?: string; size?: number }>
+  label: string
+  onClick: () => void
+  active?: boolean
+  danger?: boolean
+}
+
+function HubItem({ icon: Icon, label, onClick, active, danger }: HubItemProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+        active
+          ? 'bg-bg-accent/20 text-font-accent'
+          : danger
+          ? 'text-bg-red hover:bg-bg-red/10'
+          : 'text-font-secondary hover:bg-bg-hover hover:text-font-primary'
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
   )
 }
 
@@ -210,26 +341,35 @@ interface PlayerPanelProps {
   index: number
   player: Player
   rotated: boolean
-  onChange: (delta: number) => void
+  showPoison: boolean
+  onLife: (delta: number) => void
+  onPoison: (delta: number) => void
 }
 
-function PlayerPanel({ index, player, rotated, onChange }: PlayerPanelProps) {
+function PlayerPanel({ index, player, rotated, showPoison, onLife, onPoison }: PlayerPanelProps) {
   const accent = PLAYER_ACCENTS[index % PLAYER_ACCENTS.length]
-  const isDead = player.life <= 0
-  const isCritical = !isDead && player.life <= 5
+  const isDead = player.life <= 0 || player.poison >= 10
+  const isCritical = !isDead && (player.life <= 5 || player.poison >= 7)
 
-  // Small ticker that flashes the last delta next to the life number so the
-  // user can see "+1" / "-5" feedback after a tap.
-  const [lastDelta, setLastDelta] = useState<number | null>(null)
+  const [lastDelta, setLastDelta] = useState<{ type: 'life' | 'poison'; value: number; key: number } | null>(null)
   useEffect(() => {
-    if (lastDelta == null) return
+    if (!lastDelta) return
     const t = setTimeout(() => setLastDelta(null), 900)
     return () => clearTimeout(t)
   }, [lastDelta])
 
-  const handleChange = (delta: number) => {
-    setLastDelta((prev) => (prev != null ? prev + delta : delta))
-    onChange(delta)
+  const handleLife = (delta: number) => {
+    setLastDelta((prev) =>
+      prev?.type === 'life'
+        ? { type: 'life', value: prev.value + delta, key: Date.now() }
+        : { type: 'life', value: delta, key: Date.now() },
+    )
+    onLife(delta)
+  }
+
+  const handlePoison = (delta: number) => {
+    setLastDelta({ type: 'poison', value: delta, key: Date.now() })
+    onPoison(delta)
   }
 
   return (
@@ -238,60 +378,94 @@ function PlayerPanel({ index, player, rotated, onChange }: PlayerPanelProps) {
         rotated ? 'rotate-180' : ''
       } ${isDead ? 'grayscale opacity-70' : ''}`}
     >
-      {/* Left half: decrement */}
+      {/* Left half: decrement life */}
       <button
-        onClick={() => handleChange(-1)}
+        onClick={() => handleLife(-1)}
         className="group flex flex-1 items-center justify-start pl-4 transition-colors active:bg-black/25"
-        aria-label="decrement"
+        aria-label="decrement life"
       >
         <Minus className="h-8 w-8 text-font-muted transition-colors group-hover:text-font-primary" />
       </button>
 
-      {/* Center life */}
+      {/* Center — life + poison badge */}
       <div className="pointer-events-none flex flex-col items-center justify-center px-2 select-none">
         <div
-          className={`text-[min(28vw,9rem)] font-bold leading-none tabular-nums transition-colors ${
+          className={`text-[min(26vw,8rem)] font-bold leading-none tabular-nums transition-colors ${
             isCritical ? 'text-bg-red' : 'text-font-primary'
           }`}
         >
           {player.life}
         </div>
-        <div className={`mt-1 rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider ${accent.chip}`}>
-          Player {player.id}
+        <div className="mt-1 flex items-center gap-2">
+          <div
+            className={`rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider ${accent.chip}`}
+          >
+            Player {player.id}
+          </div>
+          {showPoison && player.poison > 0 && (
+            <div className="flex items-center gap-1 rounded-full bg-bg-green/20 px-2 py-0.5 text-xs font-semibold text-bg-green">
+              <Droplet size={12} />
+              {player.poison}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right half: increment */}
+      {/* Right half: increment life */}
       <button
-        onClick={() => handleChange(1)}
+        onClick={() => handleLife(1)}
         className="group flex flex-1 items-center justify-end pr-4 transition-colors active:bg-black/25"
-        aria-label="increment"
+        aria-label="increment life"
       >
         <Plus className="h-8 w-8 text-font-muted transition-colors group-hover:text-font-primary" />
       </button>
 
-      {/* ±5 quick buttons */}
+      {/* Corner pills — ±5 life (top) */}
       <button
-        onClick={() => handleChange(-5)}
+        onClick={() => handleLife(-5)}
         className="absolute left-2 top-2 rounded-md bg-black/30 px-2 py-0.5 text-xs font-semibold text-font-primary backdrop-blur-sm transition-colors active:bg-black/50"
       >
         −5
       </button>
       <button
-        onClick={() => handleChange(5)}
+        onClick={() => handleLife(5)}
         className="absolute right-2 top-2 rounded-md bg-black/30 px-2 py-0.5 text-xs font-semibold text-font-primary backdrop-blur-sm transition-colors active:bg-black/50"
       >
         +5
       </button>
 
+      {/* Corner pills — poison (bottom), only when mode is active */}
+      {showPoison && (
+        <>
+          <button
+            onClick={() => handlePoison(-1)}
+            className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-bg-green/25 px-2 py-0.5 text-xs font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
+          >
+            <Droplet size={10} /> −
+          </button>
+          <button
+            onClick={() => handlePoison(1)}
+            className="absolute right-2 bottom-2 flex items-center gap-1 rounded-md bg-bg-green/25 px-2 py-0.5 text-xs font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
+          >
+            <Droplet size={10} /> +
+          </button>
+        </>
+      )}
+
       {/* Delta flash */}
-      {lastDelta != null && (
+      {lastDelta && (
         <div
-          className={`pointer-events-none absolute top-10 left-1/2 -translate-x-1/2 text-2xl font-bold ${
-            lastDelta > 0 ? 'text-bg-green' : 'text-bg-red'
+          key={lastDelta.key}
+          className={`pointer-events-none absolute top-8 left-1/2 -translate-x-1/2 text-2xl font-bold ${
+            lastDelta.type === 'poison'
+              ? 'text-bg-green'
+              : lastDelta.value > 0
+              ? 'text-bg-green'
+              : 'text-bg-red'
           } animate-pulse`}
         >
-          {lastDelta > 0 ? `+${lastDelta}` : lastDelta}
+          {lastDelta.value > 0 ? `+${lastDelta.value}` : lastDelta.value}
+          {lastDelta.type === 'poison' && ' ☠'}
         </div>
       )}
 
