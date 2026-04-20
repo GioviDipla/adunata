@@ -40,6 +40,7 @@ export interface Database {
           layout: string | null
           card_faces: Json | null
           search_vector: unknown | null
+          last_price_update: string | null
           created_at: string
           updated_at: string
         }
@@ -73,6 +74,7 @@ export interface Database {
           layout?: string | null
           card_faces?: Json | null
           search_vector?: unknown | null
+          last_price_update?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -106,6 +108,7 @@ export interface Database {
           layout?: string | null
           card_faces?: Json | null
           search_vector?: unknown | null
+          last_price_update?: string | null
           created_at?: string
           updated_at?: string
         }

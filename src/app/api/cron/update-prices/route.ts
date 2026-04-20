@@ -8,21 +8,21 @@ const BATCH_SIZE = 75
 const DELAY = 100
 
 /**
- * Cron job: update prices_eur, prices_eur_foil, and released_at
- * for cards missing these fields.
+ * Nightly cron: refresh prices_eur / prices_eur_foil / released_at from
+ * Scryfall (which sources EUR from Cardmarket).
  *
- * Protected by Vercel cron secret (Authorization header).
- * Scheduled weekly via vercel.json crons.
+ * Rolling stale-first strategy — orders cards by `last_price_update` ASC
+ * NULLS FIRST, refreshes as many as the Vercel 5 min budget allows, and
+ * stamps `last_price_update = now()` on every processed row (so the same
+ * card is not picked again until everything else has been touched).
  */
 export async function GET(request: NextRequest) {
-  // Verify cron secret
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = createAdminClient()
-  let lastId = '00000000-0000-0000-0000-000000000000'
   let totalUpdated = 0
   let totalProcessed = 0
   const startTime = Date.now()
@@ -32,21 +32,22 @@ export async function GET(request: NextRequest) {
     const { data: cards, error } = await admin
       .from('cards')
       .select('id, scryfall_id')
-      .or('prices_eur.is.null,released_at.is.null')
       .not('scryfall_id', 'is', null)
-      .gt('id', lastId)
+      .order('last_price_update', { ascending: true, nullsFirst: true })
       .order('id', { ascending: true })
       .limit(750)
 
     if (error || !cards || cards.length === 0) break
 
-    lastId = String(cards[cards.length - 1].id)
     totalProcessed += cards.length
+    const now = new Date().toISOString()
 
     for (let i = 0; i < cards.length; i += BATCH_SIZE) {
       if (Date.now() - startTime >= MAX_RUNTIME) break
 
       const batch = cards.slice(i, i + BATCH_SIZE)
+      const infoMap = new Map<string, { eur: number | null; eur_foil: number | null; released_at: string | null }>()
+
       try {
         const res = await fetch('https://api.scryfall.com/cards/collection', {
           method: 'POST',
@@ -54,36 +55,38 @@ export async function GET(request: NextRequest) {
           body: JSON.stringify({ identifiers: batch.map(c => ({ id: c.scryfall_id })) }),
         })
 
-        if (!res.ok) {
-          await new Promise(r => setTimeout(r, DELAY))
-          continue
-        }
-
-        const data = await res.json() as { data: ScryfallCard[] }
-        const infoMap = new Map<string, { eur: number | null; eur_foil: number | null; released_at: string | null }>()
-        for (const sc of data.data || []) {
-          infoMap.set(sc.id, {
-            eur: sc.prices?.eur ? parseFloat(sc.prices.eur) : null,
-            eur_foil: sc.prices?.usd_foil ? parseFloat(sc.prices.usd_foil) : null,
-            released_at: sc.released_at ?? null,
-          })
-        }
-
-        for (const card of batch) {
-          const info = infoMap.get(card.scryfall_id)
-          if (!info) continue
-          const update: { prices_eur?: number; prices_eur_foil?: number; released_at?: string } = {}
-          if (info.eur !== null) update.prices_eur = info.eur
-          if (info.eur_foil !== null) update.prices_eur_foil = info.eur_foil
-          if (info.released_at !== null) update.released_at = info.released_at
-          if (Object.keys(update).length > 0) {
-            const { error: ue } = await admin.from('cards').update(update).eq('id', card.id)
-            if (!ue) totalUpdated++
+        if (res.ok) {
+          const data = await res.json() as { data: ScryfallCard[] }
+          for (const sc of data.data || []) {
+            infoMap.set(sc.id, {
+              eur: sc.prices?.eur ? parseFloat(sc.prices.eur) : null,
+              eur_foil: sc.prices?.eur_foil ? parseFloat(sc.prices.eur_foil) : null,
+              released_at: sc.released_at ?? null,
+            })
           }
         }
       } catch {
-        // continue on error
+        // fall through — we still stamp last_price_update to avoid a tight loop
       }
+
+      for (const card of batch) {
+        const info = infoMap.get(card.scryfall_id)
+        // Always stamp to rotate the sliding window; merge in fresh data when we have it.
+        const update: {
+          last_price_update: string
+          prices_eur?: number | null
+          prices_eur_foil?: number | null
+          released_at?: string
+        } = { last_price_update: now }
+        if (info) {
+          update.prices_eur = info.eur
+          update.prices_eur_foil = info.eur_foil
+          if (info.released_at) update.released_at = info.released_at
+        }
+        const { error: ue } = await admin.from('cards').update(update).eq('id', card.id)
+        if (!ue && info) totalUpdated++
+      }
+
       await new Promise(r => setTimeout(r, DELAY))
     }
   }

@@ -73,6 +73,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     layout: null,
     card_faces: null,
     search_vector: null,
+    last_price_update: null,
     created_at: '',
     updated_at: '',
   }
