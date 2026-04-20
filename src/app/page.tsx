@@ -27,7 +27,10 @@ export default async function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-dark text-font-primary">
+    <div
+      className="min-h-screen bg-bg-dark text-font-primary"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <header className="border-b border-border/50">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">

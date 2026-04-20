@@ -40,6 +40,15 @@ img {
   display: none;
 }
 
+/* Universal safe-area handling for full-screen fixed overlays.
+   viewport-fit: cover + black-translucent means pages render under the iOS
+   notch. Any `fixed inset-0` container would clip its top-edge content
+   under the status bar unless it reserves the safe-area inset. Inline styles
+   still win via specificity when a component needs a custom rule. */
+.fixed.inset-0 {
+  padding-top: env(safe-area-inset-top);
+}
+
 @theme {
   --color-bg-dark: #121218;
   --color-bg-surface: #1A1A24;

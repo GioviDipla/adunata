@@ -10,7 +10,10 @@ const LAST_UPDATED = '20 aprile 2026'
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-bg-dark">
+    <div
+      className="min-h-screen bg-bg-dark"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
         <Link
           href="/"
