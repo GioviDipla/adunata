@@ -1,28 +1,31 @@
 #!/usr/bin/env node
 /**
- * Backfill `cards.name_it` from Scryfall's `default_cards` bulk data.
+ * Backfill `cards.name_it` for every card that has an Italian printing.
  *
- * `oracle_cards` (the bulk we normally sync from) only contains one
- * canonical English printing per card, so it has no Italian name info.
- * `default_cards` instead contains every printing in every language —
- * about 500MB of JSON. We only care about the Italian printings:
- * we build a `{ oracle_id -> printed_name }` map from them, then
- * update each row in our `cards` table whose `oracle_id` matches.
+ * Earlier iterations walked Scryfall's `default_cards` bulk, but that file
+ * only carries ONE printing per card — usually the English one — so you
+ * end up with a handful of `lang=it` rows (just the cards that have no
+ * English printing at all). To really cover the catalog we page through
+ * `/cards/search?q=lang:it+unique:cards`, which returns one record per
+ * Italian printing with its English-facing `name` and `oracle_id`.
+ *
+ * Matching back to our DB:
+ *   Scryfall IT hit           →  { oracle_id, printed_name }
+ *   Scryfall oracle_cards bulk →  { oracle_id → scryfall_id }  (EN canonical)
+ *   Our DB `cards.scryfall_id` matches the EN canonical ids.
+ *
+ * We fetch the tiny oracle_cards bulk (50MB) once to build the oracle→scry
+ * map, then batch-update via the apply_italian_names RPC.
  *
  * Usage:
  *   node --max-old-space-size=4096 scripts/sync-italian-names.mjs
  *   node --max-old-space-size=4096 scripts/sync-italian-names.mjs --force
- *
- * The script is idempotent: running it twice is safe.
  */
 
 import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { createWriteStream, readFileSync, unlinkSync, existsSync } from 'fs'
-import { Readable } from 'stream'
-import { pipeline } from 'stream/promises'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__dirname, '..', '.env.local') })
@@ -37,89 +40,63 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 const force = process.argv.includes('--force')
-const TMP_FILE = resolve(__dirname, '..', '.tmp-default-cards.json')
 
-async function main() {
-  console.log('🔄 Fetching Scryfall bulk catalog…')
+const SEARCH_URL = 'https://api.scryfall.com/cards/search?q=lang%3Ait+unique%3Acards&order=name'
+const ORACLE_BULK_TYPE = 'oracle_cards'
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+async function fetchOracleMap() {
+  console.log('📦 Fetching oracle_cards bulk (for oracle_id → scryfall_id map)…')
   const bulkRes = await fetch('https://api.scryfall.com/bulk-data')
   const { data: bulkList } = await bulkRes.json()
-  const entry = bulkList.find((d) => d.type === 'default_cards')
-  if (!entry) {
-    console.error('default_cards bulk entry not found')
-    process.exit(1)
-  }
+  const entry = bulkList.find((d) => d.type === ORACLE_BULK_TYPE)
+  if (!entry) throw new Error('oracle_cards bulk entry not found')
 
-  console.log(`📦 default_cards — ${(entry.size / 1024 / 1024).toFixed(0)} MB — updated ${entry.updated_at}`)
-
-  if (!force) {
-    const { data: meta } = await supabase
-      .from('sync_metadata')
-      .select('value')
-      .eq('key', 'italian_names_sync')
-      .maybeSingle()
-    if (meta?.value === entry.updated_at) {
-      console.log('✅ Italian names already up to date. Use --force to re-run.')
-      process.exit(0)
-    }
-  }
-
-  console.log('⬇️  Downloading default_cards.json…')
   const dlRes = await fetch(entry.download_uri)
-  if (!dlRes.ok) {
-    console.error('Download failed')
-    process.exit(1)
+  if (!dlRes.ok) throw new Error(`oracle_cards download failed: ${dlRes.status}`)
+
+  console.log('   parsing…')
+  const oracleCards = await dlRes.json()
+  const oracleToScry = new Map()
+  for (const c of oracleCards) {
+    if (c.oracle_id && c.id) oracleToScry.set(c.oracle_id, c.id)
   }
-  let dlBytes = 0
-  const countStream = new (await import('stream')).Transform({
-    transform(chunk, _enc, cb) {
-      dlBytes += chunk.length
-      process.stdout.write(`\r  ${(dlBytes / 1048576).toFixed(0)} MB`)
-      cb(null, chunk)
-    },
-  })
-  await pipeline(Readable.fromWeb(dlRes.body), countStream, createWriteStream(TMP_FILE))
-  console.log(' — done')
+  console.log(`   ${oracleToScry.size.toLocaleString()} oracle_id → scryfall_id entries`)
+  return { map: oracleToScry, version: entry.updated_at }
+}
 
-  console.log('📖 Parsing JSON…')
-  const raw = readFileSync(TMP_FILE, 'utf-8')
-  const allPrintings = JSON.parse(raw)
-  console.log(`   ${allPrintings.length.toLocaleString()} total printings`)
+async function fetchItalianNames() {
+  console.log('🔎 Paginating Scryfall for Italian printings…')
+  const italianByOracle = new Map()
+  let url = SEARCH_URL
+  let page = 0
+  let total = 0
 
-  // Build { oracle_id -> italian printed name }. First IT printing wins.
-  const byOracle = new Map()
-  let italianPrintings = 0
-  for (const p of allPrintings) {
-    if (p.lang !== 'it') continue
-    italianPrintings++
-    if (!p.oracle_id || !p.printed_name) continue
-    if (!byOracle.has(p.oracle_id)) byOracle.set(p.oracle_id, p.printed_name)
+  while (url) {
+    page++
+    const res = await fetch(url)
+    if (res.status === 404) break
+    if (!res.ok) {
+      throw new Error(`Scryfall search page ${page} returned ${res.status}`)
+    }
+    const { data, has_more, next_page } = await res.json()
+    for (const c of data || []) {
+      if (c.oracle_id && c.printed_name && !italianByOracle.has(c.oracle_id)) {
+        italianByOracle.set(c.oracle_id, c.printed_name)
+        total++
+      }
+    }
+    process.stdout.write(`\r   page ${page} — ${italianByOracle.size.toLocaleString()} IT names so far`)
+    if (!has_more) break
+    url = next_page
+    await sleep(100) // Scryfall asks for ≥50ms between calls; 100ms is safe.
   }
-  console.log(`   ${italianPrintings.toLocaleString()} Italian printings, ${byOracle.size.toLocaleString()} unique oracle ids`)
+  console.log(`\n   ${italianByOracle.size.toLocaleString()} unique Italian names across ${page} pages`)
+  return italianByOracle
+}
 
-  // We need to map oracle_id → scryfall_id in our DB. Our DB was synced
-  // from oracle_cards which embeds the oracle_id as `oracle_id` on each
-  // canonical EN card. Rather than add a column, walk default_cards a
-  // second pass looking only at `lang === 'en'` printings — first EN
-  // printing per oracle_id gives us a scryfall_id that's present in our
-  // DB (since oracle_cards picks one EN printing per oracle).
-  const enCanonical = new Map() // oracle_id -> scryfall_id
-  for (const p of allPrintings) {
-    if (p.lang !== 'en') continue
-    if (!p.oracle_id || !p.id) continue
-    if (!enCanonical.has(p.oracle_id)) enCanonical.set(p.oracle_id, p.id)
-  }
-
-  // Build the final list of { scryfall_id, name_it }
-  const updates = []
-  for (const [oracleId, itName] of byOracle.entries()) {
-    const scryId = enCanonical.get(oracleId)
-    if (scryId) updates.push({ scryfall_id: scryId, name_it: itName })
-  }
-  console.log(`   ${updates.length.toLocaleString()} rows to touch in our DB`)
-
-  // Apply updates in batches. We can't upsert because rows are keyed
-  // by a different primary key — use individual update statements
-  // keyed by scryfall_id, batched via unnest() in a single SQL call.
+async function applyUpdates(updates) {
   const BATCH = 500
   let updated = 0
   const t0 = Date.now()
@@ -133,7 +110,8 @@ async function main() {
       p_names: names,
     })
     if (error) {
-      // Fallback: if the RPC isn't installed, do individual updates.
+      console.error(`\n  ❌ batch ${i}: ${error.message}`)
+      // Per-row fallback in case something odd hit the RPC
       for (const u of batch) {
         const { error: ue } = await supabase
           .from('cards')
@@ -146,19 +124,50 @@ async function main() {
     }
     process.stdout.write(`\r  📊 ${updated.toLocaleString()} / ${updates.length.toLocaleString()} (${((Date.now() - t0) / 1000).toFixed(0)}s)`)
   }
+  console.log('')
+  return updated
+}
 
-  try { unlinkSync(TMP_FILE) } catch { /* noop */ }
+async function main() {
+  if (!force) {
+    const { data: meta } = await supabase
+      .from('sync_metadata')
+      .select('value')
+      .eq('key', 'italian_names_sync')
+      .maybeSingle()
+    if (meta?.value) {
+      console.log(`Last sync marker: ${meta.value}. Use --force to re-run regardless.`)
+    }
+  }
+
+  const [{ map: oracleToScry, version }, italianByOracle] = await Promise.all([
+    fetchOracleMap(),
+    fetchItalianNames(),
+  ])
+
+  const updates = []
+  for (const [oracleId, name] of italianByOracle.entries()) {
+    const scryId = oracleToScry.get(oracleId)
+    if (scryId) updates.push({ scryfall_id: scryId, name_it: name })
+  }
+  console.log(`✍️  ${updates.length.toLocaleString()} rows to touch in our DB`)
+
+  if (updates.length === 0) {
+    console.log('Nothing to do.')
+    return
+  }
+
+  const updated = await applyUpdates(updates)
 
   await supabase.from('sync_metadata').upsert(
-    { key: 'italian_names_sync', value: entry.updated_at },
+    { key: 'italian_names_sync', value: version },
     { onConflict: 'key' },
   )
 
-  console.log(`\n\n✅ Done in ${((Date.now() - t0) / 1000).toFixed(0)}s — ${updated.toLocaleString()} rows updated`)
+  console.log(`\n✅ Done — ${updated.toLocaleString()} rows updated`)
 }
 
 main().catch((err) => {
   console.error('Fatal:', err)
-  try { if (existsSync(TMP_FILE)) unlinkSync(TMP_FILE) } catch { /* noop */ }
   process.exit(1)
 })

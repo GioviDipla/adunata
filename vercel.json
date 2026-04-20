@@ -4,7 +4,7 @@
   "installCommand": "npm install",
   "crons": [
     {
-      "path": "/api/cron/update-prices",
+      "path": "/api/cron/daily-sync",
       "schedule": "0 3 * * *"
     }
   ]

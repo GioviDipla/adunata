@@ -82,6 +82,14 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 - **Keyset pagination su sort default** — `CardBrowser.buildQuery` accetta `{ offset?, after? }`. Per `sortBy === 'released_at_desc'` (90% dei casi) usa un cursor `(released_at, id)` con filtro `or(released_at.lt.X, and(released_at.eq.X, id.lt.Y))` + `.limit(PAGE_SIZE)`. Gli altri sort (name/cmc/price/type) restano su `.range(offset, offset+39)` offset-based — tempo di risposta stabile fino a depth tipiche. Motivo: evitare di implementare cursor compound robusto su tutti i 7 sort (null-handling, tie-break multipli), che sarebbe un refactor sproporzionato per una UI di browse. Tempo di Load More profondo sul default: da O(offset) a O(1).
 - **Index Postgres a supporto** — Aggiunti `idx_cards_released_at_id_desc` compound su `(released_at DESC NULLS LAST, id DESC)` per il keyset cursor; `idx_cards_color_identity_gin` GIN su `color_identity` per accelerare i filtri `contains/overlaps/containedBy` (incluso il nuovo Commander Color Identity).
 
+## Sessione 2026-04-20 — daily bulk sync (nuove carte + prezzi)
+
+- **`/api/cron/daily-sync`** — Nuovo cron giornaliero (`0 3 * * *` UTC = 05:00 Europe/Rome in DST) che scarica il bulk `oracle_cards` da Scryfall (~50MB compresso, ~160MB JSON) e fa `upsert(onConflict=scryfall_id)` di tutte le carte in un colpo solo. Un singolo run copre sia le nuove carte (inserts) sia l'aggiornamento dei prezzi EUR/USD (updates) per TUTTO il catalogo (~35k righe) in ~30s di esecuzione. Motivo: l'approccio precedente `update-prices` via `/cards/collection` era rolling e richiedeva 2-3 notti per coprire tutto; con il bulk è tutto in un run.
+- **Short-circuit su `sync_metadata.daily_bulk_sync`**: salva `entry.updated_at` di Scryfall come versione. Se il cron gira e la versione è già presente, esce in ≤1s. Scryfall rilascia un nuovo bulk una volta al giorno, quindi il risparmio è grande sui re-run.
+- **`last_price_update = now()` uniforme**: il bulk stamppa il timestamp su tutte le righe aggiornate, rendendo ordini stale-first del vecchio cron coerenti.
+- **`update-prices` route deprecata ma NON cancellata**: la route resta nel codice e gestisce ancora la rolling strategy via `/cards/collection`. Non è più nello `crons[]` di `vercel.json`, ma può essere invocata manualmente con `CRON_SECRET` come fallback on-demand.
+- **Rischio memoria**: il bulk parse sta sui ~400-500MB RAM peak, comodo su Vercel Pro (3GB) ma stretto su Hobby (1GB). Se il deploy va su Hobby, fallback al rolling update-prices.
+
 ## Sessione 2026-04-20 — context menu su Card Browser (long-press / right-click)
 
 - **Tabella `card_likes`** — `(user_id, card_id, created_at)`, PK composta, RLS "own only" (SELECT/INSERT/DELETE filtrati da `auth.uid() = user_id`), index `(user_id, created_at desc)` per la list-liked. Motivo: il "Like" è per-user, quindi non può stare come colonna su `cards`.
