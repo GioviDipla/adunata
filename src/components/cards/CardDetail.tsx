@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { X, Plus, ChevronDown, Loader2, Check, ExternalLink } from 'lucide-react'
+import { X, Plus, ChevronDown, Loader2, Check, ExternalLink, Heart, Share2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CARD_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
@@ -75,6 +75,13 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   const [addedToDeckId, setAddedToDeckId] = useState<string | null>(null)
   const [addingToDeck, setAddingToDeck] = useState<string | null>(null)
 
+  // Like + Share state — the modal fetches its own "liked" status so it works
+  // everywhere it's embedded (card browser, deck editor, deck view, deep link)
+  // without the parent having to thread state through.
+  const [liked, setLiked] = useState(false)
+  const [likeBusy, setLikeBusy] = useState(false)
+  const [shareFeedback, setShareFeedback] = useState<null | 'copied'>(null)
+
   const legalities = displayCard.legalities as Record<string, string> | null
   const cardFaces = displayCard.card_faces as CardFace[] | null
   const isDoubleFaced = cardFaces && cardFaces.length > 1
@@ -102,6 +109,66 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     })()
     return () => { aborted = true }
   }, [card])
+
+  // Fetch the current liked status from Supabase directly (RLS filters by user).
+  // Re-run whenever the displayed card changes (user cycles printings).
+  useEffect(() => {
+    let aborted = false
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user || aborted) return
+      const { data } = await supabase
+        .from('card_likes')
+        .select('user_id')
+        .eq('user_id', session.user.id)
+        .eq('card_id', String(displayCard.id))
+        .maybeSingle()
+      if (aborted) return
+      setLiked(data != null)
+    })()
+    return () => { aborted = true }
+  }, [displayCard.id])
+
+  const handleToggleLike = async () => {
+    if (likeBusy) return
+    const prev = liked
+    setLikeBusy(true)
+    setLiked(!prev) // optimistic
+    try {
+      const res = await fetch(`/api/cards/${displayCard.id}/like`, { method: 'POST' })
+      if (!res.ok) throw new Error('like failed')
+      const payload = (await res.json()) as { liked: boolean }
+      setLiked(payload.liked)
+    } catch {
+      setLiked(prev) // rollback
+    } finally {
+      setLikeBusy(false)
+    }
+  }
+
+  const handleShare = async () => {
+    const shareUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/cards?open=${displayCard.id}`
+        : `/cards?open=${displayCard.id}`
+    const data: ShareData = { title: displayCard.name, url: shareUrl }
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share(data)
+        return
+      } catch {
+        // User cancelled or share sheet failed — fall through to clipboard.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareFeedback('copied')
+      setTimeout(() => setShareFeedback(null), 1400)
+    } catch {
+      /* clipboard unavailable — give up silently */
+    }
+  }
 
   // Fallback: if parent didn't pre-fetch (e.g. CardDetail used outside /cards),
   // load decks on mount using getSession() — no JWT round-trip.
@@ -398,8 +465,8 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                 )}
               </div>
 
-              {/* Add to Deck */}
-              <div className="relative">
+              {/* Actions — Add to Deck (primary) + Like + Share */}
+              <div className="relative flex items-center gap-2">
                 <button
                   onClick={toggleDeckPicker}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -411,6 +478,39 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                   <Plus size={16} />
                   Add to Deck
                   <ChevronDown size={14} className={`transition-transform ${showDeckPicker ? 'rotate-180' : ''}`} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleLike}
+                  disabled={likeBusy}
+                  aria-label={liked ? 'Unlike card' : 'Like card'}
+                  title={liked ? 'Liked' : 'Like'}
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg ring-1 transition-colors disabled:opacity-60 ${
+                    liked
+                      ? 'bg-red-500/15 ring-red-500/40 text-red-400 hover:bg-red-500/25'
+                      : 'bg-bg-cell ring-border text-font-muted hover:bg-bg-hover hover:text-font-primary'
+                  }`}
+                >
+                  {likeBusy ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Heart size={18} className={liked ? 'fill-current' : ''} />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  aria-label="Share card"
+                  title={shareFeedback === 'copied' ? 'Link copied' : 'Share'}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-bg-cell ring-1 ring-border text-font-muted transition-colors hover:bg-bg-hover hover:text-font-primary"
+                >
+                  {shareFeedback === 'copied' ? (
+                    <Check size={18} className="text-bg-green" />
+                  ) : (
+                    <Share2 size={18} />
+                  )}
                 </button>
 
                 {showDeckPicker && (
