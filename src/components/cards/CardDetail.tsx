@@ -338,53 +338,64 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                 </div>
               </div>
 
-              {/* Prices */}
-              <div>
-                <p className="text-sm text-font-muted mb-1">Prices</p>
-                <div className="flex flex-col gap-1.5">
-                  {/* Cardmarket (EUR) — primary. Label always links to the product page on cardmarket.com. */}
-                  <div className="flex items-center gap-3">
-                    <a
-                      href={cardmarketUrl(displayCard.name)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-20 items-center gap-1 text-xs text-font-muted transition-colors hover:text-font-accent"
-                    >
+              {/* Prices — Cardmarket primary (EUR, buyable link), TCGPlayer secondary */}
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-font-muted">
+                  Prices
+                </p>
+
+                {/* Primary: big Cardmarket card — the whole thing is a buy link */}
+                <a
+                  href={cardmarketUrl(displayCard.name)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-blue-900/60 to-blue-950/60 px-4 py-3 ring-1 ring-blue-500/40 transition-all hover:from-blue-800/70 hover:to-blue-900/70 hover:ring-blue-400/70 active:brightness-95"
+                >
+                  <div className="flex flex-col">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-200">
                       Cardmarket
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
+                      <ExternalLink className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                    </span>
+                    <span className="mt-0.5 text-[10px] text-blue-300/80">Compra su Cardmarket</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
                     {displayCard.prices_eur != null ? (
-                      <span className="text-font-primary font-medium">
+                      <span className="text-2xl font-black tabular-nums text-white drop-shadow-sm">
                         €{Number(displayCard.prices_eur).toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-font-muted text-sm">—</span>
+                      <span className="text-sm text-blue-300/60">no price</span>
                     )}
                     {displayCard.prices_eur_foil != null && (
-                      <span className="text-font-accent text-sm">
-                        €{Number(displayCard.prices_eur_foil).toFixed(2)}{' '}
-                        <span className="text-font-muted text-xs">Foil</span>
+                      <span className="flex items-baseline gap-1 text-sm font-semibold tabular-nums text-amber-300">
+                        €{Number(displayCard.prices_eur_foil).toFixed(2)}
+                        <span className="text-[9px] uppercase tracking-wider text-amber-400/70">Foil</span>
                       </span>
                     )}
                   </div>
-                  {/* TCGPlayer (USD) — secondary */}
-                  {(displayCard.prices_usd != null || displayCard.prices_usd_foil != null) && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-font-muted w-20">TCGPlayer</span>
+                </a>
+
+                {/* Secondary: TCGPlayer, compact row */}
+                {(displayCard.prices_usd != null || displayCard.prices_usd_foil != null) && (
+                  <div className="flex items-center justify-between rounded-lg bg-bg-cell/60 px-3 py-1.5">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-font-muted">
+                      TCGPlayer
+                    </span>
+                    <div className="flex items-baseline gap-2">
                       {displayCard.prices_usd != null && (
-                        <span className="text-font-secondary">
+                        <span className="text-sm font-semibold tabular-nums text-font-secondary">
                           ${Number(displayCard.prices_usd).toFixed(2)}
                         </span>
                       )}
                       {displayCard.prices_usd_foil != null && (
-                        <span className="text-font-secondary text-sm">
-                          ${Number(displayCard.prices_usd_foil).toFixed(2)}{' '}
-                          <span className="text-font-muted text-xs">Foil</span>
+                        <span className="flex items-baseline gap-1 text-xs tabular-nums text-amber-300/80">
+                          ${Number(displayCard.prices_usd_foil).toFixed(2)}
+                          <span className="text-[9px] uppercase tracking-wider text-amber-400/60">Foil</span>
                         </span>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Add to Deck */}
