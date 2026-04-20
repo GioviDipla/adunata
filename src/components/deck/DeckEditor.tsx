@@ -456,12 +456,10 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         <div className="mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
           <Link
             href={`/decks/${deck.id}/goldfish`}
-            aria-label="Start goldfish playtest"
-            className="group relative flex h-16 w-16 sm:h-20 sm:w-20 shrink-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 via-indigo-500 to-amber-400 text-font-white shadow-lg shadow-blue-500/30 ring-1 ring-amber-300/60 transition-all hover:brightness-110 hover:shadow-amber-400/40 active:scale-95"
+            className="inline-flex items-center gap-1 rounded-lg bg-bg-accent px-2.5 py-1.5 text-xs sm:text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark"
           >
-            <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-white/25" />
-            <Fish className="relative h-6 w-6 sm:h-7 sm:w-7 drop-shadow-md" />
-            <span className="relative text-[11px] sm:text-xs font-bold tracking-wide drop-shadow">Goldfish</span>
+            <Fish className="h-3.5 w-3.5" />
+            Goldfish
           </Link>
           <VisibilityToggle
             deckId={deck.id}
