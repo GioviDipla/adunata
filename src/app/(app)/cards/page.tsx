@@ -1,5 +1,6 @@
 import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import { CARD_GRID_COLUMNS, DECK_PICKER_COLUMNS } from '@/lib/supabase/columns'
 import CardBrowser from '@/components/cards/CardBrowser'
@@ -16,18 +17,23 @@ export const metadata = {
  * Shared across users — "Newest 40" + the distinct sets list both change
  * on a cadence of hours, so we pin them behind Next's data cache with a
  * tag and let ISR-style revalidation serve the warm copy.
+ *
+ * Must use the admin client here: the SSR client reads auth cookies and
+ * Next.js forbids cookies() inside unstable_cache. Everything fetched
+ * here is public catalog data, so bypassing RLS via service role is
+ * semantically equivalent and safe.
  */
 const getPublicCardsData = unstable_cache(
   async () => {
-    const supabase = await createClient()
+    const admin = createAdminClient()
     const [{ data: initialCards }, { data: sets }] = await Promise.all([
-      supabase
+      admin
         .from('cards')
         .select(CARD_GRID_COLUMNS)
         .not('released_at', 'is', null)
         .order('released_at', { ascending: false })
         .limit(40),
-      supabase.rpc('get_distinct_sets'),
+      admin.rpc('get_distinct_sets'),
     ])
     return {
       initialCards: (initialCards || []) as unknown as Card[],
