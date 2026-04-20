@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Search, Loader2, ChevronDown, ChevronUp, X, ArrowUpDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
@@ -67,10 +67,45 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const [creatureType, setCreatureType] = useState('')
   const [selectedKeyword, setSelectedKeyword] = useState('')
   const [typeMode, setTypeMode] = useState<'and' | 'or'>('and')
+  const [colorMode, setColorMode] = useState<'and' | 'or'>('or')
   const [sortBy, setSortBy] = useState<string>('released_at_desc')
+  const [setSearch, setSetSearch] = useState('')
+  const [setDropdownOpen, setSetDropdownOpen] = useState(false)
+  const setBoxRef = useRef<HTMLDivElement | null>(null)
 
   const debouncedSearch = useDebounce(searchText, 300)
   const debouncedCreatureType = useDebounce(creatureType, 300)
+  const debouncedKeyword = useDebounce(selectedKeyword, 300)
+
+  // Close set dropdown on outside click
+  useEffect(() => {
+    if (!setDropdownOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (setBoxRef.current && !setBoxRef.current.contains(e.target as Node)) {
+        setSetDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [setDropdownOpen])
+
+  const sortedSets = useMemo(
+    () => [...sets].sort((a, b) => a.set_name.localeCompare(b.set_name)),
+    [sets]
+  )
+  const filteredSets = useMemo(() => {
+    const q = setSearch.trim().toLowerCase()
+    if (!q) return sortedSets
+    return sortedSets.filter(
+      (s) =>
+        s.set_name.toLowerCase().includes(q) ||
+        s.set_code.toLowerCase().includes(q)
+    )
+  }, [sortedSets, setSearch])
+  const selectedSetInfo = useMemo(
+    () => sets.find((s) => s.set_code === selectedSet) || null,
+    [sets, selectedSet]
+  )
 
   const buildQuery = useCallback(
     (offset: number) => {
@@ -105,7 +140,11 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
       }
 
       if (selectedColors.length > 0) {
-        query = query.contains('color_identity', selectedColors)
+        if (selectedColors.length === 1 || colorMode === 'and') {
+          query = query.contains('color_identity', selectedColors)
+        } else {
+          query = query.overlaps('color_identity', selectedColors)
+        }
       }
 
       if (selectedTypes.length === 1) {
@@ -131,13 +170,13 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
         query = query.ilike('type_line', `%${debouncedCreatureType.trim()}%`)
       }
 
-      if (selectedKeyword.trim()) {
-        query = query.contains('keywords', [selectedKeyword.trim()])
+      if (debouncedKeyword.trim()) {
+        query = query.ilike('oracle_text', `%${debouncedKeyword.trim()}%`)
       }
 
       return query
     },
-    [supabase, debouncedSearch, selectedColors, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, selectedKeyword, sortBy]
+    [supabase, debouncedSearch, selectedColors, colorMode, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, sortBy]
   )
 
   useEffect(() => {
@@ -191,7 +230,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     const hasFilters =
       debouncedSearch || selectedColors.length > 0 || selectedTypes.length > 0 ||
       selectedRarity || cmcMin !== '' || cmcMax !== '' || selectedSet ||
-      debouncedCreatureType.trim() || selectedKeyword.trim()
+      debouncedCreatureType.trim() || debouncedKeyword.trim()
 
     if (hasFilters) {
       fetchCards()
@@ -202,7 +241,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     }
 
     return () => { cancelled = true; controller?.abort() }
-  }, [debouncedSearch, selectedColors, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, selectedKeyword, buildQuery, initialCards])
+  }, [debouncedSearch, selectedColors, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, buildQuery, initialCards])
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return
@@ -226,6 +265,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     setSearchText(''); setSelectedColors([]); setSelectedTypes([])
     setSelectedRarity(''); setCmcMin(''); setCmcMax('')
     setSelectedSet(''); setCreatureType(''); setSelectedKeyword('')
+    setSetSearch(''); setColorMode('or'); setTypeMode('and')
   }
 
   const activeFilterCount = [
@@ -247,29 +287,8 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
         />
       </div>
 
-      {/* Color buttons + filter toggle */}
+      {/* Filter toggle + sort */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1">
-          {MANA_COLORS.map((color) => {
-            const isActive = selectedColors.includes(color.code)
-            return (
-              <button
-                key={color.code}
-                onClick={() => toggleColor(color.code)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  isActive ? 'ring-2 ring-font-primary ring-offset-2 ring-offset-bg-dark scale-110' : 'opacity-60 hover:opacity-100'
-                }`}
-                style={{ backgroundColor: color.bg, color: color.text }}
-                title={color.code}
-              >
-                {color.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="w-px h-6 bg-border" />
-
         <button
           onClick={() => setShowFilters((p) => !p)}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors ${
@@ -316,25 +335,102 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
       {/* Expanded filters */}
       {showFilters && (
         <div className="rounded-xl border border-border bg-bg-surface p-4 space-y-4">
+          {/* Colors (multi-select toggle with AND/OR, default OR) */}
+          <div>
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-font-muted">Colors</span>
+              {selectedColors.length > 1 && (
+                <button
+                  onClick={() => setColorMode((m) => m === 'and' ? 'or' : 'and')}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                    colorMode === 'and'
+                      ? 'bg-bg-accent/20 text-font-accent'
+                      : 'bg-bg-yellow/20 text-bg-yellow'
+                  }`}
+                  title={colorMode === 'and' ? 'AND: card must include ALL selected colors in its identity' : 'OR: card must include ANY selected color in its identity'}
+                >
+                  {colorMode.toUpperCase()}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {MANA_COLORS.map((color) => {
+                const isActive = selectedColors.includes(color.code)
+                return (
+                  <button
+                    key={color.code}
+                    onClick={() => toggleColor(color.code)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      isActive ? 'ring-2 ring-font-primary ring-offset-2 ring-offset-bg-surface scale-110' : 'opacity-60 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: color.bg, color: color.text }}
+                    title={color.code}
+                  >
+                    {color.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-3">
-            {/* Set dropdown */}
-            <div className="flex-1 min-w-[200px]">
+            {/* Set combobox (search + filtered list) */}
+            <div ref={setBoxRef} className="flex-1 min-w-[240px] relative">
               <label className="mb-1 block text-xs font-medium text-font-muted">Set</label>
               <div className="relative">
-                <select
-                  value={selectedSet}
-                  onChange={(e) => setSelectedSet(e.target.value)}
-                  className="w-full appearance-none bg-bg-card border border-border text-font-primary rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:border-bg-accent cursor-pointer"
-                >
-                  <option value="">All Sets</option>
-                  {sets.map((s) => (
-                    <option key={s.set_code} value={s.set_code}>
-                      {s.set_name} ({s.set_code.toUpperCase()})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-font-muted pointer-events-none" size={14} />
+                <input
+                  type="text"
+                  value={setDropdownOpen ? setSearch : (selectedSetInfo ? `${selectedSetInfo.set_name} (${selectedSetInfo.set_code.toUpperCase()})` : setSearch)}
+                  onFocus={() => { setSetDropdownOpen(true); setSetSearch('') }}
+                  onChange={(e) => { setSetSearch(e.target.value); setSetDropdownOpen(true) }}
+                  placeholder="All Sets — type to search..."
+                  className="w-full bg-bg-card border border-border text-font-primary rounded-lg pl-3 pr-16 py-2 text-sm focus:outline-none focus:border-bg-accent placeholder:text-font-muted"
+                />
+                {selectedSet && (
+                  <button
+                    onClick={() => { setSelectedSet(''); setSetSearch(''); setSetDropdownOpen(false) }}
+                    className="absolute right-7 top-1/2 -translate-y-1/2 text-font-muted hover:text-font-primary"
+                    title="Clear set"
+                    type="button"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <ChevronDown
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-font-muted cursor-pointer"
+                  size={14}
+                  onClick={() => setSetDropdownOpen((v) => !v)}
+                />
               </div>
+              {setDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-64 overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedSet(''); setSetSearch(''); setSetDropdownOpen(false) }}
+                    className={`block w-full text-left px-3 py-2 text-sm transition-colors hover:bg-bg-hover ${
+                      !selectedSet ? 'text-font-accent' : 'text-font-secondary'
+                    }`}
+                  >
+                    All Sets
+                  </button>
+                  {filteredSets.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-font-muted">No matching sets</div>
+                  ) : (
+                    filteredSets.map((s) => (
+                      <button
+                        key={s.set_code}
+                        type="button"
+                        onClick={() => { setSelectedSet(s.set_code); setSetSearch(''); setSetDropdownOpen(false) }}
+                        className={`block w-full text-left px-3 py-2 text-sm transition-colors hover:bg-bg-hover ${
+                          s.set_code === selectedSet ? 'text-font-accent' : 'text-font-primary'
+                        }`}
+                      >
+                        {s.set_name} <span className="text-font-muted">({s.set_code.toUpperCase()})</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Rarity */}
@@ -423,10 +519,10 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
 
             <div className="min-w-[200px]">
               <label className="mb-1 block text-xs font-medium text-font-muted">
-                Keyword <span className="text-font-muted">(e.g. Flying, Deathtouch)</span>
+                Rules Text <span className="text-font-muted">(search in oracle text)</span>
               </label>
               <div className="relative">
-                <input type="text" placeholder="Flying, Trample..." value={selectedKeyword} onChange={(e) => setSelectedKeyword(e.target.value)}
+                <input type="text" placeholder="flying, draw a card, deals damage..." value={selectedKeyword} onChange={(e) => setSelectedKeyword(e.target.value)}
                   className="w-full bg-bg-card border border-border text-font-primary rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-bg-accent placeholder:text-font-muted" />
                 {selectedKeyword && (
                   <button onClick={() => setSelectedKeyword('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-font-muted hover:text-font-primary">
