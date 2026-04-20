@@ -34,16 +34,9 @@ export default function CardContextMenu({
   const [shareFeedback, setShareFeedback] = useState<null | 'copied'>(null)
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
-    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
-    document.addEventListener('mousedown', onClick)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.removeEventListener('mousedown', onClick)
-    }
+    return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
   // Clamp position so the menu fits inside the viewport.
@@ -90,6 +83,19 @@ export default function CardContextMenu({
   }
 
   return (
+    <>
+      {/* Invisible backdrop — captures outside clicks and any scroll/touch-scroll
+       *  without ever reaching the CardItem underneath, so clicking another card
+       *  or starting to scroll just closes the menu. */}
+      <div
+        className="fixed inset-0 z-40"
+        onMouseDown={onClose}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClose() }}
+        onContextMenu={(e) => { e.preventDefault(); onClose() }}
+        onWheel={onClose}
+        onTouchStart={onClose}
+        onTouchMove={onClose}
+      />
     <div
       ref={ref}
       role="menu"
@@ -97,6 +103,7 @@ export default function CardContextMenu({
       className="fixed z-50 w-[220px] rounded-xl border border-border bg-bg-surface p-1.5 shadow-2xl backdrop-blur-xl"
       style={{ left, top }}
       onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       <button
         type="button"
@@ -133,5 +140,6 @@ export default function CardContextMenu({
         {shareFeedback === 'copied' ? 'Link copied' : 'Share'}
       </button>
     </div>
+    </>
   )
 }
