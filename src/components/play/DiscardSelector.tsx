@@ -54,7 +54,10 @@ export default function DiscardSelector({ hand, cardMap, onConfirm }: DiscardSel
   const remaining = discardCount - selected.size
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-bg-dark/95">
+    <div
+      className="absolute inset-0 z-50 flex flex-col bg-bg-dark/95"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Trash2 size={18} className="text-bg-red" />

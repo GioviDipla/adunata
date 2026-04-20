@@ -844,7 +844,10 @@ export default function PlayGame(props: PlayGameProps) {
   // Loading state
   if (loading || !gameState || !myState || !opponentState) {
     return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-bg-dark">
+      <div
+        className="fixed inset-0 z-40 flex items-center justify-center bg-bg-dark"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <span className="text-font-muted">Loading game...</span>
       </div>
     )
@@ -854,7 +857,10 @@ export default function PlayGame(props: PlayGameProps) {
   if (gameOver) {
     const won = gameOver.winnerId === userId
     return (
-      <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-bg-dark">
+      <div
+        className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-bg-dark"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <span className={`text-3xl font-bold ${won ? 'text-bg-green' : 'text-bg-red'}`}>
           {won ? 'You Win!' : 'You Lose'}
         </span>
@@ -874,7 +880,10 @@ export default function PlayGame(props: PlayGameProps) {
     if (myDecision.decided && !myDecision.bottomCardsDone && myDecision.needsBottomCards > 0) {
       const needed = myDecision.needsBottomCards
       return (
-        <div className="fixed inset-0 z-40 flex flex-col bg-bg-dark">
+        <div
+          className="fixed inset-0 z-40 flex flex-col bg-bg-dark"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
           <div className="flex items-center justify-between border-b border-border bg-bg-surface px-4 py-3">
             <span className="text-sm font-semibold text-font-primary">Multiplayer</span>
             <span className="text-xs text-font-muted">Select {needed} card{needed > 1 ? 's' : ''} to put on bottom</span>
@@ -926,7 +935,10 @@ export default function PlayGame(props: PlayGameProps) {
     if (!myDecision.decided) {
       const mulliganCount = myDecision.mulliganCount
       return (
-        <div className="fixed inset-0 z-40 flex flex-col bg-bg-dark">
+        <div
+          className="fixed inset-0 z-40 flex flex-col bg-bg-dark"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
           <div className="flex items-center justify-between border-b border-border bg-bg-surface px-4 py-3">
             <span className="text-sm font-semibold text-font-primary">Multiplayer</span>
             <span className="text-xs text-font-muted">{mulliganCount > 0 ? `Mulligan ${mulliganCount}` : 'Opening Hand'}</span>
@@ -975,7 +987,10 @@ export default function PlayGame(props: PlayGameProps) {
     // Waiting for opponent to finish (multiplayer only — ghost auto-keeps)
     if (!isGoldfish) {
       return (
-        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-bg-dark">
+        <div
+          className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-bg-dark"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
           <span className="text-sm text-font-muted">Waiting for opponent to finish mulligan...</span>
         </div>
       )
