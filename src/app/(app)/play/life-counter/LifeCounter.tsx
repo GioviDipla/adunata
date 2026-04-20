@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 
 const STARTING_LIFE_OPTIONS = [20, 30, 40] as const
-const PLAYER_COUNT_OPTIONS = [2, 3, 4] as const
+const PLAYER_COUNT_OPTIONS = [2, 3, 4, 5] as const
 
 // Per-player accent — ring around the panel, glow gradient, label chip,
 // plus a text token used elsewhere (e.g. commander-damage pills that show
@@ -50,7 +50,16 @@ const PLAYER_ACCENTS = [
     text: 'text-amber-300',
     bg: 'bg-amber-500/25',
   },
+  {
+    ring: 'ring-fuchsia-500/60',
+    glow: 'from-fuchsia-600/30',
+    chip: 'bg-fuchsia-500/20 text-fuchsia-300',
+    text: 'text-fuchsia-300',
+    bg: 'bg-fuchsia-500/25',
+  },
 ] as const
+
+type PlayerCount = (typeof PLAYER_COUNT_OPTIONS)[number]
 
 interface Player {
   id: number
@@ -77,7 +86,7 @@ function makePlayers(n: number, life: number): Player[] {
 }
 
 export default function LifeCounter() {
-  const [playerCount, setPlayerCount] = useState<2 | 3 | 4>(2)
+  const [playerCount, setPlayerCount] = useState<PlayerCount>(2)
   const [startingLife, setStartingLife] = useState<number>(20)
   const [players, setPlayers] = useState<Player[]>(() => makePlayers(2, 20))
   const [history, setHistory] = useState<Player[][]>([])
@@ -157,7 +166,7 @@ export default function LifeCounter() {
     setHubOpen(false)
   }, [playerCount, startingLife, pushHistory])
 
-  const changePlayerCount = (n: 2 | 3 | 4) => {
+  const changePlayerCount = (n: PlayerCount) => {
     setPlayerCount(n)
     setPlayers(makePlayers(n, startingLife))
     setHistory([])
@@ -217,25 +226,29 @@ export default function LifeCounter() {
   const layoutClass = useMemo(() => {
     if (playerCount === 2) return 'grid grid-rows-2'
     if (playerCount === 3) return 'grid grid-rows-3'
-    return 'grid grid-cols-2 grid-rows-2'
+    if (playerCount === 4) return 'grid grid-cols-2 grid-rows-2'
+    return 'grid grid-rows-5'
   }, [playerCount])
 
   const isRotated = (idx: number) => {
     if (playerCount === 2) return idx === 0
-    if (playerCount === 3) return idx < 2
     return idx < 2
   }
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-bg-dark">
       {/* Minimal top bar: Back + title + Undo. All game controls live in the hub. */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-bg-surface/80 px-3 py-2 backdrop-blur-md">
+      <div
+        className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-bg-surface/80 px-3 pb-2 backdrop-blur-md"
+        style={{ paddingTop: 'max(env(safe-area-inset-top), 0.5rem)' }}
+      >
         <Link
           href="/play"
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+          className="flex min-h-11 min-w-11 items-center gap-1.5 rounded-md px-3 py-2.5 text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary active:bg-bg-hover"
+          aria-label="Torna al menu Play"
         >
-          <ChevronLeft size={16} />
-          <span className="hidden sm:inline">Play</span>
+          <ChevronLeft size={22} />
+          <span>Indietro</span>
         </Link>
         <div className="text-xs font-medium uppercase tracking-widest text-font-muted">
           Life Counter
@@ -243,11 +256,11 @@ export default function LifeCounter() {
         <button
           onClick={undo}
           disabled={history.length === 0}
-          className="rounded-md p-1.5 text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary disabled:opacity-30"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2.5 text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary disabled:opacity-30"
           aria-label="Undo"
           title="Undo"
         >
-          <Undo2 size={16} />
+          <Undo2 size={20} />
         </button>
       </div>
 
@@ -305,7 +318,7 @@ export default function LifeCounter() {
                   <SegmentedControl
                     options={PLAYER_COUNT_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
                     value={playerCount}
-                    onChange={(v) => changePlayerCount(v as 2 | 3 | 4)}
+                    onChange={(v) => changePlayerCount(v as PlayerCount)}
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -564,48 +577,48 @@ function PlayerPanel({
           {player.life}
         </div>
 
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
           <div
             className={`rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider ${accent.chip}`}
           >
             Player {player.id}
           </div>
           {showPoison && player.poison > 0 && (
-            <div className="flex items-center gap-1 rounded-full bg-bg-green/25 px-2 py-0.5 text-xs font-semibold text-bg-green">
-              <Droplet size={12} /> {player.poison}
+            <div className="flex items-center gap-1.5 rounded-full bg-bg-green/25 px-2.5 py-1 text-sm font-semibold text-bg-green">
+              <Droplet size={14} /> {player.poison}
             </div>
           )}
         </div>
 
         {/* Commander damage row — one mini control per opponent */}
         {showCmdDmg && others.length > 0 && (
-          <div className="pointer-events-auto mt-2 flex flex-wrap items-center justify-center gap-1">
+          <div className="pointer-events-auto mt-2.5 flex flex-wrap items-center justify-center gap-1.5">
             {others.map((other) => {
               const srcAccent = PLAYER_ACCENTS[(other.id - 1) % PLAYER_ACCENTS.length]
               const dmg = player.commanderDamage[other.id] ?? 0
               return (
                 <div
                   key={other.id}
-                  className={`flex items-center gap-0.5 rounded-full ${srcAccent.bg} px-1 py-0.5 ring-1 ring-white/10`}
+                  className={`flex items-center gap-1 rounded-full ${srcAccent.bg} px-1.5 py-1 ring-1 ring-white/15`}
                 >
                   <button
                     onClick={() => handleCmd(other.id, -1)}
-                    className="rounded-full px-1.5 py-0.5 text-xs leading-none text-font-secondary transition-colors hover:bg-black/30 hover:text-font-primary"
+                    className="flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-base leading-none text-font-secondary transition-colors hover:bg-black/30 hover:text-font-primary active:bg-black/40"
                     aria-label={`decrement commander damage from P${other.id}`}
                   >
                     −
                   </button>
-                  <div className="flex items-center gap-0.5">
-                    <Crown size={10} className={srcAccent.text} />
+                  <div className="flex items-center gap-1 px-0.5">
+                    <Crown size={14} className={srcAccent.text} />
                     <span
-                      className={`min-w-[0.8rem] text-center text-xs font-bold tabular-nums ${srcAccent.text}`}
+                      className={`min-w-[1.25rem] text-center text-sm font-bold tabular-nums ${srcAccent.text}`}
                     >
                       {dmg}
                     </span>
                   </div>
                   <button
                     onClick={() => handleCmd(other.id, 1)}
-                    className="rounded-full px-1.5 py-0.5 text-xs leading-none text-font-secondary transition-colors hover:bg-black/30 hover:text-font-primary"
+                    className="flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-base leading-none text-font-secondary transition-colors hover:bg-black/30 hover:text-font-primary active:bg-black/40"
                     aria-label={`increment commander damage from P${other.id}`}
                   >
                     +
@@ -645,15 +658,17 @@ function PlayerPanel({
         <>
           <button
             onClick={() => handlePoison(-1)}
-            className="absolute left-2 bottom-2 flex items-center gap-1 rounded-md bg-bg-green/25 px-2 py-0.5 text-xs font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
+            className="absolute left-2 bottom-2 flex min-h-9 items-center gap-1.5 rounded-md bg-bg-green/25 px-3 py-1.5 text-sm font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
+            aria-label="decrement poison"
           >
-            <Droplet size={10} /> −
+            <Droplet size={14} /> −
           </button>
           <button
             onClick={() => handlePoison(1)}
-            className="absolute right-2 bottom-2 flex items-center gap-1 rounded-md bg-bg-green/25 px-2 py-0.5 text-xs font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
+            className="absolute right-2 bottom-2 flex min-h-9 items-center gap-1.5 rounded-md bg-bg-green/25 px-3 py-1.5 text-sm font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
+            aria-label="increment poison"
           >
-            <Droplet size={10} /> +
+            <Droplet size={14} /> +
           </button>
         </>
       )}
