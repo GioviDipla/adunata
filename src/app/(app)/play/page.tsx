@@ -65,7 +65,12 @@ export default async function PlayPage() {
             <Heart className="h-5 w-5 text-bg-red" />
           </div>
           <div>
-            <div className="text-sm font-medium text-font-primary">Life Counter</div>
+            <div className="text-sm font-medium text-font-primary">
+              Life Counter{' '}
+              <span className="text-xs font-normal text-font-muted">
+                — bozza, ma funziona :) work in progress
+              </span>
+            </div>
             <div className="text-xs text-font-muted">
               Conta i punti vita durante le partite dal vivo
             </div>
