@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Play,
   Trash2,
@@ -89,16 +89,39 @@ function CounterRow({ name, value, onSet, onAdd, onRemove }: {
   onAdd: () => void
   onRemove: () => void
 }) {
+  const [draft, setDraft] = useState(String(value))
+  const [editing, setEditing] = useState(false)
+
+  useEffect(() => {
+    if (!editing) setDraft(String(value))
+  }, [value, editing])
+
+  const commit = () => {
+    setEditing(false)
+    const parsed = parseInt(draft, 10)
+    const next = Number.isFinite(parsed) ? parsed : 0
+    if (next !== value) onSet(next)
+    setDraft(String(next))
+  }
+
   return (
     <div className="flex items-center justify-between py-0.5">
       <span className="text-[11px] text-font-primary truncate mr-2">{name}</span>
       <div className="flex items-center gap-1">
         <button onClick={onRemove} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">-</button>
         <input
-          type="number"
-          value={value}
-          onChange={(e) => onSet(parseInt(e.target.value) || 0)}
-          className="h-6 w-10 rounded bg-bg-cell text-center text-xs text-font-primary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          type="text"
+          inputMode="numeric"
+          pattern="-?[0-9]*"
+          value={draft}
+          onFocus={(e) => { setEditing(true); e.currentTarget.select() }}
+          onChange={(e) => setDraft(e.target.value.replace(/[^\d-]/g, ''))}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            else if (e.key === 'Escape') { setDraft(String(value)); setEditing(false); e.currentTarget.blur() }
+          }}
+          className="h-6 w-10 rounded bg-bg-cell text-center text-xs text-font-primary outline-none"
         />
         <button onClick={onAdd} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-xs text-font-secondary active:bg-bg-hover">+</button>
       </div>
