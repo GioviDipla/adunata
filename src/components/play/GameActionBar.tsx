@@ -1,6 +1,6 @@
 'use client'
 
-import { Heart, Minus, Plus, Layers, Archive, Ban, BookOpen, SkipForward, Flag, Sparkles } from 'lucide-react'
+import { Heart, Minus, Plus, Layers, Archive, Ban, SkipForward, Flag, Sparkles } from 'lucide-react'
 import PriorityIndicator from './PriorityIndicator'
 import { GAME_PHASES } from '@/lib/game/phases'
 import type { GamePhase } from '@/lib/game/types'
@@ -66,14 +66,17 @@ export default function GameActionBar({
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={() => onViewZone('graveyard')} className="flex items-center gap-1 text-font-secondary active:text-font-primary" aria-label="Graveyard">
-            <Archive size={16} /><span className="text-sm font-semibold tabular-nums">{graveyardCount}</span>
+          <button onClick={() => onViewZone('graveyard')} className="flex items-center gap-1 active:brightness-125" aria-label="Graveyard">
+            <Archive size={16} className="text-zinc-400" />
+            <span className="text-sm font-semibold tabular-nums text-font-primary">{graveyardCount}</span>
           </button>
-          <button onClick={() => onViewZone('exile')} className="flex items-center gap-1 text-font-secondary active:text-font-primary" aria-label="Exile">
-            <Ban size={16} /><span className="text-sm font-semibold tabular-nums">{exileCount}</span>
+          <button onClick={() => onViewZone('exile')} className="flex items-center gap-1 active:brightness-125" aria-label="Exile">
+            <Ban size={16} className="text-red-400" />
+            <span className="text-sm font-semibold tabular-nums text-font-primary">{exileCount}</span>
           </button>
-          <button onClick={() => onViewZone('library')} className="flex items-center gap-1 text-font-secondary active:text-font-primary" aria-label="Library">
-            <BookOpen size={16} /><span className="text-sm font-semibold tabular-nums">{libraryCount}</span>
+          <button onClick={() => onViewZone('library')} className="flex items-center gap-1 active:brightness-125" aria-label="Library">
+            <Layers size={16} className="text-blue-400" />
+            <span className="text-sm font-semibold tabular-nums text-font-primary">{libraryCount}</span>
           </button>
         </div>
       </div>
