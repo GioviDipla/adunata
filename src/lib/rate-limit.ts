@@ -33,9 +33,11 @@ function makeLimiter(limit: number, window: `${number} s` | `${number} m`, prefi
 // Tuned per-endpoint based on expected human cadence:
 //   - search: a user typing fast with debounce fires at most 5-10 req per burst,
 //     so 20 / 10s gives generous headroom while still cutting off runaway loops.
-//   - bulk: importing a decklist is a one-shot operation, 5 per minute is ample.
+//   - bulk: each call imports a full decklist in one shot (60-100 cards), so
+//     20 / 60s lets a user load a whole collection from Moxfield in sequence
+//     while still blocking scripted loops.
 export const searchLimiter = makeLimiter(20, '10 s', 'rl:search')
-export const bulkLimiter = makeLimiter(5, '60 s', 'rl:bulk')
+export const bulkLimiter = makeLimiter(20, '60 s', 'rl:bulk')
 
 /**
  * Resolve a stable identifier for the current caller. Authenticated users are
