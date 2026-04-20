@@ -108,36 +108,49 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     [sets, selectedSet]
   )
 
+  const isDefaultSort = sortBy === 'released_at_desc'
+
   const buildQuery = useCallback(
-    (offset: number) => {
+    (opts: { offset?: number; after?: { releasedAt: string; id: string } | null } = {}) => {
+      const { offset = 0, after = null } = opts
       let query = supabase
         .from('cards')
         .select(CARD_GRID_COLUMNS)
-        .range(offset, offset + PAGE_SIZE - 1)
 
       if (debouncedSearch.trim()) {
         query = query.textSearch('search_vector', debouncedSearch.trim(), { type: 'websearch' })
       }
 
-      // Apply sort
-      switch (sortBy) {
-        case 'name_asc':
-          query = query.order('name', { ascending: true }); break
-        case 'name_desc':
-          query = query.order('name', { ascending: false }); break
-        case 'cmc_asc':
-          query = query.order('cmc', { ascending: true }).order('name', { ascending: true }); break
-        case 'cmc_desc':
-          query = query.order('cmc', { ascending: false }).order('name', { ascending: true }); break
-        case 'price_asc':
-          query = query.order('prices_eur', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
-        case 'price_desc':
-          query = query.order('prices_eur', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
-        case 'type_asc':
-          query = query.order('type_line', { ascending: true }).order('name', { ascending: true }); break
-        case 'released_at_desc':
-        default:
-          query = query.order('released_at', { ascending: false, nullsFirst: false }); break
+      // Default sort uses keyset (cursor) pagination on (released_at DESC NULLS LAST, id DESC).
+      // Other sorts fall back to offset pagination — still fine for typical browse depth.
+      if (isDefaultSort) {
+        query = query
+          .limit(PAGE_SIZE)
+          .order('released_at', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: false })
+        if (after) {
+          query = query.or(
+            `released_at.lt.${after.releasedAt},and(released_at.eq.${after.releasedAt},id.lt.${after.id})`
+          )
+        }
+      } else {
+        query = query.range(offset, offset + PAGE_SIZE - 1)
+        switch (sortBy) {
+          case 'name_asc':
+            query = query.order('name', { ascending: true }); break
+          case 'name_desc':
+            query = query.order('name', { ascending: false }); break
+          case 'cmc_asc':
+            query = query.order('cmc', { ascending: true }).order('name', { ascending: true }); break
+          case 'cmc_desc':
+            query = query.order('cmc', { ascending: false }).order('name', { ascending: true }); break
+          case 'price_asc':
+            query = query.order('prices_eur', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
+          case 'price_desc':
+            query = query.order('prices_eur', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
+          case 'type_asc':
+            query = query.order('type_line', { ascending: true }).order('name', { ascending: true }); break
+        }
       }
 
       if (selectedColors.length > 0) {
@@ -181,7 +194,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
 
       return query
     },
-    [supabase, debouncedSearch, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, sortBy]
+    [supabase, isDefaultSort, debouncedSearch, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, sortBy]
   )
 
   useEffect(() => {
@@ -190,7 +203,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
 
     async function fetchCards() {
       setLoading(true)
-      const { data, error } = await buildQuery(0)
+      const { data, error } = await buildQuery({})
       if (cancelled) return
 
       if (error) {
@@ -251,7 +264,11 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const loadMore = async () => {
     if (loadingMore || !hasMore) return
     setLoadingMore(true)
-    const { data, error } = await buildQuery(cards.length)
+    const last = cards[cards.length - 1]
+    const canUseCursor = isDefaultSort && last && last.released_at
+    const { data, error } = canUseCursor
+      ? await buildQuery({ after: { releasedAt: last.released_at!, id: String(last.id) } })
+      : await buildQuery({ offset: cards.length })
     if (error) console.error('Error loading more:', error)
     else {
       setCards((prev) => [...prev, ...((data || []) as unknown as Card[])])
