@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ScryfallCard } from '@/lib/scryfall'
 
@@ -90,6 +91,10 @@ export async function GET(request: NextRequest) {
       await new Promise(r => setTimeout(r, DELAY))
     }
   }
+
+  // Invalidate cached "Newest 40" / sets bundle so the next request after the
+  // nightly refresh serves fresh prices without waiting for the 1h revalidate.
+  revalidateTag('cards', 'max')
 
   return NextResponse.json({
     updated: totalUpdated,

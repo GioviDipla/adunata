@@ -22,16 +22,17 @@ export default function CardItem({ card, onSelect }: CardItemProps) {
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
     >
-      {/* Card image — use image_normal (488×680) for deck-grid-quality rendering */}
+      {/* Card image — thumbnail uses Scryfall `small` (146×204, ~10KB).
+       *  The large `normal` is only fetched for the hover preview (desktop) and the detail modal. */}
       <div className="relative overflow-hidden rounded-lg bg-bg-card border border-border transition-all duration-200 group-hover:scale-[1.03] group-hover:shadow-xl group-hover:border-border-light">
-        {card.image_normal || card.image_small ? (
+        {card.image_small || card.image_normal ? (
           <Image
-            src={(card.image_normal ?? card.image_small)!}
+            src={(card.image_small ?? card.image_normal)!}
             alt={card.name}
-            width={488}
-            height={680}
+            width={146}
+            height={204}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1280px) 25vw, 20vw"
-            className="w-full aspect-[488/680] object-cover"
+            className="w-full aspect-[146/204] object-cover"
             loading="lazy"
           />
         ) : (

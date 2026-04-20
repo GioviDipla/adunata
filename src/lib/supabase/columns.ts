@@ -10,9 +10,10 @@
 
 // ── cards ─────────────────────────────────────────────────────────────────
 
-/** Card browser grid + CardItem. 15 light columns, no heavy jsonb. */
+/** Card browser grid + CardItem. Light columns only — no heavy jsonb, no unused arrays.
+ *  Keep `image_normal` so the hover-preview (desktop) can use it without an extra fetch. */
 export const CARD_GRID_COLUMNS =
-  'id, name, mana_cost, type_line, image_small, image_normal, prices_eur, prices_usd, cmc, rarity, set_code, color_identity, colors, keywords, released_at'
+  'id, name, mana_cost, type_line, image_small, image_normal, prices_eur, prices_usd, cmc, rarity, set_code, color_identity, released_at'
 
 /** In-game card reference: engine, battlefield, hand, zones. No prices, no legalities, no search_vector. */
 export const CARD_GAME_COLUMNS =
