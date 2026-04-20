@@ -90,6 +90,35 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 - **`update-prices` route deprecata ma NON cancellata**: la route resta nel codice e gestisce ancora la rolling strategy via `/cards/collection`. Non è più nello `crons[]` di `vercel.json`, ma può essere invocata manualmente con `CRON_SECRET` come fallback on-demand.
 - **Rischio memoria**: il bulk parse sta sui ~400-500MB RAM peak, comodo su Vercel Pro (3GB) ma stretto su Hobby (1GB). Se il deploy va su Hobby, fallback al rolling update-prices.
 
+## Sessione 2026-04-21 — fase-1 keyword/trigger UI layer (commit `f177d3c`)
+
+> **Rollback checkpoint**: HEAD precedente a queste modifiche = `79a03b7`. Per tornare allo stato pre-keyword-layer: `git revert f177d3c` (sicuro, non tocca la storia) oppure `git reset --hard 79a03b7 && git push --force-with-lease` (distruttivo, evitare se possibile).
+>
+> **Rollback del DB**: le 6 colonne aggiunte sono additive e `NOT NULL DEFAULT false` — lasciarle in DB non rompe nulla anche se il codice viene revertato. Se proprio servisse smontarle: `ALTER TABLE cards DROP COLUMN has_upkeep_trigger, DROP COLUMN has_etb_trigger, DROP COLUMN has_attacks_trigger, DROP COLUMN has_dies_trigger, DROP COLUMN has_end_step_trigger, DROP COLUMN has_cast_trigger;` (migration `cards_phase_trigger_flags`).
+
+- **Principio**: zero runtime parsing del testo oracolo. Pre-computazione al import-time = lookup O(1) su boolean al render. L'utente ha posto "priorità 1 = non rallentare il motore" — questa scelta elimina ogni regex/parse in hot path.
+- **DB (migration `cards_phase_trigger_flags`)**: 6 colonne boolean NOT NULL DEFAULT false su `cards`:
+  - `has_upkeep_trigger` — `at the beginning of [^.]*upkeep`
+  - `has_etb_trigger` — `(when|whenever) [^.]*enters`
+  - `has_attacks_trigger` — `whenever [^.]*attacks`
+  - `has_dies_trigger` — `(when|whenever) [^.]*dies`
+  - `has_end_step_trigger` — `at the beginning of [^.]*end step`
+  - `has_cast_trigger` — `(when|whenever) [^.]*casts?\s`
+  Backfill one-shot con gli stessi regex su `oracle_text`. Risultato: 1574 upkeep / 6042 etb / 1804 attacks / 1449 dies / 1253 end_step / 2078 cast su 34959 carte.
+- **`scripts/bulk-sync.mjs`** estende `mapCard()` con gli stessi regex applicati a oracle full-text (inclusi `card_faces` per DFC/flip). I future import arrivano già etichettati — nessun re-backfill da lanciare a mano.
+- **`CardMap`** (`src/lib/game/types.ts`) esteso con `keywords: string[] | null` + le 6 flag `hasUpkeepTrigger`…`hasCastTrigger`. `keywords` viene da Scryfall (già popolato da anni) e copre Vigilance/Flying/Trample/Deathtouch/Lifelink/Haste/Menace/Reach/Defender/Hexproof/Indestructible/First Strike/Double Strike/Fear/Flash gratis.
+- **`toCardMapEntry` single source of truth** (`src/lib/game/card-map.ts`): nuovo helper usato da tutti e 3 i builder (`/api/game/[id]/route.ts`, `(app)/decks/[id]/goldfish/page.tsx`, `(app)/play/[lobbyId]/history/page.tsx`). Evita 3 punti dove un campo nuovo può essere dimenticato — lezione appresa da `isCommander` che era stato propagato solo parzialmente.
+- **`CARD_GAME_COLUMNS`** (`src/lib/supabase/columns.ts`) esteso con le 6 flag. La history page che prima selezionava un sottoinsieme custom ora passa anche lei da `CARD_GAME_COLUMNS`.
+- **`KeywordBadges`** (`src/components/play/KeywordBadges.tsx`): mappa 15 keyword → icone lucide (Eye/Feather/Footprints/Skull/HeartPulse/Zap/Flame/MoveUp/Shield/ShieldCheck/ShieldPlus/Sword/Swords/Ghost/Sparkles). Max 3 badge per carta in priorità (volo > reach > vigilanza > …). Badge = cerchio nero semi-trasparente con ring bianco sottile + icona tonale, posizionati top-right della carta.
+- **`BattlefieldZone`** (`src/components/goldfish/BattlefieldZone.tsx`): card size da 68×95 → 80×112 (stesso rapporto 5/7, +17% superficie, badge leggibili senza zoom). Accetta `phase?: GamePhase`; `phaseTriggerKey()` mappa la fase corrente al campo relativo (`upkeep` → `has_upkeep_trigger`, `end_step` → `has_end_step_trigger`, `declare_attackers` → `has_attacks_trigger`) e aggiunge `ring-2 ring-amber-300 ring-offset-1` alle carte il cui flag corrisponde. Le altre fasi non mostrano ring (niente draw/main/combat — meno visually noisy).
+- **Defender filter**: `CombatAttackers` e `hasEligibleAttackers` in `PlayGame` escludono le carte con `keywords includes 'defender'`. Se una creatura con Defender è l'unica sul campo, l'overlay viene comunque auto-skippato dalla logica della sessione precedente.
+- **Limiti consci**: i regex sono euristici, non un parser vero. Casi limite non coperti:
+  - "At the beginning of **the next** end step" (inclinato per alcune transformation) → match
+  - "Whenever **a permanent** enters" → match (può risultare in falsi positivi su animations)
+  - "Enters tapped" → match (ma non è un trigger vero) — accettato, ring è un *hint*, non una verità
+  - Trigger su zone diverse (da cimitero, da esilio) → non distinti — ring può fuorviare
+  Il layer è esplicitamente UI, non engine. Serve a ricordare al giocatore di pensare alla fase, non a risolvere automaticamente i trigger.
+
 ## Sessione 2026-04-20 — context menu su Card Browser (long-press / right-click)
 
 - **Tabella `card_likes`** — `(user_id, card_id, created_at)`, PK composta, RLS "own only" (SELECT/INSERT/DELETE filtrati da `auth.uid() = user_id`), index `(user_id, created_at desc)` per la list-liked. Motivo: il "Like" è per-user, quindi non può stare come colonna su `cards`.

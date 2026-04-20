@@ -2,7 +2,9 @@
 
 Stato: **IN PRODUZIONE** — deployato su Vercel, in uso attivo.
 
-Ultimo aggiornamento: 2026-04-16.
+Ultimo aggiornamento: 2026-04-21.
+
+**Commit di riferimento per rollback rapido**: `f177d3c` (post fase-1 keyword/trigger layer). HEAD precedente pulito: `79a03b7`.
 
 ---
 
@@ -43,6 +45,14 @@ Ultimo aggiornamento: 2026-04-16.
 - [x] Contatore vita e turni
 - [x] Long-press per preview + azioni contestuali
 - [x] Token creator (custom + da deck_cards board='tokens')
+
+### Keyword / trigger UI layer (2026-04-21)
+- [x] 6 colonne boolean trigger su `cards` (upkeep/etb/attacks/dies/end_step/cast) backfillate e indicizzate in CardMap
+- [x] `KeywordBadges` — 15 icone lucide su battlefield (Vigilance/Flying/Trample/Deathtouch/Lifelink/Haste/Menace/Reach/Defender/Hexproof/Indestructible/First Strike/Double Strike/Fear/Flash)
+- [x] Ring ambra su carte con trigger nella fase corrente (upkeep, end_step, declare_attackers)
+- [x] Defender escluso dagli attaccanti
+- [x] Card battlefield ingrandite a 80×112 (stesso rapporto 5/7)
+- [x] Bulk sync script già etichetta i nuovi import via regex su oracle_text
 
 ### Multiplayer 1v1
 - [x] Lobby con codice condivisibile
