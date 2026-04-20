@@ -14,13 +14,16 @@ interface CombatAttackersProps {
 export default function CombatAttackers({ battlefield, cardMap, onConfirm, onSkip }: CombatAttackersProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  // Only untapped creatures can attack
+  // Only untapped creatures / tokens / cards with altered P/T (e.g. lands
+  // animated into creatures via effects) can attack.
   const eligibleCreatures = useMemo(() => {
     return battlefield.filter((c) => {
       if (c.tapped) return false
       const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
       if (!data) return false
-      return data.typeLine.toLowerCase().includes('creature')
+      const isCreature = data.typeLine.toLowerCase().includes('creature')
+      const hasAlteredPT = (c.powerMod ?? 0) !== 0 || (c.toughnessMod ?? 0) !== 0
+      return isCreature || data.isToken || hasAlteredPT
     })
   }, [battlefield, cardMap])
 

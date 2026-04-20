@@ -1,16 +1,82 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Trash2, Check } from 'lucide-react'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { CardMap } from '@/lib/game/types'
 
 interface DiscardSelectorProps {
   hand: string[]   // instanceIds
   cardMap: CardMap
   onConfirm: (discards: { instanceId: string; cardId: number; cardName: string }[]) => void
+  onCardPreview?: (instanceId: string) => void
 }
 
-export default function DiscardSelector({ hand, cardMap, onConfirm }: DiscardSelectorProps) {
+function DiscardCardButton({
+  instanceId,
+  data,
+  isSelected,
+  onToggle,
+  onPreview,
+}: {
+  instanceId: string
+  data: CardMap[string]
+  isSelected: boolean
+  onToggle: (id: string) => void
+  onPreview?: (id: string) => void
+}) {
+  const longPress = useLongPress({
+    onLongPress: () => onPreview?.(instanceId),
+    delay: 400,
+  })
+
+  const handleClick = useCallback(() => {
+    if (longPress.wasLongPress()) return
+    onToggle(instanceId)
+  }, [longPress, onToggle, instanceId])
+
+  return (
+    <button
+      onClick={handleClick}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onPreview?.(instanceId)
+      }}
+      {...longPress}
+      className={`flex flex-col items-center overflow-hidden rounded-lg border-2 transition-colors select-none ${
+        isSelected
+          ? 'border-bg-red bg-bg-red/10'
+          : 'border-border bg-bg-card'
+      }`}
+      title={`${data.name} — tap to select, hold to preview`}
+    >
+      <div className="relative w-full aspect-[5/7] overflow-hidden">
+        {data.imageSmall ? (
+          <img
+            src={data.imageSmall}
+            alt={data.name}
+            className="h-full w-full object-cover pointer-events-none"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-bg-cell">
+            <span className="text-xs text-font-muted">{data.name}</span>
+          </div>
+        )}
+        {isSelected && (
+          <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-bg-red">
+            <Trash2 size={10} className="text-font-white" />
+          </div>
+        )}
+      </div>
+      <div className="w-full px-1 py-1">
+        <span className="block truncate text-[9px] font-semibold text-font-primary">{data.name}</span>
+      </div>
+    </button>
+  )
+}
+
+export default function DiscardSelector({ hand, cardMap, onConfirm, onCardPreview }: DiscardSelectorProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const discardCount = hand.length - 7
@@ -70,38 +136,16 @@ export default function DiscardSelector({ hand, cardMap, onConfirm }: DiscardSel
       {/* Card grid */}
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {handCards.map(({ instanceId, data }) => {
-            const isSelected = selected.has(instanceId)
-            return (
-              <button
-                key={instanceId}
-                onClick={() => toggleCard(instanceId)}
-                className={`flex flex-col items-center overflow-hidden rounded-lg border-2 transition-colors ${
-                  isSelected
-                    ? 'border-bg-red bg-bg-red/10'
-                    : 'border-border bg-bg-card'
-                }`}
-              >
-                <div className="relative w-full" style={{ height: 100 }}>
-                  {data.imageSmall ? (
-                    <img src={data.imageSmall} alt={data.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-bg-cell">
-                      <span className="text-xs text-font-muted">{data.name}</span>
-                    </div>
-                  )}
-                  {isSelected && (
-                    <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-bg-red">
-                      <Trash2 size={10} className="text-font-white" />
-                    </div>
-                  )}
-                </div>
-                <div className="w-full px-1 py-1">
-                  <span className="block truncate text-[9px] font-semibold text-font-primary">{data.name}</span>
-                </div>
-              </button>
-            )
-          })}
+          {handCards.map(({ instanceId, data }) => (
+            <DiscardCardButton
+              key={instanceId}
+              instanceId={instanceId}
+              data={data}
+              isSelected={selected.has(instanceId)}
+              onToggle={toggleCard}
+              onPreview={onCardPreview}
+            />
+          ))}
         </div>
       </div>
 
