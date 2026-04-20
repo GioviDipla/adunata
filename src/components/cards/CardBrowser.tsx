@@ -68,6 +68,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const [selectedKeyword, setSelectedKeyword] = useState('')
   const [typeMode, setTypeMode] = useState<'and' | 'or'>('and')
   const [colorMode, setColorMode] = useState<'and' | 'or'>('or')
+  const [commanderIdentity, setCommanderIdentity] = useState<string[]>([])
   const [sortBy, setSortBy] = useState<string>('released_at_desc')
   const [setSearch, setSetSearch] = useState('')
   const [setDropdownOpen, setSetDropdownOpen] = useState(false)
@@ -147,6 +148,10 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
         }
       }
 
+      if (commanderIdentity.length > 0) {
+        query = query.containedBy('color_identity', commanderIdentity)
+      }
+
       if (selectedTypes.length === 1) {
         query = query.ilike('type_line', `%${selectedTypes[0]}%`)
       } else if (selectedTypes.length > 1) {
@@ -176,7 +181,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
 
       return query
     },
-    [supabase, debouncedSearch, selectedColors, colorMode, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, sortBy]
+    [supabase, debouncedSearch, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, sortBy]
   )
 
   useEffect(() => {
@@ -228,9 +233,9 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     }
 
     const hasFilters =
-      debouncedSearch || selectedColors.length > 0 || selectedTypes.length > 0 ||
-      selectedRarity || cmcMin !== '' || cmcMax !== '' || selectedSet ||
-      debouncedCreatureType.trim() || debouncedKeyword.trim()
+      debouncedSearch || selectedColors.length > 0 || commanderIdentity.length > 0 ||
+      selectedTypes.length > 0 || selectedRarity || cmcMin !== '' || cmcMax !== '' ||
+      selectedSet || debouncedCreatureType.trim() || debouncedKeyword.trim()
 
     if (hasFilters) {
       fetchCards()
@@ -241,7 +246,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     }
 
     return () => { cancelled = true; controller?.abort() }
-  }, [debouncedSearch, selectedColors, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, buildQuery, initialCards])
+  }, [debouncedSearch, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, buildQuery, initialCards])
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return
@@ -258,19 +263,23 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const toggleColor = (color: string) =>
     setSelectedColors((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])
 
+  const toggleCommanderColor = (color: string) =>
+    setCommanderIdentity((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])
+
   const toggleType = (type: string) =>
     setSelectedTypes((prev) => prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type])
 
   const clearFilters = () => {
-    setSearchText(''); setSelectedColors([]); setSelectedTypes([])
+    setSearchText(''); setSelectedColors([]); setCommanderIdentity([]); setSelectedTypes([])
     setSelectedRarity(''); setCmcMin(''); setCmcMax('')
     setSelectedSet(''); setCreatureType(''); setSelectedKeyword('')
     setSetSearch(''); setColorMode('or'); setTypeMode('and')
   }
 
   const activeFilterCount = [
-    searchText, selectedColors.length > 0, selectedTypes.length > 0,
-    selectedRarity, cmcMin, cmcMax, selectedSet, creatureType, selectedKeyword,
+    searchText, selectedColors.length > 0, commanderIdentity.length > 0,
+    selectedTypes.length > 0, selectedRarity, cmcMin, cmcMax, selectedSet,
+    creatureType, selectedKeyword,
   ].filter(Boolean).length
 
   return (
@@ -365,6 +374,43 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
                     }`}
                     style={{ backgroundColor: color.bg, color: color.text }}
                     title={color.code}
+                  >
+                    {color.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Commander Color Identity — subset filter (card color_identity ⊆ selected) */}
+          <div>
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-font-muted">
+                Commander Color Identity <span className="text-font-muted">(only cards legal in this identity)</span>
+              </span>
+              {commanderIdentity.length > 0 && (
+                <button
+                  onClick={() => setCommanderIdentity([])}
+                  className="text-[10px] text-font-accent hover:text-font-primary transition-colors"
+                  type="button"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {MANA_COLORS.map((color) => {
+                const isActive = commanderIdentity.includes(color.code)
+                return (
+                  <button
+                    key={color.code}
+                    onClick={() => toggleCommanderColor(color.code)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      isActive ? 'ring-2 ring-font-primary ring-offset-2 ring-offset-bg-surface scale-110' : 'opacity-60 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: color.bg, color: color.text }}
+                    title={`Include ${color.code} in commander identity`}
+                    type="button"
                   >
                     {color.label}
                   </button>
