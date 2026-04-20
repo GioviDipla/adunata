@@ -119,4 +119,25 @@ export interface LogEntry {
 }
 
 // Card map: instanceId → card data (built at game start, kept client-side)
-export type CardMap = Record<string, { cardId: number; name: string; imageSmall: string | null; imageNormal: string | null; typeLine: string; manaCost: string | null; power: string | null; toughness: string | null; oracleText: string | null; isCommander: boolean; isToken: boolean }>
+export type CardMap = Record<string, {
+  cardId: number
+  name: string
+  imageSmall: string | null
+  imageNormal: string | null
+  typeLine: string
+  manaCost: string | null
+  power: string | null
+  toughness: string | null
+  oracleText: string | null
+  isCommander: boolean
+  isToken: boolean
+  /** Scryfall-normalised keyword abilities: ["Vigilance", "Flying", ...] */
+  keywords: string[] | null
+  /** Pre-computed phase-trigger flags for UI highlighting (set at import time) */
+  hasUpkeepTrigger: boolean
+  hasEtbTrigger: boolean
+  hasAttacksTrigger: boolean
+  hasDiesTrigger: boolean
+  hasEndStepTrigger: boolean
+  hasCastTrigger: boolean
+}>

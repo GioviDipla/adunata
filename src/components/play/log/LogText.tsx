@@ -38,7 +38,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     legalities: null,
     power: data.power ?? null,
     toughness: data.toughness ?? null,
-    keywords: null,
+    keywords: data.keywords ?? null,
     produced_mana: null,
     layout: null,
     card_faces: null,
@@ -46,6 +46,12 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     last_price_update: null,
     created_at: '',
     updated_at: '',
+    has_upkeep_trigger: data.hasUpkeepTrigger,
+    has_etb_trigger: data.hasEtbTrigger,
+    has_attacks_trigger: data.hasAttacksTrigger,
+    has_dies_trigger: data.hasDiesTrigger,
+    has_end_step_trigger: data.hasEndStepTrigger,
+    has_cast_trigger: data.hasCastTrigger,
   }
 }
 

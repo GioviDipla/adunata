@@ -7,6 +7,7 @@ import {
   GAME_LOG_COLUMNS,
 } from '@/lib/supabase/columns'
 import type { GameState, CardMap, LogEntry } from '@/lib/game/types'
+import { toCardMapEntry } from '@/lib/game/card-map'
 
 export async function GET(
   _request: NextRequest,
@@ -68,44 +69,14 @@ export async function GET(
 
     if (!deckCards) continue
 
-    // Build cardId → card data lookup
-    const cardDataById: Record<number, {
-      name: string
-      imageSmall: string | null
-      imageNormal: string | null
-      typeLine: string
-      manaCost: string | null
-      power: string | null
-      toughness: string | null
-      oracleText: string | null
-    }> = {}
-
-    // Track which cardIds are commanders for this player
+    type CardGameRow = Parameters<typeof toCardMapEntry>[1] & { id: number }
+    const cardDataById: Record<number, CardGameRow> = {}
     const commanderCardIds = new Set<number>()
 
     for (const dc of deckCards) {
       if (!dc.card) continue
-      const card = dc.card as unknown as {
-        id: number
-        name: string
-        image_small: string | null
-        image_normal: string | null
-        type_line: string
-        mana_cost: string | null
-        power: string | null
-        toughness: string | null
-        oracle_text: string | null
-      }
-      cardDataById[card.id] = {
-        name: card.name,
-        imageSmall: card.image_small,
-        imageNormal: card.image_normal,
-        typeLine: card.type_line,
-        manaCost: card.mana_cost,
-        power: card.power,
-        toughness: card.toughness,
-        oracleText: card.oracle_text,
-      }
+      const card = dc.card as unknown as CardGameRow
+      cardDataById[card.id] = card
       if (dc.board === 'commander') commanderCardIds.add(card.id)
     }
 
@@ -120,11 +91,11 @@ export async function GET(
 
       if (dc.board === 'commander') {
         const iid = `ci-${++globalCounter}`
-        cardMap[iid] = { cardId: card.id, isCommander: true, isToken: false, ...data }
+        cardMap[iid] = toCardMapEntry(card.id, data, { isCommander: true, isToken: false })
       } else if (dc.board === 'main') {
         for (let i = 0; i < dc.quantity; i++) {
           const iid = `ci-${++globalCounter}`
-          cardMap[iid] = { cardId: card.id, isCommander, isToken: false, ...data }
+          cardMap[iid] = toCardMapEntry(card.id, data, { isCommander, isToken: false })
         }
       }
     }

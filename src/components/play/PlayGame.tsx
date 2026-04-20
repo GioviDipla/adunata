@@ -69,7 +69,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     legalities: null,
     power: data.power ?? null,
     toughness: data.toughness ?? null,
-    keywords: null,
+    keywords: data.keywords ?? null,
     produced_mana: null,
     layout: null,
     card_faces: null,
@@ -77,6 +77,12 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     last_price_update: null,
     created_at: '',
     updated_at: '',
+    has_upkeep_trigger: data.hasUpkeepTrigger,
+    has_etb_trigger: data.hasEtbTrigger,
+    has_attacks_trigger: data.hasAttacksTrigger,
+    has_dies_trigger: data.hasDiesTrigger,
+    has_end_step_trigger: data.hasEndStepTrigger,
+    has_cast_trigger: data.hasCastTrigger,
   }
 }
 
@@ -742,6 +748,13 @@ export default function PlayGame(props: PlayGameProps) {
           oracleText: token.keywords.length > 0 ? token.keywords.join(', ') : null,
           isCommander: false,
           isToken: true,
+          keywords: token.keywords.length > 0 ? token.keywords : null,
+          hasUpkeepTrigger: false,
+          hasEtbTrigger: false,
+          hasAttacksTrigger: false,
+          hasDiesTrigger: false,
+          hasEndStepTrigger: false,
+          hasCastTrigger: false,
         },
       }))
     }
@@ -844,6 +857,8 @@ export default function PlayGame(props: PlayGameProps) {
       if (c.tapped) return false
       const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
       if (!data) return false
+      const kws = data.keywords?.map((k) => k.toLowerCase()) ?? []
+      if (kws.includes('defender')) return false
       const isCreature = data.typeLine.toLowerCase().includes('creature')
       const hasAlteredPT = (c.powerMod ?? 0) !== 0 || (c.toughnessMod ?? 0) !== 0
       return isCreature || data.isToken || hasAlteredPT
@@ -1075,6 +1090,7 @@ export default function PlayGame(props: PlayGameProps) {
             title="CREATURES"
             cards={myBattlefieldByZone.creatures}
             onTapToggle={handleTapToggle}
+            phase={gameState?.phase}
             onCardPreview={(card, id, tapped) => {
               const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
               setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
@@ -1088,6 +1104,7 @@ export default function PlayGame(props: PlayGameProps) {
                 title="OTHER"
                 cards={myBattlefieldByZone.other}
                 onTapToggle={handleTapToggle}
+                phase={gameState?.phase}
                 onCardPreview={(card, id, tapped) =>
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
                 }
@@ -1102,6 +1119,7 @@ export default function PlayGame(props: PlayGameProps) {
                 title="TOKENS"
                 cards={myBattlefieldByZone.tokens}
                 onTapToggle={handleTapToggle}
+                phase={gameState?.phase}
                 onCardPreview={(card, id, tapped) => {
                   const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
@@ -1116,6 +1134,7 @@ export default function PlayGame(props: PlayGameProps) {
               title="LANDS"
               cards={myBattlefieldByZone.lands}
               onTapToggle={handleTapToggle}
+              phase={gameState?.phase}
               onCardPreview={(card, id, tapped) =>
                 setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
               }

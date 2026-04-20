@@ -5,6 +5,7 @@ import PlayGame from '@/components/play/PlayGame'
 import { GHOST_BOT } from '@/lib/game/bot'
 import { CARD_GAME_COLUMNS, DECK_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import type { GameState, CardMap, PlayerState, CombatState } from '@/lib/game/types'
+import { toCardMapEntry } from '@/lib/game/card-map'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -62,36 +63,12 @@ export default async function GoldfishPage({
     if (dc.board === 'commander') {
       const iid = `ci-${++instanceCounter}`
       commandZone.push({ instanceId: iid, cardId: card.id as unknown as number })
-      cardMap[iid] = {
-        cardId: card.id as unknown as number,
-        name: card.name,
-        imageSmall: card.image_small,
-        imageNormal: card.image_normal,
-        typeLine: card.type_line,
-        manaCost: card.mana_cost,
-        power: card.power,
-        toughness: card.toughness,
-        oracleText: card.oracle_text,
-        isCommander: true,
-        isToken: false,
-      }
+      cardMap[iid] = toCardMapEntry(card.id as unknown as number, card, { isCommander: true, isToken: false })
     } else {
       for (let i = 0; i < dc.quantity; i++) {
         const iid = `ci-${++instanceCounter}`
         library.push(iid)
-        cardMap[iid] = {
-          cardId: card.id as unknown as number,
-          name: card.name,
-          imageSmall: card.image_small,
-          imageNormal: card.image_normal,
-          typeLine: card.type_line,
-          manaCost: card.mana_cost,
-          power: card.power,
-          toughness: card.toughness,
-          oracleText: card.oracle_text,
-          isCommander: false,
-          isToken: false,
-        }
+        cardMap[iid] = toCardMapEntry(card.id as unknown as number, card, { isCommander: false, isToken: false })
       }
     }
   }

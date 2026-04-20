@@ -15,12 +15,14 @@ export default function CombatAttackers({ battlefield, cardMap, onConfirm, onSki
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   // Only untapped creatures / tokens / cards with altered P/T (e.g. lands
-  // animated into creatures via effects) can attack.
+  // animated into creatures via effects) can attack. Defender is excluded.
   const eligibleCreatures = useMemo(() => {
     return battlefield.filter((c) => {
       if (c.tapped) return false
       const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
       if (!data) return false
+      const kws = data.keywords?.map((k) => k.toLowerCase()) ?? []
+      if (kws.includes('defender')) return false
       const isCreature = data.typeLine.toLowerCase().includes('creature')
       const hasAlteredPT = (c.powerMod ?? 0) !== 0 || (c.toughnessMod ?? 0) !== 0
       return isCreature || data.isToken || hasAlteredPT

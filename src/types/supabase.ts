@@ -44,6 +44,12 @@ export interface Database {
           last_price_update: string | null
           created_at: string
           updated_at: string
+          has_upkeep_trigger: boolean
+          has_etb_trigger: boolean
+          has_attacks_trigger: boolean
+          has_dies_trigger: boolean
+          has_end_step_trigger: boolean
+          has_cast_trigger: boolean
         }
         Insert: {
           id?: number
@@ -79,6 +85,12 @@ export interface Database {
           last_price_update?: string | null
           created_at?: string
           updated_at?: string
+          has_upkeep_trigger?: boolean
+          has_etb_trigger?: boolean
+          has_attacks_trigger?: boolean
+          has_dies_trigger?: boolean
+          has_end_step_trigger?: boolean
+          has_cast_trigger?: boolean
         }
         Update: {
           id?: number
@@ -114,6 +126,12 @@ export interface Database {
           last_price_update?: string | null
           created_at?: string
           updated_at?: string
+          has_upkeep_trigger?: boolean
+          has_etb_trigger?: boolean
+          has_attacks_trigger?: boolean
+          has_dies_trigger?: boolean
+          has_end_step_trigger?: boolean
+          has_cast_trigger?: boolean
         }
         Relationships: []
       }

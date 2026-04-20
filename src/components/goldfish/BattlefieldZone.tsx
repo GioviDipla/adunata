@@ -2,7 +2,9 @@
 
 import { useCallback } from 'react'
 import { useLongPress } from '@/lib/hooks/useLongPress'
+import KeywordBadges from '@/components/play/KeywordBadges'
 import type { Database } from '@/types/supabase'
+import type { GamePhase } from '@/lib/game/types'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -20,16 +22,34 @@ interface BattlefieldZoneProps {
   cards: BattlefieldCard[]
   onTapToggle: (instanceId: string) => void
   onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
+  /** Current game phase — used to ring-highlight cards whose pre-computed
+   *  trigger flag matches (e.g. upkeep-trigger cards during the upkeep phase). */
+  phase?: GamePhase
 }
+
+/** Map a game phase onto the flag name whose cards deserve a highlight ring. */
+function phaseTriggerKey(phase: GamePhase | undefined): keyof CardRow | null {
+  switch (phase) {
+    case 'upkeep': return 'has_upkeep_trigger'
+    case 'end_step': return 'has_end_step_trigger'
+    case 'declare_attackers': return 'has_attacks_trigger'
+    default: return null
+  }
+}
+
+const CARD_W = 80
+const CARD_H = 112
 
 function BattlefieldCardButton({
   bc,
   onTapToggle,
   onCardPreview,
+  phase,
 }: {
   bc: BattlefieldCard
   onTapToggle: (id: string) => void
   onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
+  phase?: GamePhase
 }) {
   const longPress = useLongPress({
     onLongPress: () => onCardPreview?.(bc.card, bc.instanceId, bc.tapped),
@@ -40,6 +60,9 @@ function BattlefieldCardButton({
     if (longPress.wasLongPress()) return
     onTapToggle(bc.instanceId)
   }, [longPress, onTapToggle, bc.instanceId])
+
+  const triggerKey = phaseTriggerKey(phase)
+  const triggersNow = triggerKey ? Boolean(bc.card[triggerKey]) : false
 
   return (
     <button
@@ -53,9 +76,9 @@ function BattlefieldCardButton({
         bc.tapped
           ? 'rotate-90 border-font-muted'
           : 'border-border hover:border-bg-accent'
-      }`}
-      style={{ width: 68, height: 95, touchAction: 'manipulation' }}
-      title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''} — hold or right-click for actions`}
+      } ${triggersNow ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-bg-dark' : ''}`}
+      style={{ width: CARD_W, height: CARD_H, touchAction: 'manipulation' }}
+      title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''}${triggersNow ? ' — triggers this phase' : ''} — hold or right-click for actions`}
     >
       {bc.card.image_small ? (
         <img
@@ -79,6 +102,7 @@ function BattlefieldCardButton({
           )}
         </div>
       )}
+      <KeywordBadges keywords={bc.card.keywords} size={10} max={3} />
       {/* P/T badge — bottom-right, always visible for creatures with mods */}
       {bc.card.power != null && bc.card.toughness != null && (bc.powerMod || bc.toughnessMod) ? (
         <div className="absolute bottom-0.5 right-0.5 pointer-events-none">
@@ -106,6 +130,7 @@ export default function BattlefieldZone({
   cards,
   onTapToggle,
   onCardPreview,
+  phase,
 }: BattlefieldZoneProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -119,6 +144,7 @@ export default function BattlefieldZone({
             bc={bc}
             onTapToggle={onTapToggle}
             onCardPreview={onCardPreview}
+            phase={phase}
           />
         ))}
 
@@ -126,7 +152,7 @@ export default function BattlefieldZone({
         {cards.length === 0 && (
           <div
             className="flex items-center justify-center rounded-lg border border-dashed border-border bg-bg-card"
-            style={{ width: 68, height: 95 }}
+            style={{ width: CARD_W, height: CARD_H }}
           >
             <span className="text-[9px] text-font-muted">Empty</span>
           </div>

@@ -2,9 +2,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
-import { GAME_LOG_COLUMNS } from '@/lib/supabase/columns'
+import { GAME_LOG_COLUMNS, CARD_GAME_COLUMNS } from '@/lib/supabase/columns'
 import GameHistoryView from '@/components/play/GameHistoryView'
 import type { CardMap, LogEntry } from '@/lib/game/types'
+import { toCardMapEntry } from '@/lib/game/card-map'
 
 export default async function GameHistoryPage({
   params,
@@ -58,7 +59,7 @@ export default async function GameHistoryPage({
   for (const player of players ?? []) {
     const { data: deckCards } = await admin
       .from('deck_cards')
-      .select('card_id, quantity, board, card:cards!card_id(id, name, image_small, image_normal, type_line, mana_cost, power, toughness, oracle_text)')
+      .select(`card_id, quantity, board, card:cards!card_id(${CARD_GAME_COLUMNS})`)
       .eq('deck_id', player.deck_id)
 
     if (!deckCards) continue
@@ -68,29 +69,18 @@ export default async function GameHistoryPage({
       if (dc.board === 'commander' && dc.card) commanderCardIds.add((dc.card as unknown as { id: number }).id)
     }
 
+    type CardGameRow = Parameters<typeof toCardMapEntry>[1] & { id: number }
     for (const dc of deckCards) {
       if (!dc.card) continue
-      const card = dc.card as unknown as {
-        id: number; name: string; image_small: string | null; image_normal: string | null
-        type_line: string; mana_cost: string | null; power: string | null; toughness: string | null
-        oracle_text: string | null
-      }
+      const card = dc.card as unknown as CardGameRow
 
       if (dc.board === 'commander') {
         const iid = `ci-${++globalCounter}`
-        cardMap[iid] = {
-          cardId: card.id, name: card.name, imageSmall: card.image_small, imageNormal: card.image_normal,
-          typeLine: card.type_line, manaCost: card.mana_cost, power: card.power, toughness: card.toughness,
-          oracleText: card.oracle_text, isCommander: true, isToken: false,
-        }
+        cardMap[iid] = toCardMapEntry(card.id, card, { isCommander: true, isToken: false })
       } else if (dc.board === 'main') {
         for (let i = 0; i < dc.quantity; i++) {
           const iid = `ci-${++globalCounter}`
-          cardMap[iid] = {
-            cardId: card.id, name: card.name, imageSmall: card.image_small, imageNormal: card.image_normal,
-            typeLine: card.type_line, manaCost: card.mana_cost, power: card.power, toughness: card.toughness,
-            oracleText: card.oracle_text, isCommander: commanderCardIds.has(card.id), isToken: false,
-          }
+          cardMap[iid] = toCardMapEntry(card.id, card, { isCommander: commanderCardIds.has(card.id), isToken: false })
         }
       }
     }

@@ -35,17 +35,34 @@ const TMP_FILE = resolve(__dirname, '..', `.tmp-bulk-${bulkType}.json`)
 
 const SKIP_LAYOUTS = new Set(['token', 'double_faced_token', 'emblem', 'art_series'])
 
+// Pre-computed phase-trigger flags — mirror the DB backfill patterns so future
+// imports stay consistent with the initial state. Applied on oracle_text at
+// import time for O(1) UI highlighting later.
+const TRIGGER_PATTERNS = {
+  upkeep: /at the beginning of [^.]*upkeep/i,
+  etb: /(when|whenever) [^.]*enters/i,
+  attacks: /whenever [^.]*attacks/i,
+  dies: /(when|whenever) [^.]*dies/i,
+  end_step: /at the beginning of [^.]*end step/i,
+  cast: /(when|whenever) [^.]*casts?\s/i,
+}
+
 function mapCard(card) {
   const ff = card.card_faces?.[0]
   const img = card.image_uris ?? ff?.image_uris
   const pu = card.prices?.usd ? parseFloat(card.prices.usd) : null
   const pf = card.prices?.usd_foil ? parseFloat(card.prices.usd_foil) : null
+  const oracle = card.oracle_text ?? ff?.oracle_text ?? null
+  // Concatenate both faces' oracle so flip/DFC cards still get flagged.
+  const oracleFull = card.card_faces?.length
+    ? card.card_faces.map(f => f.oracle_text ?? '').join('\n')
+    : oracle ?? ''
   return {
     scryfall_id: card.id, name: card.name,
     mana_cost: card.mana_cost ?? ff?.mana_cost ?? null,
     cmc: card.cmc ?? 0,
     type_line: card.type_line ?? ff?.type_line ?? 'Unknown',
-    oracle_text: card.oracle_text ?? ff?.oracle_text ?? null,
+    oracle_text: oracle,
     colors: card.colors ?? ff?.colors ?? null,
     color_identity: card.color_identity ?? [],
     rarity: card.rarity ?? 'common',
@@ -59,6 +76,12 @@ function mapCard(card) {
     toughness: card.toughness ?? ff?.toughness ?? null,
     keywords: card.keywords ?? null, produced_mana: card.produced_mana ?? null,
     layout: card.layout ?? null, card_faces: card.card_faces ?? null,
+    has_upkeep_trigger: TRIGGER_PATTERNS.upkeep.test(oracleFull),
+    has_etb_trigger: TRIGGER_PATTERNS.etb.test(oracleFull),
+    has_attacks_trigger: TRIGGER_PATTERNS.attacks.test(oracleFull),
+    has_dies_trigger: TRIGGER_PATTERNS.dies.test(oracleFull),
+    has_end_step_trigger: TRIGGER_PATTERNS.end_step.test(oracleFull),
+    has_cast_trigger: TRIGGER_PATTERNS.cast.test(oracleFull),
     updated_at: new Date().toISOString(),
   }
 }
