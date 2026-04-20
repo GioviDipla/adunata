@@ -1,26 +1,49 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Image from 'next/image'
+import { Heart } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 
 type Card = Database['public']['Tables']['cards']['Row']
 
 interface CardItemProps {
   card: Card
+  liked?: boolean
   onSelect: (card: Card) => void
+  onContextAction?: (card: Card, x: number, y: number) => void
 }
 
-export default function CardItem({ card, onSelect }: CardItemProps) {
+export default function CardItem({ card, liked, onSelect, onContextAction }: CardItemProps) {
   const [showPreview, setShowPreview] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+
+  const longPress = useLongPress({
+    onLongPress: () => {
+      if (!onContextAction) return
+      const rect = rootRef.current?.getBoundingClientRect()
+      if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
+    },
+  })
 
   return (
     <div
+      ref={rootRef}
       className="group relative cursor-pointer"
-      onClick={() => onSelect(card)}
+      onClick={() => {
+        if (longPress.wasLongPress()) return
+        onSelect(card)
+      }}
+      onContextMenu={(e) => {
+        if (!onContextAction) return
+        e.preventDefault()
+        onContextAction(card, e.clientX, e.clientY)
+      }}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
+      {...longPress}
     >
       {/* Card image — `image_normal` (488×680), same as DeckGridView. next/image
        *  downscales via `sizes` so the actual bytes on the wire match the rendered size. */}
@@ -38,6 +61,13 @@ export default function CardItem({ card, onSelect }: CardItemProps) {
         ) : (
           <div className="w-full aspect-[5/7] flex items-center justify-center bg-bg-cell text-font-muted text-sm p-4 text-center">
             {card.name}
+          </div>
+        )}
+
+        {/* Liked badge — top-left */}
+        {liked && (
+          <div className="absolute top-1.5 left-1.5 bg-black/70 backdrop-blur-sm rounded-full p-1">
+            <Heart size={12} className="fill-red-500 text-red-500" />
           </div>
         )}
 

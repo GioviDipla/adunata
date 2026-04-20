@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { Search, Loader2, ChevronDown, ChevronUp, X, ArrowUpDown } from 'lucide-react'
+import { Search, Loader2, ChevronDown, ChevronUp, X, ArrowUpDown, Heart } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import CardGrid from './CardGrid'
 import CardDetail from './CardDetail'
+import CardContextMenu from './CardContextMenu'
 
 type Card = Database['public']['Tables']['cards']['Row']
 
@@ -44,9 +45,15 @@ interface CardBrowserProps {
   initialCards: Card[]
   sets?: SetInfo[]
   userDecks?: DeckSummary[]
+  initialLikedIds?: string[]
 }
 
-export default function CardBrowser({ initialCards, sets = [], userDecks = [] }: CardBrowserProps) {
+export default function CardBrowser({
+  initialCards,
+  sets = [],
+  userDecks = [],
+  initialLikedIds = [],
+}: CardBrowserProps) {
   const supabase = createClient()
 
   const [cards, setCards] = useState<Card[]>(initialCards)
@@ -55,6 +62,11 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const [hasMore, setHasMore] = useState(initialCards.length === PAGE_SIZE)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+
+  // Likes + context menu
+  const [likedIds, setLikedIds] = useState<Set<string>>(() => new Set(initialLikedIds))
+  const [showLikedOnly, setShowLikedOnly] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ card: Card; x: number; y: number } | null>(null)
 
   // Filters
   const [searchText, setSearchText] = useState('')
@@ -165,6 +177,14 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
         query = query.containedBy('color_identity', commanderIdentity)
       }
 
+      if (showLikedOnly) {
+        // Empty-set shortcut: no likes → no rows. Using a guaranteed-empty
+        // id value avoids sending an invalid `.in('id', [])` to PostgREST.
+        // Cast: cards.id is uuid at runtime; the TS types claim number.
+        const ids = likedIds.size > 0 ? Array.from(likedIds) : ['00000000-0000-0000-0000-000000000000']
+        query = query.in('id', ids as unknown as number[])
+      }
+
       if (selectedTypes.length === 1) {
         query = query.ilike('type_line', `%${selectedTypes[0]}%`)
       } else if (selectedTypes.length > 1) {
@@ -194,7 +214,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
 
       return query
     },
-    [supabase, isDefaultSort, debouncedSearch, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, sortBy]
+    [supabase, isDefaultSort, debouncedSearch, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy]
   )
 
   useEffect(() => {
@@ -248,7 +268,8 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     const hasFilters =
       debouncedSearch || selectedColors.length > 0 || commanderIdentity.length > 0 ||
       selectedTypes.length > 0 || selectedRarity || cmcMin !== '' || cmcMax !== '' ||
-      selectedSet || debouncedCreatureType.trim() || debouncedKeyword.trim()
+      selectedSet || debouncedCreatureType.trim() || debouncedKeyword.trim() ||
+      showLikedOnly
 
     if (hasFilters) {
       fetchCards()
@@ -259,7 +280,7 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     }
 
     return () => { cancelled = true; controller?.abort() }
-  }, [debouncedSearch, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, buildQuery, initialCards])
+  }, [debouncedSearch, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, buildQuery, initialCards])
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return
@@ -283,6 +304,58 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
   const toggleCommanderColor = (color: string) =>
     setCommanderIdentity((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])
 
+  const handleContextAction = (card: Card, x: number, y: number) => {
+    setContextMenu({ card, x, y })
+  }
+
+  const toggleLike = async (card: Card) => {
+    const id = String(card.id)
+    const wasLiked = likedIds.has(id)
+    // Optimistic toggle
+    setLikedIds((prev) => {
+      const next = new Set(prev)
+      if (wasLiked) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    try {
+      const res = await fetch(`/api/cards/${id}/like`, { method: 'POST' })
+      if (!res.ok) throw new Error('like failed')
+    } catch {
+      // Rollback
+      setLikedIds((prev) => {
+        const next = new Set(prev)
+        if (wasLiked) next.add(id)
+        else next.delete(id)
+        return next
+      })
+    }
+  }
+
+  // Deep-link: ?open=<cardId> opens the detail modal on mount.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const openId = params.get('open')
+    if (!openId) return
+    const existing = initialCards.find((c) => String(c.id) === openId)
+    if (existing) {
+      setSelectedCard(existing)
+      return
+    }
+    // Fetch the card if not in the initial payload
+    // Cast: cards.id is uuid at runtime; the TS types claim number.
+    supabase
+      .from('cards')
+      .select(CARD_GRID_COLUMNS)
+      .eq('id', openId as unknown as number)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setSelectedCard(data as unknown as Card)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const toggleType = (type: string) =>
     setSelectedTypes((prev) => prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type])
 
@@ -291,12 +364,13 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
     setSelectedRarity(''); setCmcMin(''); setCmcMax('')
     setSelectedSet(''); setCreatureType(''); setSelectedKeyword('')
     setSetSearch(''); setColorMode('or'); setTypeMode('and')
+    setShowLikedOnly(false)
   }
 
   const activeFilterCount = [
     searchText, selectedColors.length > 0, commanderIdentity.length > 0,
     selectedTypes.length > 0, selectedRarity, cmcMin, cmcMax, selectedSet,
-    creatureType, selectedKeyword,
+    creatureType, selectedKeyword, showLikedOnly,
   ].filter(Boolean).length
 
   return (
@@ -397,6 +471,31 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
                 )
               })}
             </div>
+          </div>
+
+          {/* Liked-only toggle */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowLikedOnly((v) => !v)}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                showLikedOnly
+                  ? 'bg-red-500/20 text-red-300 ring-1 ring-red-500/40'
+                  : 'bg-bg-card border border-border text-font-secondary hover:text-font-primary'
+              }`}
+              title={showLikedOnly ? 'Show all cards' : 'Show only liked cards'}
+            >
+              <Heart
+                size={14}
+                className={showLikedOnly ? 'fill-red-500 text-red-500' : 'text-font-muted'}
+              />
+              Liked only
+              {likedIds.size > 0 && (
+                <span className="rounded-full bg-bg-accent/30 px-1.5 py-0.5 text-[10px] font-bold text-font-accent">
+                  {likedIds.size}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Commander Color Identity — subset filter (card color_identity ⊆ selected) */}
@@ -617,7 +716,12 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
           ))}
         </div>
       ) : (
-        <CardGrid cards={cards} onSelectCard={setSelectedCard} />
+        <CardGrid
+          cards={cards}
+          likedIds={likedIds}
+          onSelectCard={setSelectedCard}
+          onContextAction={handleContextAction}
+        />
       )}
 
       {/* Load more */}
@@ -631,6 +735,23 @@ export default function CardBrowser({ initialCards, sets = [], userDecks = [] }:
       )}
 
       {selectedCard && <CardDetail card={selectedCard} onClose={() => setSelectedCard(null)} userDecks={userDecks} />}
+
+      {contextMenu && (
+        <CardContextMenu
+          cardName={contextMenu.card.name}
+          shareUrl={
+            typeof window !== 'undefined'
+              ? `${window.location.origin}/cards?open=${contextMenu.card.id}`
+              : `/cards?open=${contextMenu.card.id}`
+          }
+          x={contextMenu.x}
+          y={contextMenu.y}
+          liked={likedIds.has(String(contextMenu.card.id))}
+          onAddToDeck={() => setSelectedCard(contextMenu.card)}
+          onToggleLike={() => toggleLike(contextMenu.card)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   )
 }

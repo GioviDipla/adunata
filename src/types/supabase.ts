@@ -198,6 +198,24 @@ export interface Database {
           }
         ]
       }
+      card_likes: {
+        Row: {
+          user_id: string
+          card_id: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          card_id: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          card_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       deck_cards: {
         Row: {
           id: string

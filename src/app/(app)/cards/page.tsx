@@ -48,7 +48,7 @@ export default async function CardsPage() {
   const supabase = await createClient()
   const user = await getAuthenticatedUser()
 
-  const [publicData, { data: userDecks }] = await Promise.all([
+  const [publicData, { data: userDecks }, { data: likedRows }] = await Promise.all([
     getPublicCardsData(),
     user
       ? supabase
@@ -57,7 +57,15 @@ export default async function CardsPage() {
           .eq('user_id', user.id)
           .order('updated_at', { ascending: false })
       : Promise.resolve({ data: [] as { id: string; name: string; format: string }[] }),
+    user
+      ? supabase
+          .from('card_likes')
+          .select('card_id')
+          .eq('user_id', user.id)
+      : Promise.resolve({ data: [] as { card_id: string }[] }),
   ])
+
+  const likedIds = (likedRows || []).map((r) => r.card_id)
 
   return (
     <div className="min-h-screen bg-bg-dark">
@@ -67,6 +75,7 @@ export default async function CardsPage() {
           initialCards={publicData.initialCards}
           sets={publicData.sets}
           userDecks={userDecks || []}
+          initialLikedIds={likedIds}
         />
       </div>
     </div>
