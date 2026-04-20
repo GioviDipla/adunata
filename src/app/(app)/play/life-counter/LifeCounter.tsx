@@ -235,20 +235,23 @@ export default function LifeCounter() {
 
   const layoutClass = useMemo(() => {
     if (playerCount === 2) return 'grid grid-rows-2'
-    if (playerCount === 3) return 'grid grid-rows-3'
+    // 3-player: the "head of the table" (P1, rotated) gets a larger panel on
+    // the top row; P2 and P3 share a smaller second row as two equal tiles.
+    if (playerCount === 3) return 'grid grid-cols-2 [grid-template-rows:3fr_2fr]'
     if (playerCount === 4) return 'grid grid-cols-2 grid-rows-2'
     return 'grid grid-cols-2 grid-rows-3'
   }, [playerCount])
 
   const isRotated = (idx: number) => {
     if (playerCount === 2) return idx === 0
+    if (playerCount === 3) return idx === 0
     if (playerCount === 5) return idx < 3
     return idx < 2
   }
 
-  // For 5-player layout, the first player spans both columns on the top row,
-  // creating a 1 (rotated) + 2 (rotated) + 2 (normal) arrangement.
+  // When a layout has a "head of table" tile, it spans both columns of its row.
   const panelClassFor = (idx: number) => {
+    if (playerCount === 3 && idx === 0) return 'col-span-2'
     if (playerCount === 5 && idx === 0) return 'col-span-2'
     return ''
   }
@@ -573,11 +576,11 @@ function PlayerPanel({
 
   const others = allPlayers.filter((o) => o.id !== player.id)
 
-  // Top-of-DOM button = decrement; bottom-of-DOM button = increment.
-  // When the panel is rotate-180'd, the DOM-top appears at the bottom of the
-  // user's field of view, so we invert: rotated user taps what visually looks
-  // like the "top" (−) which is actually the bottom DOM button, and vice versa.
-  const topDelta = rotated ? +1 : -1
+  // Every player sees "+" above the life number and "−" below it from their
+  // own point of view. The panel is rotate-180'd for rotated seats, so the
+  // DOM-top button visually lands at the bottom for that user — we flip the
+  // delta accordingly so the convention holds for everyone.
+  const topDelta = rotated ? -1 : +1
   const bottomDelta = -topDelta
 
   return (
