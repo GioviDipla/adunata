@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  Sparkles,
   Layers,
   Swords,
   Fish,
@@ -32,7 +31,14 @@ export default async function Home() {
       <header className="border-b border-border/50">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-font-accent" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/icons/icon-120.png"
+              alt="Adunata"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-md"
+            />
             <span className="text-lg font-bold">Adunata</span>
           </div>
           <Link
@@ -46,6 +52,14 @@ export default async function Home() {
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:py-16">
         <section className="mb-14 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icons/logo-full.png"
+            alt="Adunata"
+            width={280}
+            height={280}
+            className="mx-auto mb-6 h-48 w-48 rounded-2xl shadow-2xl sm:h-64 sm:w-64"
+          />
           <h1 className="mb-4 text-3xl font-bold sm:text-5xl">
             La piattaforma per giocatori di{" "}
             <span className="text-font-accent">Magic: The Gathering</span>

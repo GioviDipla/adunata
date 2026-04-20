@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Mail, Lock } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -56,9 +56,14 @@ export default function LoginPage() {
   return (
     <div>
       <div className="mb-8 flex flex-col items-center gap-3">
-        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-bg-accent/10">
-          <Sparkles className="h-7 w-7 text-font-accent" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/icons/icon-120.png"
+          alt="Adunata"
+          width={72}
+          height={72}
+          className="h-18 w-18 rounded-xl shadow-lg"
+        />
         <h1 className="text-2xl font-bold text-font-primary">Adunata!!!</h1>
         <p className="text-sm text-font-secondary">
           Sign in to your account
