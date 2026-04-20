@@ -45,6 +45,20 @@ curl -X POST "https://adunata.vercel.app/api/sync-cards?force=true" \
 ## ✅ [STEP 9] — Google OAuth
 Client ID + Secret configurati nel pannello Supabase → Authentication → Providers → Google. Redirect URI: `https://wyujskkzqeexvmrwudup.supabase.co/auth/v1/callback`.
 
+## ✅ [STEP 12] — Upstash Redis (rate limiting pre-lancio community)
+Integrazione installata via Vercel Dashboard → Storage → Marketplace → **Upstash for Redis** (piano Free, region Frankfurt / eu-west).
+
+Env vars iniettate automaticamente in tutti gli ambienti del progetto (prefisso legacy `KV_*`):
+- `KV_REST_API_URL`
+- `KV_REST_API_TOKEN`
+- `KV_REST_API_READ_ONLY_TOKEN`
+- `KV_URL`
+
+Helper in `src/lib/rate-limit.ts` fa no-op se le env vars mancano (dev senza Redis continua a funzionare). Endpoint protetti:
+- `/api/cards/search` → 20 req / 10 s, keyed by IP
+- `/api/users/search` → 20 req / 10 s, keyed by user id
+- `/api/decks/:id/cards/bulk-import` → 5 req / 60 s, keyed by user id
+
 ---
 
 ## Step ancora aperti
