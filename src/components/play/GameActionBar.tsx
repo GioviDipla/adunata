@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { Heart, Minus, Plus, Layers, Archive, Ban, SkipForward, Flag, Sparkles } from 'lucide-react'
 import PriorityIndicator from './PriorityIndicator'
 import { GAME_PHASES } from '@/lib/game/phases'
@@ -32,17 +33,44 @@ export default function GameActionBar({
   hasPriority, isActivePlayer, onPassPriority, onLifeChange, onDraw,
   onViewZone, onConcede, onConfirmUntap, autoPass, onToggleAutoPass, onSpecialActions,
 }: GameActionBarProps) {
+  const phaseRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    const el = phaseRefs.current[phase]
+    if (el) {
+      el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+    }
+  }, [phase])
+
   return (
     <div className="border-t border-border bg-bg-surface">
-      {/* Phase tracker */}
-      <div className="flex items-center gap-0.5 overflow-x-auto px-2 py-1">
-        {GAME_PHASES.map((p) => (
-          <div key={p.key} className={`shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold tracking-wider ${
-            p.key === phase ? 'bg-bg-accent text-font-white' : 'bg-bg-cell text-font-muted'
-          }`}>
-            {p.label.toUpperCase()}
-          </div>
-        ))}
+      {/* Phase tracker — horizontal carousel, active phase auto-centers */}
+      <div className="relative">
+        <div className="flex items-center gap-1 overflow-x-auto scroll-smooth scrollbar-hide py-1.5">
+          {/* Left spacer so the first phase can sit centered */}
+          <div aria-hidden className="shrink-0" style={{ width: '50%' }} />
+          {GAME_PHASES.map((p) => {
+            const isActive = p.key === phase
+            return (
+              <div
+                key={p.key}
+                ref={(el) => { phaseRefs.current[p.key] = el }}
+                className={`shrink-0 rounded px-1.5 py-1 text-[9px] font-bold tracking-wider transition-colors ${
+                  isActive
+                    ? 'bg-bg-accent text-font-white scale-110'
+                    : 'bg-bg-cell text-font-muted'
+                }`}
+              >
+                {p.label.toUpperCase()}
+              </div>
+            )
+          })}
+          {/* Right spacer so the last phase can sit centered */}
+          <div aria-hidden className="shrink-0" style={{ width: '50%' }} />
+        </div>
+        {/* Edge fade masks to hint at more content */}
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-bg-surface to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-bg-surface to-transparent" />
       </div>
 
       {/* Info + priority */}

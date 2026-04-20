@@ -31,6 +31,15 @@ img {
   bottom: calc(env(safe-area-inset-bottom) + 1rem);
 }
 
+/* Hide native scrollbar (used by the phase carousel in the game action bar). */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 @theme {
   --color-bg-dark: #121218;
   --color-bg-surface: #1A1A24;

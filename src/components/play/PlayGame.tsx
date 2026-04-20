@@ -983,12 +983,18 @@ export default function PlayGame(props: PlayGameProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark">
+    <div
+      className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       {/* Back button — goldfish only */}
       {isGoldfish && (
-        <div className="flex items-center border-b border-border/40 px-3 py-1.5">
-          <Link href={`/decks/${(props as PlayGameProps & { mode: 'goldfish' }).deckId}`} className="flex items-center gap-1 text-font-secondary">
-            <ChevronLeft size={16} /><span className="text-xs font-medium">Deck</span>
+        <div className="flex items-center border-b border-border/40 px-2">
+          <Link
+            href={`/decks/${(props as PlayGameProps & { mode: 'goldfish' }).deckId}`}
+            className="flex min-h-11 items-center gap-1 px-2 text-font-secondary active:text-font-primary"
+          >
+            <ChevronLeft size={20} /><span className="text-sm font-medium">Deck</span>
           </Link>
         </div>
       )}

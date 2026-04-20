@@ -36,6 +36,11 @@ export function Navbar() {
   const { collapsed, toggle } = useSidebar();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Hide mobile FAB + drawer on immersive game screens (goldfish, multiplayer game).
+  const isGameScreen =
+    /\/decks\/[^/]+\/goldfish$/.test(pathname) ||
+    /\/play\/[^/]+\/game$/.test(pathname);
+
   // Close mobile drawer on route change
   useEffect(() => {
     setMobileOpen(false);
@@ -147,21 +152,23 @@ export function Navbar() {
       </aside>
 
       {/* Mobile floating hamburger — rounded-square FAB on the left edge */}
-      <button
-        type="button"
-        aria-label={mobileOpen ? "Close menu" : "Open menu"}
-        onClick={() => setMobileOpen((v) => !v)}
-        className="mobile-navbar fixed left-4 z-50 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/25 text-font-primary ring-1 ring-white/40 backdrop-blur-xl transition-colors active:bg-white/35 md:hidden"
-      >
-        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
+      {!isGameScreen && (
+        <button
+          type="button"
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          onClick={() => setMobileOpen((v) => !v)}
+          className="mobile-navbar fixed left-4 z-50 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/25 text-font-primary ring-1 ring-white/40 backdrop-blur-xl transition-colors active:bg-white/35 md:hidden"
+        >
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      )}
 
       {/* Mobile drawer — slides in from the left when hamburger is tapped.
           Transparent backdrop (click-capture only) + transparent panel,
           so the icons and labels float over page content just like on desktop. */}
       <div
-        className={`fixed inset-0 z-40 md:hidden ${mobileOpen ? "pointer-events-auto" : "pointer-events-none"}`}
-        aria-hidden={!mobileOpen}
+        className={`fixed inset-0 z-40 md:hidden ${mobileOpen && !isGameScreen ? "pointer-events-auto" : "pointer-events-none"}`}
+        aria-hidden={!mobileOpen || isGameScreen}
       >
         <div
           className={`absolute inset-0 bg-black/0 backdrop-blur-0 transition-all duration-200 ${
