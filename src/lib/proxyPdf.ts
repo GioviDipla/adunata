@@ -30,10 +30,26 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// Scryfall URLs are routed through /api/card-image so we hit Vercel's edge
+// cache (same as next/image in the card browser) instead of pounding Scryfall
+// on every PDF build. Non-Scryfall URLs fall back to a direct fetch.
+function toProxyUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.hostname === 'cards.scryfall.io') {
+      return `/api/card-image?url=${encodeURIComponent(url)}`
+    }
+  } catch {
+    // fall through
+  }
+  return url
+}
+
 async function fetchImageAsBase64(url: string): Promise<string | null> {
+  const target = toProxyUrl(url)
   for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
     try {
-      const res = await fetch(url, { cache: 'force-cache' })
+      const res = await fetch(target, { cache: 'force-cache' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const blob = await res.blob()
       const dataUrl = await new Promise<string | null>((resolve) => {
