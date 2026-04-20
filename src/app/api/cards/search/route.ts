@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchCards, mapScryfallCard, type ScryfallCard } from '@/lib/scryfall'
 import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
+import { enforceLimit, getClientId, searchLimiter } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')
@@ -9,6 +10,9 @@ export async function GET(request: NextRequest) {
   if (!q || q.trim().length < 2) {
     return NextResponse.json({ cards: [] })
   }
+
+  const limited = await enforceLimit(searchLimiter, getClientId(request))
+  if (limited) return limited
 
   const supabase = createAdminClient()
   const query = q.trim()

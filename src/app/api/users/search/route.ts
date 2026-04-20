@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { enforceLimit, getClientId, searchLimiter } from '@/lib/rate-limit'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -14,9 +15,14 @@ export async function GET(request: NextRequest) {
     50,
   )
 
-  if (query.length < 1) {
+  // Enforce a minimum length both client-side (UserSearch debounce) and here
+  // so a bypassed client can't force trigram scans on single-character queries.
+  if (query.length < 2) {
     return NextResponse.json({ users: [] })
   }
+
+  const limited = await enforceLimit(searchLimiter, getClientId(request, user.id))
+  if (limited) return limited
 
   const { data, error } = await supabase.rpc('search_users', {
     p_query: query,

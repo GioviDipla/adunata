@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lookupCardsByNames, mapScryfallCard } from '@/lib/scryfall'
 import { CARD_DECK_COLUMNS } from '@/lib/supabase/columns'
+import { bulkLimiter, enforceLimit, getClientId } from '@/lib/rate-limit'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -44,6 +45,9 @@ export async function POST(
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  const limited = await enforceLimit(bulkLimiter, getClientId(request, user.id))
+  if (limited) return limited
 
   // Verify deck ownership
   const { data: deck } = await supabase
