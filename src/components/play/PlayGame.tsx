@@ -13,7 +13,7 @@ import {
   createMulligan, createKeepHand, createBottomCards,
   createAddCounter, createRemoveCounter, createSetCounter, createSetPT, createCreateToken,
   createCommanderChoice, createToggleAutoPass,
-  createShuffleIntoLibrary, createCopyCard, createTakeControl,
+  createShuffleIntoLibrary, createShuffleLibrary, createCopyCard, createTakeControl,
 } from '@/lib/game/actions'
 import { applyAction } from '@/lib/game/engine'
 import { applyWithBotLoop } from '@/lib/game/bot'
@@ -47,6 +47,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     id: cardId,
     scryfall_id: '',
     name: data.name,
+    name_it: null,
     mana_cost: data.manaCost ?? null,
     cmc: 0,
     type_line: data.typeLine,
@@ -596,6 +597,12 @@ export default function PlayGame(props: PlayGameProps) {
     sendAction(createShuffleIntoLibrary(userId, myName, instanceId, data.cardId, data.name, from))
     setPreview(null)
   }, [cardMap, sendAction, userId, myName])
+
+  // Close the library viewer AND shuffle — standard "I searched my library" closer.
+  const handleCloseAndShuffleLibrary = useCallback(() => {
+    sendAction(createShuffleLibrary(userId, myName))
+    setViewingZone(null)
+  }, [sendAction, userId, myName])
 
   // Copy a battlefield card (create token copy)
   const handleCopy = useCallback((instanceId: string) => {
@@ -1168,6 +1175,7 @@ export default function PlayGame(props: PlayGameProps) {
           title="Library (top to bottom)"
           cards={libraryCards}
           onClose={() => setViewingZone(null)}
+          onCloseAndShuffle={handleCloseAndShuffleLibrary}
           onCardPreview={(card) => setPreview({ card })}
           onCardAction={(entry) => setPreview({ card: entry.card, zone: 'library', instanceId: entry.instanceId })}
         />

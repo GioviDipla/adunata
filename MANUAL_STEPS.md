@@ -95,3 +95,16 @@ Cosa fare:
 2. Segui le istruzioni DNS (di solito un CNAME o A record)
 3. Aggiorna `Site URL` in Supabase → Authentication → URL Configuration
 4. Aggiungi il nuovo dominio alle redirect URL autorizzate su Google OAuth
+
+### [STEP 12] — Backfill nomi italiani nel DB
+Quando: dopo il deploy della feature "search per nome italiano" — va eseguito una volta per popolare `cards.name_it` su tutto il catalogo. Senza questo passo la search italiana continua a funzionare via fallback Scryfall, ma è più lenta.
+
+Cosa fare (da locale, con `.env.local` contenente `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`):
+
+```bash
+node --max-old-space-size=4096 scripts/sync-italian-names.mjs
+```
+
+Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `printed_name` italiani via `oracle_id`, e aggiorna `cards.name_it` via la RPC `apply_italian_names`. Attesa: ~2-5 min a seconda della rete. Idempotente — se rilanciato senza `--force` salta quando il bulk non è cambiato.
+
+Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.

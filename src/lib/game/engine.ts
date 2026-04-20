@@ -67,6 +67,8 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return handleDrawX(s, action)
     case 'shuffle_into_library':
       return handleShuffleIntoLibrary(s, action)
+    case 'shuffle_library':
+      return handleShuffleLibrary(s, action)
     case 'copy_card':
       return handleCopyCard(s, action)
     case 'take_control':
@@ -694,6 +696,18 @@ function handleDrawX(s: GameState, action: GameAction): GameState {
   player.libraryCount = player.library.length
   player.handCount = player.hand.length
   player.autoPass = false
+  return s
+}
+
+function handleShuffleLibrary(s: GameState, action: GameAction): GameState {
+  const player = s.players[action.playerId]
+  if (!player) return s
+  const lib = player.library
+  for (let i = lib.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [lib[i], lib[j]] = [lib[j], lib[i]]
+  }
+  player.libraryCount = lib.length
   return s
 }
 

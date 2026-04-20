@@ -14,6 +14,7 @@ export interface Database {
           id: number
           scryfall_id: string
           name: string
+          name_it: string | null
           mana_cost: string | null
           cmc: number
           type_line: string
@@ -48,6 +49,7 @@ export interface Database {
           id?: number
           scryfall_id: string
           name: string
+          name_it?: string | null
           mana_cost?: string | null
           cmc: number
           type_line: string
@@ -82,6 +84,7 @@ export interface Database {
           id?: number
           scryfall_id?: string
           name?: string
+          name_it?: string | null
           mana_cost?: string | null
           cmc?: number
           type_line?: string

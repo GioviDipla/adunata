@@ -130,12 +130,13 @@ export default function CardBrowser({
         .select(CARD_GRID_COLUMNS)
 
       if (debouncedSearch.trim()) {
-        // Match primarily by name + type_line. Oracle text is not searched
-        // here — the dedicated "Rules Text" filter covers that. Sanitize
-        // chars that would break the PostgREST `or=(f1,f2)` syntax.
+        // Match by English `name` OR Italian `name_it`. Oracle text and
+        // type line are not searched here — the dedicated "Rules Text"
+        // and "Creature Subtype" filters cover those. Sanitize chars
+        // that would break the PostgREST `or=(f1,f2)` syntax.
         const raw = debouncedSearch.trim()
         const q = raw.replace(/[,()]/g, ' ')
-        query = query.or(`name.ilike.%${q}%,type_line.ilike.%${q}%`)
+        query = query.or(`name.ilike.%${q}%,name_it.ilike.%${q}%`)
       }
 
       // Default sort uses keyset (cursor) pagination on (released_at DESC NULLS LAST, id DESC).
@@ -242,27 +243,33 @@ export default function CardBrowser({
       const q = debouncedSearch.trim()
       const rows = (data ?? []) as unknown as Card[]
 
-      // Rank name matches to the top so "Lightning Bolt" appears before
-      // cards that merely contain "lightning" or "bolt" in another column.
+      // Rank by closest match on either English `name` or Italian
+      // `name_it`: exact > prefix > contains > nothing.
       if (q && rows.length > 0) {
         const lc = q.toLowerCase()
-        const score = (name: string) => {
-          const n = name.toLowerCase()
+        const scoreOne = (s: string | null | undefined) => {
+          if (!s) return 0
+          const n = s.toLowerCase()
           if (n === lc) return 3
           if (n.startsWith(lc)) return 2
           if (n.includes(lc)) return 1
           return 0
         }
-        rows.sort((a, b) => score(b.name) - score(a.name))
+        const score = (r: Card) => Math.max(scoreOne(r.name), scoreOne(r.name_it))
+        rows.sort((a, b) => score(b) - score(a))
       }
 
-      // If the user searched, decide whether to hit the Scryfall fallback
-      // (which handles Italian card names via `lang:it`). Scatta quando
-      // nessuno dei risultati locali ha il nome che contiene la query —
-      // così l'italiano funziona anche se il match per type_line ha
-      // restituito carte irrilevanti.
+      // Scryfall fallback only when no local match contains the query
+      // in either English or Italian name. With the backfilled name_it
+      // column this is a rare path (new cards not yet synced).
       const nameHit = q
-        ? rows.some((r) => r.name.toLowerCase().includes(q.toLowerCase()))
+        ? rows.some((r) => {
+            const lc = q.toLowerCase()
+            return (
+              r.name.toLowerCase().includes(lc) ||
+              (r.name_it ?? '').toLowerCase().includes(lc)
+            )
+          })
         : true
 
       if (q && q.length >= 2 && !nameHit) {
@@ -407,7 +414,7 @@ export default function CardBrowser({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-font-muted" size={18} />
         <input
           type="text"
-          placeholder="Search cards by name or type (Italian supported)…"
+          placeholder="Search by card name — English or Italian…"
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           className="w-full pl-10 pr-4 py-3 rounded-lg bg-bg-card border border-border text-font-primary placeholder:text-font-muted focus:outline-none focus:border-bg-accent focus:ring-1 focus:ring-bg-accent transition-colors"

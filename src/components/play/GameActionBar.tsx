@@ -65,15 +65,15 @@ export default function GameActionBar({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button onClick={() => onViewZone('graveyard')} className="flex items-center gap-0.5 text-font-secondary">
-            <Archive size={10} /><span className="text-[10px]">{graveyardCount}</span>
+        <div className="flex items-center gap-3">
+          <button onClick={() => onViewZone('graveyard')} className="flex items-center gap-1 text-font-secondary active:text-font-primary" aria-label="Graveyard">
+            <Archive size={16} /><span className="text-sm font-semibold tabular-nums">{graveyardCount}</span>
           </button>
-          <button onClick={() => onViewZone('exile')} className="flex items-center gap-0.5 text-font-secondary">
-            <Ban size={10} /><span className="text-[10px]">{exileCount}</span>
+          <button onClick={() => onViewZone('exile')} className="flex items-center gap-1 text-font-secondary active:text-font-primary" aria-label="Exile">
+            <Ban size={16} /><span className="text-sm font-semibold tabular-nums">{exileCount}</span>
           </button>
-          <button onClick={() => onViewZone('library')} className="flex items-center gap-0.5 text-font-secondary">
-            <BookOpen size={10} /><span className="text-[10px]">{libraryCount}</span>
+          <button onClick={() => onViewZone('library')} className="flex items-center gap-1 text-font-secondary active:text-font-primary" aria-label="Library">
+            <BookOpen size={16} /><span className="text-sm font-semibold tabular-nums">{libraryCount}</span>
           </button>
         </div>
       </div>
@@ -88,7 +88,7 @@ export default function GameActionBar({
         ) : hasPriority ? (
           <>
             <button onClick={onDraw} disabled={!isActivePlayer}
-              className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-bg-cell py-2 text-font-secondary disabled:opacity-30">
+              className="flex flex-1 flex-col items-center gap-0.5 rounded-xl bg-blue-600 py-2 text-font-white disabled:opacity-30 active:brightness-95">
               <Layers size={16} /><span className="text-[8px] font-bold">DRAW</span>
             </button>
             <button onClick={onPassPriority}
@@ -106,12 +106,12 @@ export default function GameActionBar({
             )}
             {onSpecialActions && (
               <button onClick={onSpecialActions}
-                className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-cell px-3 py-2 text-font-secondary active:bg-bg-hover">
+                className="flex flex-col items-center gap-0.5 rounded-xl bg-yellow-500 px-3 py-2 text-black active:brightness-95">
                 <Sparkles size={16} /><span className="text-[7px] font-bold">SPECIAL</span>
               </button>
             )}
             <button onClick={onConcede}
-              className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-cell px-3 py-2 text-font-muted">
+              className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-red px-3 py-2 text-font-white active:brightness-95">
               <Flag size={14} /><span className="text-[8px] font-bold">{mode === 'goldfish' ? 'RESTART' : 'GG'}</span>
             </button>
           </>

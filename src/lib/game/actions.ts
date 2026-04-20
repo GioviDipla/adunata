@@ -169,6 +169,14 @@ export function createShuffleIntoLibrary(playerId: string, playerName: string, i
   }
 }
 
+export function createShuffleLibrary(playerId: string, playerName: string): GameAction {
+  return {
+    type: 'shuffle_library', playerId,
+    data: {},
+    text: `${playerName} shuffles their library`,
+  }
+}
+
 export function createCopyCard(playerId: string, playerName: string, sourceInstanceId: string, cardId: number, cardName: string, newInstanceId: string): GameAction {
   return {
     type: 'copy_card', playerId,

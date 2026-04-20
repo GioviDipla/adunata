@@ -18,11 +18,11 @@ export async function GET(request: NextRequest) {
   const query = q.trim()
 
   try {
-    // Search local DB first (English name)
+    // Search local DB first — now covers both English `name` and Italian `name_it`.
     const { data: localCards } = await supabase
       .from('cards')
       .select(CARD_GRID_COLUMNS)
-      .ilike('name', `%${query}%`)
+      .or(`name.ilike.%${query}%,name_it.ilike.%${query}%`)
       .limit(10)
 
     if (localCards && localCards.length >= 5) {
@@ -38,14 +38,16 @@ export async function GET(request: NextRequest) {
     const enCards = enResult.status === 'fulfilled' ? enResult.value.data : []
     const itCards = itResult.status === 'fulfilled' ? itResult.value.data : []
 
-    // For Italian results, we need the English oracle version.
-    // Scryfall Italian cards have the english `name` field, so we can use that.
-    // Merge results, deduplicate by oracle_id or name
+    // Dedup by English `name` (Italian printings carry the English name field).
     const seen = new Set<string>()
     const merged: ScryfallCard[] = []
+    const italianNameByKey = new Map<string, string>()
 
     for (const card of [...enCards, ...itCards]) {
       const key = card.name
+      if (card.lang === 'it' && card.printed_name) {
+        italianNameByKey.set(key, card.printed_name)
+      }
       if (!seen.has(key)) {
         seen.add(key)
         merged.push(card)
@@ -56,8 +58,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ cards: localCards ?? [], source: 'database' })
     }
 
-    // For Italian results, fetch the English version to store canonical data
-    const toUpsert = merged.slice(0, 10).map(mapScryfallCard)
+    // Italian printings have Italian images. Fetch the English canonical
+    // version so we store the English artwork and English-lang metadata.
+    const canonical: ScryfallCard[] = []
+    for (const c of merged.slice(0, 10)) {
+      if (c.lang && c.lang !== 'en') {
+        try {
+          const res = await fetch(
+            `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(c.name)}`,
+          )
+          if (res.ok) {
+            canonical.push(await res.json() as ScryfallCard)
+            continue
+          }
+        } catch { /* fall through to using the IT card */ }
+      }
+      canonical.push(c)
+    }
+
+    const toUpsert = canonical.map((c) => ({
+      ...mapScryfallCard(c),
+      // Attach the Italian printed name when we found one for this card
+      name_it: italianNameByKey.get(c.name) ?? null,
+    }))
 
     const { data: upserted } = await supabase
       .from('cards')
@@ -72,11 +95,10 @@ export async function GET(request: NextRequest) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('Card search failed:', message)
 
-    // Fallback: return local results if Scryfall fails
     const { data: fallback } = await supabase
       .from('cards')
       .select(CARD_GRID_COLUMNS)
-      .ilike('name', `%${query}%`)
+      .or(`name.ilike.%${query}%,name_it.ilike.%${query}%`)
       .limit(10)
 
     return NextResponse.json({ cards: fallback ?? [], source: 'fallback' })

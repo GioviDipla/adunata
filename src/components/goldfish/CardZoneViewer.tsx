@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useCallback } from 'react'
-import { X } from 'lucide-react'
+import { Shuffle, X } from 'lucide-react'
 import { getCardTypeCategory } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
@@ -16,6 +16,12 @@ interface CardZoneViewerProps {
   title: string
   cards: CardEntry[]
   onClose: () => void
+  /**
+   * When provided, renders a primary "Close and shuffle" button next to the X.
+   * Used for the library viewer so a player ending a tutor/search effect can
+   * shuffle in the same click that dismisses the modal.
+   */
+  onCloseAndShuffle?: () => void
   onCardPreview?: (card: CardRow) => void
   onCardAction?: (entry: CardEntry) => void
   groupByType?: boolean
@@ -95,6 +101,7 @@ export default function CardZoneViewer({
   title,
   cards,
   onClose,
+  onCloseAndShuffle,
   onCardPreview,
   onCardAction,
   groupByType = false,
@@ -119,16 +126,29 @@ export default function CardZoneViewer({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-bg-dark/80 p-0 sm:p-4">
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-xl sm:rounded-xl border border-border bg-bg-surface shadow-2xl">
         {/* Header */}
-        <div className="relative z-10 flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="relative z-10 flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <h2 className="text-sm font-bold text-font-primary">
             {title} ({cards.length})
           </h2>
-          <button
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-font-muted hover:bg-bg-hover hover:text-font-primary"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-md text-font-muted hover:bg-bg-hover hover:text-font-primary"
+              aria-label="Close"
+              title="Close without shuffling"
+            >
+              <X size={18} />
+            </button>
+            {onCloseAndShuffle && (
+              <button
+                onClick={onCloseAndShuffle}
+                className="flex h-9 items-center gap-1.5 rounded-md bg-bg-accent px-3 text-xs font-semibold text-font-white hover:brightness-110 active:brightness-95"
+              >
+                <Shuffle size={14} />
+                Close and shuffle
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Scrollable area: sticky filters + card list */}

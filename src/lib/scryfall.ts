@@ -28,6 +28,8 @@ export interface ScryfallCard {
     [key: string]: string | undefined
   }
   card_faces?: ScryfallCardFace[]
+  lang?: string
+  printed_name?: string
   prices?: {
     usd?: string | null
     usd_foil?: string | null
