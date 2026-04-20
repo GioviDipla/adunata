@@ -25,37 +25,47 @@ const PLAYER_ACCENTS = [
   {
     ring: 'ring-red-500/60',
     glow: 'from-red-600/30',
-    chip: 'bg-red-500/20 text-red-300',
-    text: 'text-red-300',
+    chip: 'bg-red-500/30 text-red-100',
+    text: 'text-red-200',
     bg: 'bg-red-500/25',
+    panel: 'bg-red-600/55',
+    panelRing: 'ring-red-400/70',
   },
   {
     ring: 'ring-blue-500/60',
     glow: 'from-blue-600/30',
-    chip: 'bg-blue-500/20 text-blue-300',
-    text: 'text-blue-300',
+    chip: 'bg-blue-500/30 text-blue-100',
+    text: 'text-blue-200',
     bg: 'bg-blue-500/25',
+    panel: 'bg-blue-600/55',
+    panelRing: 'ring-blue-400/70',
   },
   {
     ring: 'ring-green-500/60',
     glow: 'from-green-600/30',
-    chip: 'bg-green-500/20 text-green-300',
-    text: 'text-green-300',
+    chip: 'bg-green-500/30 text-green-100',
+    text: 'text-green-200',
     bg: 'bg-green-500/25',
+    panel: 'bg-green-600/55',
+    panelRing: 'ring-green-400/70',
   },
   {
     ring: 'ring-amber-500/60',
     glow: 'from-amber-600/30',
-    chip: 'bg-amber-500/20 text-amber-300',
-    text: 'text-amber-300',
+    chip: 'bg-amber-500/30 text-amber-100',
+    text: 'text-amber-200',
     bg: 'bg-amber-500/25',
+    panel: 'bg-amber-600/55',
+    panelRing: 'ring-amber-400/70',
   },
   {
     ring: 'ring-fuchsia-500/60',
     glow: 'from-fuchsia-600/30',
-    chip: 'bg-fuchsia-500/20 text-fuchsia-300',
-    text: 'text-fuchsia-300',
+    chip: 'bg-fuchsia-500/30 text-fuchsia-100',
+    text: 'text-fuchsia-200',
     bg: 'bg-fuchsia-500/25',
+    panel: 'bg-fuchsia-600/55',
+    panelRing: 'ring-fuchsia-400/70',
   },
 ] as const
 
@@ -227,12 +237,20 @@ export default function LifeCounter() {
     if (playerCount === 2) return 'grid grid-rows-2'
     if (playerCount === 3) return 'grid grid-rows-3'
     if (playerCount === 4) return 'grid grid-cols-2 grid-rows-2'
-    return 'grid grid-rows-5'
+    return 'grid grid-cols-2 grid-rows-3'
   }, [playerCount])
 
   const isRotated = (idx: number) => {
     if (playerCount === 2) return idx === 0
+    if (playerCount === 5) return idx < 3
     return idx < 2
+  }
+
+  // For 5-player layout, the first player spans both columns on the top row,
+  // creating a 1 (rotated) + 2 (rotated) + 2 (normal) arrangement.
+  const panelClassFor = (idx: number) => {
+    if (playerCount === 5 && idx === 0) return 'col-span-2'
+    return ''
   }
 
   return (
@@ -276,6 +294,7 @@ export default function LifeCounter() {
               rotated={isRotated(idx)}
               showPoison={showPoison}
               showCmdDmg={showCmdDmg}
+              panelClassName={panelClassFor(idx)}
               onLife={(delta) => updateLife(p.id, delta)}
               onPoison={(delta) => updatePoison(p.id, delta)}
               onCmdDmg={(sourceId, delta) => updateCmdDmg(p.id, sourceId, delta)}
@@ -497,6 +516,7 @@ interface PlayerPanelProps {
   rotated: boolean
   showPoison: boolean
   showCmdDmg: boolean
+  panelClassName?: string
   onLife: (delta: number) => void
   onPoison: (delta: number) => void
   onCmdDmg: (sourceId: number, delta: number) => void
@@ -509,6 +529,7 @@ function PlayerPanel({
   rotated,
   showPoison,
   showCmdDmg,
+  panelClassName = '',
   onLife,
   onPoison,
   onCmdDmg,
@@ -552,139 +573,151 @@ function PlayerPanel({
 
   const others = allPlayers.filter((o) => o.id !== player.id)
 
+  // Top-of-DOM button = decrement; bottom-of-DOM button = increment.
+  // When the panel is rotate-180'd, the DOM-top appears at the bottom of the
+  // user's field of view, so we invert: rotated user taps what visually looks
+  // like the "top" (−) which is actually the bottom DOM button, and vice versa.
+  const topDelta = rotated ? +1 : -1
+  const bottomDelta = -topDelta
+
   return (
     <div
-      className={`relative flex items-stretch overflow-hidden rounded-lg bg-gradient-to-br ${accent.glow} to-bg-surface ring-1 ${accent.ring} ${
+      className={`relative flex overflow-hidden rounded-lg ${accent.panel} ring-2 ${accent.panelRing} ${
         rotated ? 'rotate-180' : ''
-      } ${isDead ? 'grayscale opacity-70' : ''}`}
+      } ${isDead ? 'grayscale opacity-70' : ''} ${panelClassName}`}
     >
-      {/* Left half: -1 life */}
-      <button
-        onClick={() => handleLife(-1)}
-        className="group flex flex-1 items-center justify-start pl-4 transition-colors active:bg-black/25"
-        aria-label="decrement life"
-      >
-        <Minus className="h-8 w-8 text-font-muted transition-colors group-hover:text-font-primary" />
-      </button>
-
-      {/* Center */}
-      <div className="pointer-events-none flex flex-col items-center justify-center px-2 select-none">
-        <div
-          className={`text-[min(24vw,8rem)] font-bold leading-none tabular-nums transition-colors ${
-            isCritical ? 'text-bg-red' : 'text-font-primary'
-          }`}
+      {/* Life tap zones — top half / bottom half */}
+      <div className="relative flex flex-1 flex-col">
+        <button
+          onClick={() => handleLife(topDelta)}
+          className="group flex flex-1 items-start justify-center pt-3 transition-colors active:bg-black/25"
+          aria-label={topDelta < 0 ? 'decrement life' : 'increment life'}
         >
-          {player.life}
-        </div>
+          {topDelta < 0 ? (
+            <Minus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
+          ) : (
+            <Plus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
+          )}
+        </button>
+        <button
+          onClick={() => handleLife(bottomDelta)}
+          className="group flex flex-1 items-end justify-center pb-3 transition-colors active:bg-black/25"
+          aria-label={bottomDelta < 0 ? 'decrement life' : 'increment life'}
+        >
+          {bottomDelta < 0 ? (
+            <Minus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
+          ) : (
+            <Plus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
+          )}
+        </button>
 
-        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1.5">
+        {/* Central life number + label (pointer-events pass-through so tap zones above work) */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center select-none">
           <div
-            className={`rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider ${accent.chip}`}
+            className={`text-[min(32vw,11rem)] font-black leading-none tabular-nums drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] transition-colors ${
+              isCritical ? 'text-red-200' : 'text-white'
+            }`}
+          >
+            {player.life}
+          </div>
+          <div
+            className={`mt-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-widest ${accent.chip}`}
           >
             Player {player.id}
           </div>
-          {showPoison && player.poison > 0 && (
-            <div className="flex items-center gap-1.5 rounded-full bg-bg-green/25 px-2.5 py-1 text-sm font-semibold text-bg-green">
-              <Droplet size={14} /> {player.poison}
+        </div>
+      </div>
+
+      {/* Side pill column — poison + commander damage (always aligned to right in DOM;
+          when the panel is rotated, visually appears on the user's left, still reachable) */}
+      {(showPoison || (showCmdDmg && others.length > 0)) && (
+        <div className="flex flex-col items-stretch justify-center gap-1.5 pr-1.5">
+          {showPoison && (
+            <div className="flex flex-col items-stretch overflow-hidden rounded-full bg-black/40 ring-1 ring-white/20 backdrop-blur-sm">
+              <button
+                onClick={() => handlePoison(1)}
+                className="flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none text-bg-green transition-colors active:bg-white/10"
+                aria-label="increment poison"
+              >
+                +
+              </button>
+              <div className="flex items-center justify-center gap-1 px-1 py-0.5 text-sm font-bold text-bg-green">
+                <Droplet size={12} />
+                <span className="tabular-nums">{player.poison}</span>
+              </div>
+              <button
+                onClick={() => handlePoison(-1)}
+                className="flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none text-bg-green transition-colors active:bg-white/10"
+                aria-label="decrement poison"
+              >
+                −
+              </button>
             </div>
           )}
-        </div>
 
-        {/* Commander damage row — one mini control per opponent */}
-        {showCmdDmg && others.length > 0 && (
-          <div className="pointer-events-auto mt-2.5 flex flex-wrap items-center justify-center gap-1.5">
-            {others.map((other) => {
+          {showCmdDmg &&
+            others.map((other) => {
               const srcAccent = PLAYER_ACCENTS[(other.id - 1) % PLAYER_ACCENTS.length]
               const dmg = player.commanderDamage[other.id] ?? 0
               return (
                 <div
                   key={other.id}
-                  className={`flex items-center gap-1 rounded-full ${srcAccent.bg} px-1.5 py-1 ring-1 ring-white/15`}
+                  className={`flex flex-col items-stretch overflow-hidden rounded-full ${srcAccent.bg} ring-1 ring-white/25 backdrop-blur-sm`}
                 >
                   <button
-                    onClick={() => handleCmd(other.id, -1)}
-                    className="flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-base leading-none text-font-secondary transition-colors hover:bg-black/30 hover:text-font-primary active:bg-black/40"
-                    aria-label={`decrement commander damage from P${other.id}`}
-                  >
-                    −
-                  </button>
-                  <div className="flex items-center gap-1 px-0.5">
-                    <Crown size={14} className={srcAccent.text} />
-                    <span
-                      className={`min-w-[1.25rem] text-center text-sm font-bold tabular-nums ${srcAccent.text}`}
-                    >
-                      {dmg}
-                    </span>
-                  </div>
-                  <button
                     onClick={() => handleCmd(other.id, 1)}
-                    className="flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-base leading-none text-font-secondary transition-colors hover:bg-black/30 hover:text-font-primary active:bg-black/40"
+                    className={`flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none transition-colors active:bg-white/10 ${srcAccent.text}`}
                     aria-label={`increment commander damage from P${other.id}`}
                   >
                     +
                   </button>
+                  <div
+                    className={`flex items-center justify-center gap-1 px-1 py-0.5 text-sm font-bold ${srcAccent.text}`}
+                  >
+                    <Crown size={12} />
+                    <span className="tabular-nums">{dmg}</span>
+                  </div>
+                  <button
+                    onClick={() => handleCmd(other.id, -1)}
+                    className={`flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none transition-colors active:bg-white/10 ${srcAccent.text}`}
+                    aria-label={`decrement commander damage from P${other.id}`}
+                  >
+                    −
+                  </button>
                 </div>
               )
             })}
-          </div>
-        )}
-      </div>
-
-      {/* Right half: +1 life */}
-      <button
-        onClick={() => handleLife(1)}
-        className="group flex flex-1 items-center justify-end pr-4 transition-colors active:bg-black/25"
-        aria-label="increment life"
-      >
-        <Plus className="h-8 w-8 text-font-muted transition-colors group-hover:text-font-primary" />
-      </button>
-
-      {/* Top corner pills: ±5 life */}
-      <button
-        onClick={() => handleLife(-5)}
-        className="absolute left-2 top-2 rounded-md bg-black/30 px-2 py-0.5 text-xs font-semibold text-font-primary backdrop-blur-sm transition-colors active:bg-black/50"
-      >
-        −5
-      </button>
-      <button
-        onClick={() => handleLife(5)}
-        className="absolute right-2 top-2 rounded-md bg-black/30 px-2 py-0.5 text-xs font-semibold text-font-primary backdrop-blur-sm transition-colors active:bg-black/50"
-      >
-        +5
-      </button>
-
-      {/* Bottom corner pills: poison ±1 (mode-gated) */}
-      {showPoison && (
-        <>
-          <button
-            onClick={() => handlePoison(-1)}
-            className="absolute left-2 bottom-2 flex min-h-9 items-center gap-1.5 rounded-md bg-bg-green/25 px-3 py-1.5 text-sm font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
-            aria-label="decrement poison"
-          >
-            <Droplet size={14} /> −
-          </button>
-          <button
-            onClick={() => handlePoison(1)}
-            className="absolute right-2 bottom-2 flex min-h-9 items-center gap-1.5 rounded-md bg-bg-green/25 px-3 py-1.5 text-sm font-semibold text-bg-green backdrop-blur-sm transition-colors active:bg-bg-green/40"
-            aria-label="increment poison"
-          >
-            <Droplet size={14} /> +
-          </button>
-        </>
+        </div>
       )}
+
+      {/* Corner ±5 pills — DOM top corners = visual bottom for rotated users */}
+      <button
+        onClick={() => handleLife(topDelta * 5)}
+        className="absolute left-2 top-2 min-h-8 rounded-md bg-black/40 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm transition-colors active:bg-black/60"
+        aria-label={topDelta < 0 ? 'life −5' : 'life +5'}
+      >
+        {topDelta < 0 ? '−5' : '+5'}
+      </button>
+      <button
+        onClick={() => handleLife(bottomDelta * 5)}
+        className="absolute left-2 bottom-2 min-h-8 rounded-md bg-black/40 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm transition-colors active:bg-black/60"
+        aria-label={bottomDelta < 0 ? 'life −5' : 'life +5'}
+      >
+        {bottomDelta < 0 ? '−5' : '+5'}
+      </button>
 
       {/* Delta flash */}
       {lastDelta && (
         <div
           key={lastDelta.key}
-          className={`pointer-events-none absolute top-8 left-1/2 -translate-x-1/2 text-2xl font-bold animate-pulse ${
+          className={`pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[calc(50%+4.5rem)] text-3xl font-bold animate-pulse ${
             lastDelta.type === 'life'
               ? lastDelta.value > 0
-                ? 'text-bg-green'
-                : 'text-bg-red'
+                ? 'text-green-200'
+                : 'text-red-200'
               : lastDelta.type === 'poison'
-              ? 'text-bg-green'
-              : 'text-amber-300'
+              ? 'text-green-200'
+              : 'text-amber-200'
           }`}
         >
           {lastDelta.value > 0 ? `+${lastDelta.value}` : lastDelta.value}
@@ -695,7 +728,7 @@ function PlayerPanel({
 
       {isDead && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="rounded-full bg-black/70 px-4 py-1 text-xs font-bold uppercase tracking-widest text-bg-red">
+          <div className="rounded-full bg-black/80 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-red-300 ring-1 ring-red-400/40">
             Defeated
           </div>
         </div>
