@@ -21,6 +21,23 @@ const CARD_TYPES = [
 
 const RARITIES = ['common', 'uncommon', 'rare', 'mythic'] as const
 
+// Languages for the search bar dropdown. `en` and `it` are stored locally
+// (columns `name` and `name_it`) and resolve against the DB; the rest go
+// directly to Scryfall's `lang:<code>` search and are mapped back to the
+// canonical English printing before we cache them.
+const SEARCH_LANGS: { code: string; label: string; local: boolean }[] = [
+  { code: 'en',  label: 'EN', local: true },
+  { code: 'it',  label: 'IT', local: true },
+  { code: 'es',  label: 'ES', local: false },
+  { code: 'fr',  label: 'FR', local: false },
+  { code: 'de',  label: 'DE', local: false },
+  { code: 'pt',  label: 'PT', local: false },
+  { code: 'ja',  label: 'JP', local: false },
+  { code: 'ko',  label: 'KO', local: false },
+  { code: 'ru',  label: 'RU', local: false },
+  { code: 'zhs', label: 'ZH', local: false },
+]
+
 const MANA_COLORS = [
   { code: 'W', label: 'W', bg: '#F5F0E1', text: '#333' },
   { code: 'U', label: 'U', bg: '#0E7FC0', text: '#fff' },
@@ -67,6 +84,11 @@ export default function CardBrowser({
   const [likedIds, setLikedIds] = useState<Set<string>>(() => new Set(initialLikedIds))
   const [showLikedOnly, setShowLikedOnly] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ card: Card; x: number; y: number } | null>(null)
+
+  // Language dropdown for the search bar. 'en' and 'it' hit the local DB
+  // (columns `name` and `name_it`). Any other language skips the DB and
+  // goes straight to Scryfall with `lang:<code>`.
+  const [searchLang, setSearchLang] = useState<string>('en')
 
   // Filters
   const [searchText, setSearchText] = useState('')
@@ -130,13 +152,20 @@ export default function CardBrowser({
         .select(CARD_GRID_COLUMNS)
 
       if (debouncedSearch.trim()) {
-        // Match by English `name` OR Italian `name_it`. Oracle text and
-        // type line are not searched here — the dedicated "Rules Text"
-        // and "Creature Subtype" filters cover those. Sanitize chars
-        // that would break the PostgREST `or=(f1,f2)` syntax.
-        const raw = debouncedSearch.trim()
-        const q = raw.replace(/[,()]/g, ' ')
-        query = query.or(`name.ilike.%${q}%,name_it.ilike.%${q}%`)
+        // Single-column ilike keyed to the selected language — one GIN scan
+        // via the dedicated trigram index (idx_cards_name_trgm /
+        // idx_cards_name_it_trgm) instead of a two-way BitmapOr. For
+        // non-local languages we skip the DB entirely and rely on the
+        // Scryfall fallback in fetchCards().
+        const q = debouncedSearch.trim().replace(/%/g, '')
+        if (searchLang === 'en') {
+          query = query.ilike('name', `%${q}%`)
+        } else if (searchLang === 'it') {
+          query = query.ilike('name_it', `%${q}%`)
+        } else {
+          // Force an empty local result so fetchCards goes to Scryfall.
+          query = query.eq('id', '00000000-0000-0000-0000-000000000000' as unknown as number)
+        }
       }
 
       // Default sort uses keyset (cursor) pagination on (released_at DESC NULLS LAST, id DESC).
@@ -220,7 +249,7 @@ export default function CardBrowser({
 
       return query
     },
-    [supabase, isDefaultSort, debouncedSearch, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy]
+    [supabase, isDefaultSort, debouncedSearch, searchLang, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy]
   )
 
   useEffect(() => {
@@ -242,43 +271,40 @@ export default function CardBrowser({
 
       const q = debouncedSearch.trim()
       const rows = (data ?? []) as unknown as Card[]
+      const langConfig = SEARCH_LANGS.find((l) => l.code === searchLang)
+      const isLocalLang = langConfig?.local ?? false
 
-      // Rank by closest match on either English `name` or Italian
-      // `name_it`: exact > prefix > contains > nothing.
+      // Rank against the column that matches the active language. MTG names
+      // are unique, so exact > prefix > contains > 0 is enough.
       if (q && rows.length > 0) {
         const lc = q.toLowerCase()
-        const scoreOne = (s: string | null | undefined) => {
-          if (!s) return 0
-          const n = s.toLowerCase()
+        const col = (r: Card) => searchLang === 'it' ? (r.name_it ?? '') : r.name
+        const score = (r: Card) => {
+          const n = col(r).toLowerCase()
           if (n === lc) return 3
           if (n.startsWith(lc)) return 2
           if (n.includes(lc)) return 1
           return 0
         }
-        const score = (r: Card) => Math.max(scoreOne(r.name), scoreOne(r.name_it))
         rows.sort((a, b) => score(b) - score(a))
       }
 
-      // Scryfall fallback only when no local match contains the query
-      // in either English or Italian name. With the backfilled name_it
-      // column this is a rare path (new cards not yet synced).
-      const nameHit = q
+      const nameHit = q && isLocalLang
         ? rows.some((r) => {
             const lc = q.toLowerCase()
-            return (
-              r.name.toLowerCase().includes(lc) ||
-              (r.name_it ?? '').toLowerCase().includes(lc)
-            )
+            const col = searchLang === 'it' ? (r.name_it ?? '') : r.name
+            return col.toLowerCase().includes(lc)
           })
         : true
 
-      if (q && q.length >= 2 && !nameHit) {
+      // Scryfall fallback: always for non-local languages; for en/it only
+      // when the local column returned nothing matching by name.
+      const shouldFallback = q && q.length >= 2 && (!isLocalLang || !nameHit)
+      if (shouldFallback) {
         try {
           controller = new AbortController()
-          const res = await fetch(
-            `/api/cards/search?q=${encodeURIComponent(q)}`,
-            { signal: controller.signal }
-          )
+          const url = `/api/cards/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(searchLang)}`
+          const res = await fetch(url, { signal: controller.signal })
           if (!cancelled && res.ok) {
             const json = await res.json()
             const fallback = (json.cards ?? []) as Card[]
@@ -314,7 +340,7 @@ export default function CardBrowser({
     }
 
     return () => { cancelled = true; controller?.abort() }
-  }, [debouncedSearch, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, buildQuery, initialCards])
+  }, [debouncedSearch, searchLang, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, buildQuery, initialCards])
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return
@@ -410,15 +436,37 @@ export default function CardBrowser({
   return (
     <div className="space-y-4">
       {/* Search bar */}
-      <div className="relative">
+      <div className="relative flex items-stretch gap-2">
+        <label className="relative inline-flex">
+          <select
+            value={searchLang}
+            onChange={(e) => setSearchLang(e.target.value)}
+            className="appearance-none rounded-lg bg-bg-card border border-border text-font-primary text-sm font-semibold pl-3 pr-7 py-3 focus:outline-none focus:border-bg-accent cursor-pointer"
+            aria-label="Search language"
+            title="Search language — EN / IT use the local catalog, other languages query Scryfall"
+          >
+            {SEARCH_LANGS.map((l) => (
+              <option key={l.code} value={l.code} className="bg-bg-surface">
+                {l.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-font-muted" />
+        </label>
+        <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-font-muted" size={18} />
         <input
           type="text"
-          placeholder="Search by card name — English or Italian…"
+          placeholder={
+            searchLang === 'en' ? 'Search by card name (English)…'
+            : searchLang === 'it' ? 'Cerca per nome carta (Italiano)…'
+            : 'Search by card name via Scryfall…'
+          }
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           className="w-full pl-10 pr-4 py-3 rounded-lg bg-bg-card border border-border text-font-primary placeholder:text-font-muted focus:outline-none focus:border-bg-accent focus:ring-1 focus:ring-bg-accent transition-colors"
         />
+        </div>
       </div>
 
       {/* Filter toggle + sort */}
