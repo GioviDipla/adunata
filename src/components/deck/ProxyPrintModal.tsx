@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { X, Printer, CheckSquare, Square, Mail } from 'lucide-react'
-import { generateProxyPdf } from '@/lib/proxyPdf'
+import { X, Printer, CheckSquare, Square, Mail, AlertTriangle } from 'lucide-react'
+import { generateProxyPdfWithDetails } from '@/lib/proxyPdf'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -53,6 +53,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [canShareFiles, setCanShareFiles] = useState(false)
+  const [skipWarning, setSkipWarning] = useState<number>(0)
 
   useEffect(() => {
     // Feature-detect Web Share Level 2 with a probe file. Hidden on desktop
@@ -138,17 +139,26 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
       .map((e) => ({ imageUrl: e.card.image_normal!, quantity: e.quantity }))
     if (cardsWithImages.length === 0) return null
 
-    return generateProxyPdf({
+    const { blob, skippedUrls } = await generateProxyPdfWithDetails({
       paper,
       gap,
       scale: scale / 100,
       cards: cardsWithImages,
       onProgress: (done, total) => setProgress({ done, total }),
     })
+    setSkipWarning(skippedUrls.length)
+    return blob
   }, [selectedCards, paper, gap, scale])
+
+  // Close only after a clean run; keep the modal open with a warning when
+  // any images failed to fetch so the user can retry.
+  const closeIfClean = useCallback(() => {
+    if (skipWarning === 0) onClose()
+  }, [skipWarning, onClose])
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true)
+    setSkipWarning(0)
     setProgress({ done: 0, total: 0 })
     try {
       const blob = await buildPdfBlob()
@@ -159,16 +169,17 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
       a.download = `${deckName}-proxies.pdf`
       a.click()
       URL.revokeObjectURL(url)
-      onClose()
-    } catch {
-      // silently fail
+      closeIfClean()
+    } catch (err) {
+      console.error('[proxy-generate]', err)
     } finally {
       setGenerating(false)
     }
-  }, [buildPdfBlob, deckName, onClose])
+  }, [buildPdfBlob, deckName, closeIfClean])
 
   const handleShare = useCallback(async () => {
     setGenerating(true)
+    setSkipWarning(0)
     setProgress({ done: 0, total: 0 })
     try {
       const blob = await buildPdfBlob()
@@ -180,7 +191,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
           title: `${deckName} — proxies`,
           text: `Proxies for ${deckName}`,
         })
-        onClose()
+        closeIfClean()
       } else {
         // Share API disappeared between detection and click — fall back to download.
         const url = URL.createObjectURL(blob)
@@ -189,7 +200,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
         a.download = `${deckName}-proxies.pdf`
         a.click()
         URL.revokeObjectURL(url)
-        onClose()
+        closeIfClean()
       }
     } catch (err) {
       // AbortError = user cancelled the share sheet. Don't surface it.
@@ -199,7 +210,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     } finally {
       setGenerating(false)
     }
-  }, [buildPdfBlob, deckName, onClose])
+  }, [buildPdfBlob, deckName, closeIfClean])
 
   const pages = Math.ceil(totalCards / 9)
 
@@ -364,6 +375,16 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
               </select>
             </label>
           </div>
+
+          {skipWarning > 0 && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                {skipWarning} image{skipWarning === 1 ? '' : 's'} failed to download from Scryfall and were skipped.
+                The PDF is incomplete — tap Generate again to retry.
+              </span>
+            </div>
+          )}
 
           {/* Generate / Share buttons */}
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
