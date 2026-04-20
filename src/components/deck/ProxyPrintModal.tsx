@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
-import { X, Printer, CheckSquare, Square } from 'lucide-react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { X, Printer, CheckSquare, Square, Mail } from 'lucide-react'
 import { generateProxyPdf } from '@/lib/proxyPdf'
 import type { Database } from '@/types/supabase'
 
@@ -52,6 +52,19 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   })
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
+  const [canShareFiles, setCanShareFiles] = useState(false)
+
+  useEffect(() => {
+    // Feature-detect Web Share Level 2 with a probe file. Hidden on desktop
+    // browsers that don't accept file sharing (Chrome Win/Linux, Firefox).
+    if (typeof navigator === 'undefined' || typeof navigator.canShare !== 'function') return
+    try {
+      const probe = new File([new Uint8Array()], 'probe.pdf', { type: 'application/pdf' })
+      setCanShareFiles(navigator.canShare({ files: [probe] }))
+    } catch {
+      setCanShareFiles(false)
+    }
+  }, [])
 
   // Group and sort cards by section, alphabetically
   const sections = useMemo(() => {
@@ -119,25 +132,27 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     return selectedCards.reduce((sum, e) => sum + e.quantity, 0)
   }, [selectedCards])
 
-  const handleGenerate = useCallback(async () => {
+  const buildPdfBlob = useCallback(async (): Promise<Blob | null> => {
     const cardsWithImages = selectedCards
       .filter((e) => e.card.image_normal)
       .map((e) => ({ imageUrl: e.card.image_normal!, quantity: e.quantity }))
+    if (cardsWithImages.length === 0) return null
 
-    if (cardsWithImages.length === 0) return
+    return generateProxyPdf({
+      paper,
+      gap,
+      scale: scale / 100,
+      cards: cardsWithImages,
+      onProgress: (done, total) => setProgress({ done, total }),
+    })
+  }, [selectedCards, paper, gap, scale])
 
+  const handleGenerate = useCallback(async () => {
     setGenerating(true)
     setProgress({ done: 0, total: 0 })
-
     try {
-      const blob = await generateProxyPdf({
-        paper,
-        gap,
-        scale: scale / 100,
-        cards: cardsWithImages,
-        onProgress: (done, total) => setProgress({ done, total }),
-      })
-
+      const blob = await buildPdfBlob()
+      if (!blob) return
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -150,7 +165,41 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     } finally {
       setGenerating(false)
     }
-  }, [selectedCards, paper, gap, scale, deckName, onClose])
+  }, [buildPdfBlob, deckName, onClose])
+
+  const handleShare = useCallback(async () => {
+    setGenerating(true)
+    setProgress({ done: 0, total: 0 })
+    try {
+      const blob = await buildPdfBlob()
+      if (!blob) return
+      const file = new File([blob], `${deckName}-proxies.pdf`, { type: 'application/pdf' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `${deckName} — proxies`,
+          text: `Proxies for ${deckName}`,
+        })
+        onClose()
+      } else {
+        // Share API disappeared between detection and click — fall back to download.
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${deckName}-proxies.pdf`
+        a.click()
+        URL.revokeObjectURL(url)
+        onClose()
+      }
+    } catch (err) {
+      // AbortError = user cancelled the share sheet. Don't surface it.
+      if ((err as Error | undefined)?.name && (err as Error).name !== 'AbortError') {
+        console.error('[proxy-share]', err)
+      }
+    } finally {
+      setGenerating(false)
+    }
+  }, [buildPdfBlob, deckName, onClose])
 
   const pages = Math.ceil(totalCards / 9)
 
@@ -316,26 +365,38 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
             </label>
           </div>
 
-          {/* Generate button */}
-          <button
-            onClick={handleGenerate}
-            disabled={generating || totalCards === 0}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-bg-accent px-4 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {generating ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-font-white/30 border-t-font-white" />
-                {progress.total > 0
-                  ? `Loading images… ${progress.done}/${progress.total}`
-                  : 'Generating…'}
-              </>
-            ) : (
-              <>
-                <Printer size={16} />
-                Generate PDF
-              </>
+          {/* Generate / Share buttons */}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={handleGenerate}
+              disabled={generating || totalCards === 0}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-bg-accent px-4 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {generating ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-font-white/30 border-t-font-white" />
+                  {progress.total > 0
+                    ? `${progress.done}/${progress.total}`
+                    : 'Generating…'}
+                </>
+              ) : (
+                <>
+                  <Printer size={16} />
+                  Generate PDF
+                </>
+              )}
+            </button>
+            {canShareFiles && (
+              <button
+                onClick={handleShare}
+                disabled={generating || totalCards === 0}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-bg-accent/60 bg-bg-card px-4 py-2.5 text-sm font-bold text-font-accent transition-colors hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Mail size={16} />
+                Send via email
+              </button>
             )}
-          </button>
+          </div>
         </div>
       </div>
     </div>
