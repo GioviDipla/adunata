@@ -329,7 +329,7 @@ export default function CardBrowser({
       debouncedSearch || selectedColors.length > 0 || commanderIdentity.length > 0 ||
       selectedTypes.length > 0 || selectedRarity || cmcMin !== '' || cmcMax !== '' ||
       selectedSet || debouncedCreatureType.trim() || debouncedKeyword.trim() ||
-      showLikedOnly
+      showLikedOnly || !isDefaultSort
 
     if (hasFilters) {
       fetchCards()
@@ -340,7 +340,7 @@ export default function CardBrowser({
     }
 
     return () => { cancelled = true; controller?.abort() }
-  }, [debouncedSearch, searchLang, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, buildQuery, initialCards])
+  }, [debouncedSearch, searchLang, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, isDefaultSort, buildQuery, initialCards])
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return
