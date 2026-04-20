@@ -1,7 +1,6 @@
 'use client'
 
-import { RotateCcw, Trash2, Ban, Hand, Eye } from 'lucide-react'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
 
@@ -20,21 +19,16 @@ interface BattlefieldZoneProps {
   title: string
   cards: BattlefieldCard[]
   onTapToggle: (instanceId: string) => void
-  onSendToGraveyard: (instanceId: string) => void
-  onExile: (instanceId: string) => void
-  onReturnToHand: (instanceId: string) => void
   onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
 }
 
 function BattlefieldCardButton({
   bc,
   onTapToggle,
-  onContextOpen,
   onCardPreview,
 }: {
   bc: BattlefieldCard
   onTapToggle: (id: string) => void
-  onContextOpen: (id: string) => void
   onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
 }) {
   const longPress = useLongPress({
@@ -52,7 +46,7 @@ function BattlefieldCardButton({
       onClick={handleClick}
       onContextMenu={(e) => {
         e.preventDefault()
-        onContextOpen(bc.instanceId)
+        onCardPreview?.(bc.card, bc.instanceId, bc.tapped)
       }}
       {...longPress}
       className={`relative overflow-hidden rounded-lg border transition-transform select-none ${
@@ -61,7 +55,7 @@ function BattlefieldCardButton({
           : 'border-border hover:border-bg-accent'
       }`}
       style={{ width: 68, height: 95, touchAction: 'manipulation' }}
-      title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''} — hold to preview, right-click for options`}
+      title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''} — hold or right-click for actions`}
     >
       {bc.card.image_small ? (
         <img
@@ -111,26 +105,8 @@ export default function BattlefieldZone({
   title,
   cards,
   onTapToggle,
-  onSendToGraveyard,
-  onExile,
-  onReturnToHand,
   onCardPreview,
 }: BattlefieldZoneProps) {
-  const [contextMenu, setContextMenu] = useState<string | null>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setContextMenu(null)
-      }
-    }
-    if (contextMenu) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [contextMenu])
-
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[9px] font-semibold tracking-wider text-font-muted">
@@ -138,81 +114,20 @@ export default function BattlefieldZone({
       </span>
       <div className="flex flex-wrap gap-1.5">
         {cards.map((bc) => (
-          <div key={bc.instanceId} className="relative">
-            <BattlefieldCardButton
-              bc={bc}
-              onTapToggle={onTapToggle}
-              onContextOpen={setContextMenu}
-              onCardPreview={onCardPreview}
-            />
-
-            {/* Context menu */}
-            {contextMenu === bc.instanceId && (
-              <div
-                ref={menuRef}
-                className="absolute left-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-bg-surface shadow-xl"
-              >
-                {onCardPreview && (
-                  <button
-                    onClick={() => {
-                      onCardPreview(bc.card, bc.instanceId, bc.tapped)
-                      setContextMenu(null)
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-font-primary hover:bg-bg-hover"
-                  >
-                    <Eye size={12} />
-                    View Card
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    onTapToggle(bc.instanceId)
-                    setContextMenu(null)
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-font-primary hover:bg-bg-hover"
-                >
-                  <RotateCcw size={12} />
-                  {bc.tapped ? 'Untap' : 'Tap'}
-                </button>
-                <button
-                  onClick={() => {
-                    onReturnToHand(bc.instanceId)
-                    setContextMenu(null)
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-font-primary hover:bg-bg-hover"
-                >
-                  <Hand size={12} />
-                  Return to Hand
-                </button>
-                <button
-                  onClick={() => {
-                    onSendToGraveyard(bc.instanceId)
-                    setContextMenu(null)
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-font-primary hover:bg-bg-hover"
-                >
-                  <Trash2 size={12} />
-                  Send to Graveyard
-                </button>
-                <button
-                  onClick={() => {
-                    onExile(bc.instanceId)
-                    setContextMenu(null)
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-font-primary hover:bg-bg-hover"
-                >
-                  <Ban size={12} />
-                  Exile
-                </button>
-              </div>
-            )}
-          </div>
+          <BattlefieldCardButton
+            key={bc.instanceId}
+            bc={bc}
+            onTapToggle={onTapToggle}
+            onCardPreview={onCardPreview}
+          />
         ))}
 
         {/* Empty slot */}
         {cards.length === 0 && (
-          <div className="flex items-center justify-center rounded-lg border border-dashed border-border bg-bg-card"
-               style={{ width: 68, height: 95 }}>
+          <div
+            className="flex items-center justify-center rounded-lg border border-dashed border-border bg-bg-card"
+            style={{ width: 68, height: 95 }}
+          >
             <span className="text-[9px] text-font-muted">Empty</span>
           </div>
         )}

@@ -1019,9 +1019,6 @@ export default function PlayGame(props: PlayGameProps) {
             title="CREATURES"
             cards={myBattlefieldByZone.creatures}
             onTapToggle={handleTapToggle}
-            onSendToGraveyard={handleSendToGraveyard}
-            onExile={handleExile}
-            onReturnToHand={handleReturnToHand}
             onCardPreview={(card, id, tapped) => {
               const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
               setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
@@ -1035,9 +1032,6 @@ export default function PlayGame(props: PlayGameProps) {
                 title="OTHER"
                 cards={myBattlefieldByZone.other}
                 onTapToggle={handleTapToggle}
-                onSendToGraveyard={handleSendToGraveyard}
-                onExile={handleExile}
-                onReturnToHand={handleReturnToHand}
                 onCardPreview={(card, id, tapped) =>
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
                 }
@@ -1052,9 +1046,6 @@ export default function PlayGame(props: PlayGameProps) {
                 title="TOKENS"
                 cards={myBattlefieldByZone.tokens}
                 onTapToggle={handleTapToggle}
-                onSendToGraveyard={handleSendToGraveyard}
-                onExile={handleExile}
-                onReturnToHand={handleReturnToHand}
                 onCardPreview={(card, id, tapped) => {
                   const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
@@ -1069,9 +1060,6 @@ export default function PlayGame(props: PlayGameProps) {
               title="LANDS"
               cards={myBattlefieldByZone.lands}
               onTapToggle={handleTapToggle}
-              onSendToGraveyard={handleSendToGraveyard}
-              onExile={handleExile}
-              onReturnToHand={handleReturnToHand}
               onCardPreview={(card, id, tapped) =>
                 setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
               }
