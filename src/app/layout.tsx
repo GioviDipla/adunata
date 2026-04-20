@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: "Adunata!!!",
   description: "Your Magic: The Gathering companion",
   manifest: "/manifest.json",
+  verification: {
+    google: "TbSFP1heMVSiP1cKtL2LdA2t3-q-FiV4nysOq14SNo0",
+  },
 };
 
 export const viewport: Viewport = {
