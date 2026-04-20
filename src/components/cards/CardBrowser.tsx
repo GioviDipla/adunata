@@ -130,7 +130,12 @@ export default function CardBrowser({
         .select(CARD_GRID_COLUMNS)
 
       if (debouncedSearch.trim()) {
-        query = query.textSearch('search_vector', debouncedSearch.trim(), { type: 'websearch' })
+        // Match primarily by name + type_line. Oracle text is not searched
+        // here — the dedicated "Rules Text" filter covers that. Sanitize
+        // chars that would break the PostgREST `or=(f1,f2)` syntax.
+        const raw = debouncedSearch.trim()
+        const q = raw.replace(/[,()]/g, ' ')
+        query = query.or(`name.ilike.%${q}%,type_line.ilike.%${q}%`)
       }
 
       // Default sort uses keyset (cursor) pagination on (released_at DESC NULLS LAST, id DESC).
@@ -234,33 +239,55 @@ export default function CardBrowser({
         return
       }
 
-      if (data && data.length > 0) {
-        setCards(data as unknown as Card[])
-        setHasMore(data.length === PAGE_SIZE)
-        setLoading(false)
-        return
+      const q = debouncedSearch.trim()
+      const rows = (data ?? []) as unknown as Card[]
+
+      // Rank name matches to the top so "Lightning Bolt" appears before
+      // cards that merely contain "lightning" or "bolt" in another column.
+      if (q && rows.length > 0) {
+        const lc = q.toLowerCase()
+        const score = (name: string) => {
+          const n = name.toLowerCase()
+          if (n === lc) return 3
+          if (n.startsWith(lc)) return 2
+          if (n.includes(lc)) return 1
+          return 0
+        }
+        rows.sort((a, b) => score(b.name) - score(a.name))
       }
 
-      if (debouncedSearch.trim().length >= 2) {
+      // If the user searched, decide whether to hit the Scryfall fallback
+      // (which handles Italian card names via `lang:it`). Scatta quando
+      // nessuno dei risultati locali ha il nome che contiene la query —
+      // così l'italiano funziona anche se il match per type_line ha
+      // restituito carte irrilevanti.
+      const nameHit = q
+        ? rows.some((r) => r.name.toLowerCase().includes(q.toLowerCase()))
+        : true
+
+      if (q && q.length >= 2 && !nameHit) {
         try {
           controller = new AbortController()
           const res = await fetch(
-            `/api/cards/search?q=${encodeURIComponent(debouncedSearch.trim())}`,
+            `/api/cards/search?q=${encodeURIComponent(q)}`,
             { signal: controller.signal }
           )
           if (!cancelled && res.ok) {
             const json = await res.json()
-            setCards(json.cards ?? [])
-            setHasMore(false)
-            setLoading(false)
-            return
+            const fallback = (json.cards ?? []) as Card[]
+            if (fallback.length > 0) {
+              setCards(fallback)
+              setHasMore(false)
+              setLoading(false)
+              return
+            }
           }
-        } catch { /* ignore */ }
+        } catch { /* ignore aborts / network errors */ }
       }
 
       if (!cancelled) {
-        setCards((data ?? []) as unknown as Card[])
-        setHasMore(false)
+        setCards(rows)
+        setHasMore(rows.length === PAGE_SIZE)
         setLoading(false)
       }
     }
@@ -380,7 +407,7 @@ export default function CardBrowser({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-font-muted" size={18} />
         <input
           type="text"
-          placeholder="Search cards by name, type, or text..."
+          placeholder="Search cards by name or type (Italian supported)…"
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           className="w-full pl-10 pr-4 py-3 rounded-lg bg-bg-card border border-border text-font-primary placeholder:text-font-muted focus:outline-none focus:border-bg-accent focus:ring-1 focus:ring-bg-accent transition-colors"
