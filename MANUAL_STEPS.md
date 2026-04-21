@@ -109,6 +109,10 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
+## ✅ [STEP] — Applicare migration `20260421170000_rls_public_decks_anon_readable.sql`
+
+Applicata via Supabase MCP il 2026-04-21. Apre la SELECT su `decks`, `deck_cards`, `profiles` al role `anon` per i deck con `visibility='public'` (profiles sempre). Sblocca lo scraper Open Graph di WhatsApp/iMessage/Discord (anon, senza cookie) per renderizzare il rich link preview, e permette a chi riceve un link condiviso di vedere il deck senza login. Deck privati restano owner-only.
+
 ## ✅ [STEP] — Applicare migration `20260421160000_rewrite_lookup_rpcs_union_for_flavor_name.sql`
 
 Applicata via Supabase MCP il 2026-04-21. La precedente versione degli RPC usava `lower(name) = ANY (...) OR lower(flavor_name) = ANY (...)` che il planner non riusciva a mappare sugli indici expression → full Index Scan su 36k righe, timeout (`statement_timeout`) sull'import di un deck da 96 carte. Riscritta come UNION tra due rami: uno usa `idx_cards_name_lower`, l'altro il partial `idx_cards_flavor_name_lower`. Query warm passa da ~5s a ~10–30ms. Verifica: `explain analyze select * from public.lookup_cards_by_names(array['sol ring']::text[])` deve mostrare "Index Cond: (lower(name) = ANY (lc.arr))", non "Filter".
