@@ -48,6 +48,11 @@ export default async function GoldfishPage({
   const cardMap: CardMap = {}
   const library: string[] = []
   const commandZone: { instanceId: string; cardId: number }[] = []
+  // Ghost opponent mirrors the player's main deck as its library so the
+  // library count reflects the deck's format (Standard 60, Commander 99,
+  // Pauper 60, etc.) without us having to hard-code format sizes. The
+  // ghost does NOT get a commander — only the main-deck cards.
+  const ghostLibrary: string[] = []
   let instanceCounter = 0
 
   interface DeckCardFromDB {
@@ -69,6 +74,13 @@ export default async function GoldfishPage({
         const iid = `ci-${++instanceCounter}`
         library.push(iid)
         cardMap[iid] = toCardMapEntry(card.id as unknown as number, card, { isCommander: false, isToken: false })
+
+        // Ghost gets its own independent instance for the same card.
+        // Fresh instanceId prefix (gi-) so tap-state, counters, and
+        // graveyard/exile movements never collide with the player's.
+        const gid = `gi-${++instanceCounter}`
+        ghostLibrary.push(gid)
+        cardMap[gid] = toCardMapEntry(card.id as unknown as number, card, { isCommander: false, isToken: false })
       }
     }
   }
@@ -95,11 +107,14 @@ export default async function GoldfishPage({
     autoPass: false,
   }
 
-  // Ghost state — empty everything
+  // Ghost state — library mirrors the player's main deck size so
+  // "mill X", "exile top N", and the library counter all show realistic
+  // numbers. Hand stays empty (goldfish = no opponent plays).
+  const shuffledGhostLibrary = shuffle(ghostLibrary)
   const ghostState: PlayerState = {
     life: GHOST_BOT.life,
-    library: [],
-    libraryCount: 0,
+    library: shuffledGhostLibrary,
+    libraryCount: shuffledGhostLibrary.length,
     hand: [],
     handCount: 0,
     battlefield: [],
