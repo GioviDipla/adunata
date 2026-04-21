@@ -147,15 +147,16 @@ export async function lookupCardsByNames(
 }
 
 /**
- * Batch lookup cards by `(name, set?)` identifiers. Supplying `set` pins the
- * result to that specific printing — critical for deck imports where the user
- * paste-listed an edition, otherwise Scryfall returns its "preferred" printing
- * (usually the most recent) which is wrong.
+ * Batch lookup cards by `(name, set?, collector_number?)` identifiers. Supplying
+ * `set` pins the result to that set's printing; supplying `collector_number`
+ * along with `set` is unambiguous and returns the exact row — critical for
+ * deck imports where the same (name, set) exists in multiple printings
+ * (Arcane Signet CMR 297 vs CMR 689) and the user typed the specific collector.
  *
  * Up to 75 identifiers per request; larger batches split automatically.
  */
 export async function lookupCardsByIdentifiers(
-  identifiers: Array<{ name: string; set?: string }>
+  identifiers: Array<{ name: string; set?: string; collector_number?: string }>
 ): Promise<{ found: ScryfallCard[]; notFound: string[] }> {
   const found: ScryfallCard[] = []
   const notFound: string[] = []
@@ -163,9 +164,19 @@ export async function lookupCardsByIdentifiers(
   const BATCH_SIZE = 75
   for (let i = 0; i < identifiers.length; i += BATCH_SIZE) {
     const batch = identifiers.slice(i, i + BATCH_SIZE)
-    const payload = batch.map((id) =>
-      id.set ? { name: id.name, set: id.set.toLowerCase() } : { name: id.name }
-    )
+    const payload = batch.map((id) => {
+      // Scryfall accepts `{ set, collector_number }` as a standalone
+      // identifier that pins the exact printing — preferable over
+      // `{ name, set }` whenever we have the collector.
+      if (id.set && id.collector_number) {
+        return {
+          set: id.set.toLowerCase(),
+          collector_number: id.collector_number,
+        }
+      }
+      if (id.set) return { name: id.name, set: id.set.toLowerCase() }
+      return { name: id.name }
+    })
 
     const res = await rateLimitedFetch(
       'https://api.scryfall.com/cards/collection',

@@ -3,6 +3,12 @@ export interface ParsedCard {
   quantity: number
   board: string
   setCode?: string
+  /** Collector number from Moxfield-style `(STA) 42` / promo `266p` /
+      surge-foil `★` / The-List `KHM-251`. Used together with setCode to
+      pin the exact printing during import — multiple printings can
+      share the same (name, set) pair (e.g. Arcane Signet CMR 297 vs
+      CMR 689). */
+  collectorNumber?: string
   /** True when the source line carried a Moxfield / ManaBox / Archidekt
       foil or etched marker (`*F*`, `*E*`, trailing bare ` F`/` E`). */
   isFoil?: boolean
@@ -31,19 +37,22 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
     const line = rawLine.trim()
     if (!line || line.startsWith('//')) continue
 
-    if (/^sideboard\s*$/i.test(line) || /^SB:\s*$/i.test(line)) {
+    // Section headers: accept optional trailing `:` because Moxfield
+    // and a lot of hand-pasted lists write `SIDEBOARD:` / `MAYBEBOARD:`
+    // / `COMMANDER:` instead of the bare word.
+    if (/^sideboard\s*:?\s*$/i.test(line) || /^SB:\s*$/i.test(line)) {
       currentBoard = 'sideboard'
       continue
     }
-    if (/^maybeboard\s*$/i.test(line)) {
+    if (/^maybeboard\s*:?\s*$/i.test(line)) {
       currentBoard = 'maybeboard'
       continue
     }
-    if (/^commander\s*$/i.test(line)) {
+    if (/^commander\s*:?\s*$/i.test(line)) {
       currentBoard = 'commander'
       continue
     }
-    if (/^mainboard\s*$/i.test(line) || /^main\s*deck\s*$/i.test(line)) {
+    if (/^mainboard\s*:?\s*$/i.test(line) || /^main\s*deck\s*:?\s*$/i.test(line)) {
       currentBoard = 'main'
       continue
     }
@@ -83,7 +92,7 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
     // and `-` so promo variants like `266p` or The-List entries like
     // `KHM-251` don't fall back into the name.
     const match = workingLine.match(
-      /^(?:(\d+)\s*x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]+)\)(?:\s+[A-Za-z0-9★\-]+)?)?$/
+      /^(?:(\d+)\s*x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]+)\)(?:\s+([A-Za-z0-9★\-]+))?)?$/
     )
 
     if (match) {
@@ -94,8 +103,9 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
       // matches both locally and at the Scryfall fallback.
       const name = match[2].trim().replace(/\s+\/\s+/g, ' // ')
       const setCode = match[3] || undefined
+      const collectorNumber = match[4] || undefined
       if (quantity > 0 && name) {
-        cards.push({ name, quantity, board, setCode, isFoil })
+        cards.push({ name, quantity, board, setCode, collectorNumber, isFoil })
       }
     }
   }

@@ -603,7 +603,13 @@ export interface Database {
         Returns: Database['public']['Tables']['cards']['Row'][]
       }
       lookup_cards_by_name_and_set: {
-        Args: { pairs: { name: string; set_code: string }[] }
+        Args: {
+          pairs: {
+            name: string
+            set_code: string
+            collector_number?: string
+          }[]
+        }
         Returns: Database['public']['Tables']['cards']['Row'][]
       }
       get_deck_covers: {

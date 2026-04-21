@@ -19,6 +19,10 @@ interface ImportEntry {
   board: string
   /** Set code from Moxfield-style `(STA)` — pins the lookup to that printing. */
   setCode?: string | null
+  /** Collector number — combined with setCode pins the exact printing
+   *  when the same (name, set) has multiple rows (e.g. Arcane Signet
+   *  CMR 297 vs CMR 689). */
+  collectorNumber?: string | null
   /** True when the source line carried `*F*`, `*E*`, or trailing ` F`/` E`. */
   isFoil?: boolean
 }
@@ -39,6 +43,8 @@ interface ImportFailure {
 const nameKey = (s: string) => s.trim().toLowerCase()
 const pairKey = (name: string, setCode: string) =>
   `${nameKey(name)}|${setCode.trim().toLowerCase()}`
+const tripleKey = (name: string, setCode: string, collector: string) =>
+  `${nameKey(name)}|${setCode.trim().toLowerCase()}|${collector.trim().toLowerCase()}`
 
 /**
  * Bulk import cards into a deck from a parsed text list.
@@ -86,16 +92,32 @@ export async function POST(
 
   // --- 1. Set-specific lookup FIRST so a paste like "Lightning Bolt (STA)"
   // pins to the STA printing even if other printings also live in our table.
+  // When the paste also carries a collector number we pass it to the RPC
+  // so same-(name, set) pairs like Arcane Signet CMR 297 vs CMR 689
+  // resolve to the exact row the user typed.
   const setPairs = entries
     .filter((e) => e.setCode && e.setCode.trim() !== '')
-    .map((e) => ({ name: e.name.trim(), set_code: e.setCode!.trim() }))
+    .map((e) => ({
+      name: e.name.trim(),
+      set_code: e.setCode!.trim(),
+      collector_number: e.collectorNumber?.trim() || undefined,
+    }))
 
+  // cardByTriple indexes by (name, set, collector). cardByNameAndSet
+  // stays as a looser fallback — needed when the paste had a set code
+  // but no collector, or when the requested collector isn't in our DB
+  // and Scryfall hands back a different printing of the same set.
+  const cardByTriple = new Map<string, CardRow>()
   const cardByNameAndSet = new Map<string, CardRow>()
   if (setPairs.length > 0) {
-    // Dedupe — the RPC returns DISTINCT ON anyway, but a tight input helps.
     const uniquePairs = Array.from(
       new Map(
-        setPairs.map((p) => [pairKey(p.name, p.set_code), p]),
+        setPairs.map((p) => [
+          p.collector_number
+            ? tripleKey(p.name, p.set_code, p.collector_number)
+            : pairKey(p.name, p.set_code),
+          p,
+        ]),
       ).values(),
     )
     const { data: setCards, error: setRpcError } = await admin.rpc(
@@ -108,12 +130,21 @@ export async function POST(
     for (const c of (setCards ?? []) as CardRow[]) {
       if (c.set_code) {
         cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
+        if (c.collector_number) {
+          cardByTriple.set(tripleKey(c.name, c.set_code, c.collector_number), c)
+        }
         // Index UB reprints under the flavor name too so a paste of
         // "Paradise Chocobo (FIC)" resolves via the in-memory map
         // populated from the local `cards` row whose canonical name
         // is "Birds of Paradise".
         if (c.flavor_name) {
           cardByNameAndSet.set(pairKey(c.flavor_name, c.set_code), c)
+          if (c.collector_number) {
+            cardByTriple.set(
+              tripleKey(c.flavor_name, c.set_code, c.collector_number),
+              c,
+            )
+          }
         }
       }
     }
@@ -149,6 +180,12 @@ export async function POST(
   // --- 3. Scryfall fallback for anything still missing. Pass `set` when the
   // entry had one so we land on the right printing.
   const resolve = (entry: ImportEntry): CardRow | null => {
+    if (entry.setCode && entry.collectorNumber) {
+      const hit = cardByTriple.get(
+        tripleKey(entry.name, entry.setCode, entry.collectorNumber),
+      )
+      if (hit) return hit
+    }
     if (entry.setCode) {
       const hit = cardByNameAndSet.get(pairKey(entry.name, entry.setCode))
       if (hit) return hit
@@ -175,8 +212,17 @@ export async function POST(
     for (const c of (upserted ?? []) as CardRow[]) {
       if (c.set_code) {
         cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
+        if (c.collector_number) {
+          cardByTriple.set(tripleKey(c.name, c.set_code, c.collector_number), c)
+        }
         if (c.flavor_name) {
           cardByNameAndSet.set(pairKey(c.flavor_name, c.set_code), c)
+          if (c.collector_number) {
+            cardByTriple.set(
+              tripleKey(c.flavor_name, c.set_code, c.collector_number),
+              c,
+            )
+          }
         }
       }
       if (!cardByLowerName.has(nameKey(c.name))) {
@@ -193,12 +239,25 @@ export async function POST(
   const scryfallNeeded = entries.filter((e) => !resolve(e))
   if (scryfallNeeded.length > 0) {
     const seen = new Set<string>()
-    const identifiers: { name: string; set?: string }[] = []
+    const identifiers: {
+      name: string
+      set?: string
+      collector_number?: string
+    }[] = []
     for (const e of scryfallNeeded) {
-      const key = e.setCode ? pairKey(e.name, e.setCode) : nameKey(e.name)
+      const key =
+        e.setCode && e.collectorNumber
+          ? tripleKey(e.name, e.setCode, e.collectorNumber)
+          : e.setCode
+            ? pairKey(e.name, e.setCode)
+            : nameKey(e.name)
       if (seen.has(key)) continue
       seen.add(key)
-      identifiers.push({ name: e.name.trim(), set: e.setCode ?? undefined })
+      identifiers.push({
+        name: e.name.trim(),
+        set: e.setCode ?? undefined,
+        collector_number: e.collectorNumber ?? undefined,
+      })
     }
 
     const { found } = await lookupCardsByIdentifiers(identifiers)
@@ -268,9 +327,21 @@ export async function POST(
       }
       if (e.setCode) {
         cardByNameAndSet.set(pairKey(e.name, e.setCode), row)
+        if (e.collectorNumber) {
+          cardByTriple.set(
+            tripleKey(e.name, e.setCode, e.collectorNumber),
+            row,
+          )
+        }
       }
       if (row.set_code) {
         cardByNameAndSet.set(pairKey(row.name, row.set_code), row)
+        if (row.collector_number) {
+          cardByTriple.set(
+            tripleKey(row.name, row.set_code, row.collector_number),
+            row,
+          )
+        }
       }
     }
   }
