@@ -109,6 +109,10 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
+## ✅ [STEP] — Applicare migration `20260421160000_rewrite_lookup_rpcs_union_for_flavor_name.sql`
+
+Applicata via Supabase MCP il 2026-04-21. La precedente versione degli RPC usava `lower(name) = ANY (...) OR lower(flavor_name) = ANY (...)` che il planner non riusciva a mappare sugli indici expression → full Index Scan su 36k righe, timeout (`statement_timeout`) sull'import di un deck da 96 carte. Riscritta come UNION tra due rami: uno usa `idx_cards_name_lower`, l'altro il partial `idx_cards_flavor_name_lower`. Query warm passa da ~5s a ~10–30ms. Verifica: `explain analyze select * from public.lookup_cards_by_names(array['sol ring']::text[])` deve mostrare "Index Cond: (lower(name) = ANY (lc.arr))", non "Filter".
+
 ## ✅ [STEP] — Applicare migration `20260421150000_cards_flavor_name_for_ub_reprints.sql`
 
 Applicata via Supabase MCP il 2026-04-21. Aggiunge `cards.flavor_name` + indice funzionale `lower(flavor_name)`, ed estende `lookup_cards_by_names` e `lookup_cards_by_name_and_set` a matchare anche sul flavor name. Sblocca l'import di Universes Beyond reprints (Paradise Chocobo → Birds of Paradise, Balin's Tomb → Ancient Tomb) senza round-trip Scryfall su import ripetuti.
