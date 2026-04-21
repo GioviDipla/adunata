@@ -109,7 +109,13 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
-## [STEP] — Applicare migration `20260421120000_lobby_invitations.sql`
+## ✅ [STEP] — Applicare migration `20260421120000_lobby_invitations.sql`
+
+Applicata via Supabase MCP il 2026-04-21. Verifica eseguita:
+- 7 colonne presenti (id, lobby_id, from_user_id, to_user_id, status, created_at, responded_at)
+- 3 policy RLS (select/insert/update participants)
+- 4 index (pkey, unique (lobby_id, to_user_id), partial pending su to_user_id, secondario su from_user_id)
+- `lobby_invitations` inclusa in `pg_publication_tables` per `supabase_realtime`
 
 Quando: prima di usare la feature "Invite to 1v1" (menu su `/play` e bottone sul profilo di un utente di community).
 Cosa fare: aprire il Supabase SQL Editor del progetto di produzione e incollare il contenuto di `supabase/migrations/20260421120000_lobby_invitations.sql`, quindi premere *Run*.
