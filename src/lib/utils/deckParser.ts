@@ -5,6 +5,20 @@ export interface ParsedCard {
   setCode?: string
 }
 
+/**
+ * Parse a pasted decklist.
+ *
+ * Accepted formats (one card per line):
+ *   `4 Lightning Bolt`            — bare count
+ *   `4x Lightning Bolt`           — `x` suffix
+ *   `Lightning Bolt`              — no count → treated as 1
+ *   `4 Lightning Bolt (STA) 42`   — Moxfield / Archidekt with set + collector
+ *   `4 Lightning Bolt (STA) 42 F` / `*F*` — foil marker (Moxfield / ManaBox)
+ *   `SB: 2 Pyroblast`             — explicit sideboard prefix
+ *
+ * Section headers (`Sideboard`, `Maybeboard`, `Commander`, `Mainboard`,
+ * `Main Deck`) on their own line switch the board for subsequent entries.
+ */
 export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[] {
   const lines = text.split('\n')
   const cards: ParsedCard[] = []
@@ -38,12 +52,25 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
       workingLine = workingLine.replace(/^SB:\s*/i, '')
     }
 
+    // Strip foil / etched-foil markers used by Moxfield, ManaBox, Archidekt.
+    // Trailing `*F*` / `*E*` (case-insensitive), trailing bare ` F` / ` E`
+    // (case-sensitive to avoid clipping lowercase letters at the end of a
+    // card name), and the mid-line `*F*` that sometimes appears between
+    // the card name and the set code.
+    workingLine = workingLine
+      .replace(/\s+\*[FE]\*(?=\s|$)/gi, '')
+      .replace(/\s+\*[FE]\*\s*$/i, '')
+      .replace(/\s+[FE]\s*$/, '')
+      .trim()
+
+    // Quantity is optional — default to 1 when the line starts with the
+    // card name directly (common when users hand-write the list).
     const match = workingLine.match(
-      /^(\d+)\s*x?\s+(.+?)(?:\s+\(([A-Za-z0-9]+)\))?(?:\s+\d+)?$/
+      /^(?:(\d+)\s*x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]+)\))?(?:\s+\d+)?$/
     )
 
     if (match) {
-      const quantity = parseInt(match[1], 10)
+      const quantity = match[1] ? parseInt(match[1], 10) : 1
       const name = match[2].trim()
       const setCode = match[3] || undefined
       if (quantity > 0 && name) {
