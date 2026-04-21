@@ -22,6 +22,8 @@ export interface DeckCardEntry {
   card: CardRow
   quantity: number
   board: string
+  /** True when the row was imported with a foil / etched marker. */
+  isFoil?: boolean
 }
 
 type ViewMode = 'list' | 'grid' | 'text'

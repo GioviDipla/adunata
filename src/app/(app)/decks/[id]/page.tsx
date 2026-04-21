@@ -13,6 +13,7 @@ interface DeckCardFromDB {
   card_id: number
   quantity: number
   board: string
+  is_foil: boolean
   created_at: string
   card: CardRow
 }
@@ -32,7 +33,7 @@ export default async function DeckDetailPage({
     supabase.from('decks').select(DECK_DETAIL_COLUMNS).eq('id', id).single(),
     supabase
       .from('deck_cards')
-      .select(`id, card_id, quantity, board, created_at, card:cards!card_id(${CARD_DECK_COLUMNS})`)
+      .select(`id, card_id, quantity, board, is_foil, created_at, card:cards!card_id(${CARD_DECK_COLUMNS})`)
       .eq('deck_id', id),
   ])
 
@@ -50,6 +51,7 @@ export default async function DeckDetailPage({
       card: dc.card,
       quantity: dc.quantity,
       board: dc.board,
+      isFoil: !!dc.is_foil,
     }))
 
   if (isOwner) {

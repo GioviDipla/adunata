@@ -109,6 +109,14 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
+## ✅ [STEP] — Applicare migration `20260421130000_deck_cards_foil_and_set_lookup.sql`
+
+Applicata via Supabase MCP il 2026-04-21. Verifica eseguita con `information_schema`:
+- `deck_cards.is_foil boolean NOT NULL DEFAULT false` aggiunta
+- RPC `lookup_cards_by_name_and_set(pairs jsonb)` presente e `STABLE` con `search_path` bloccato
+
+Cosa sblocca: in importazione, una riga come `4 Lightning Bolt (STA) 42 *F*` ora risolve alla stampa STA come foil row separata dalla non-foil. Senza questo passo, l'import torna a risolvere per nome e perde foil+edizione.
+
 ## ✅ [STEP] — Applicare migration `20260421120000_lobby_invitations.sql`
 
 Applicata via Supabase MCP il 2026-04-21. Verifica eseguita:

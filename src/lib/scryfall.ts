@@ -114,31 +114,45 @@ export async function searchCardByName(
 export async function lookupCardsByNames(
   names: string[]
 ): Promise<{ found: ScryfallCard[]; notFound: string[] }> {
+  return lookupCardsByIdentifiers(names.map((name) => ({ name })))
+}
+
+/**
+ * Batch lookup cards by `(name, set?)` identifiers. Supplying `set` pins the
+ * result to that specific printing — critical for deck imports where the user
+ * paste-listed an edition, otherwise Scryfall returns its "preferred" printing
+ * (usually the most recent) which is wrong.
+ *
+ * Up to 75 identifiers per request; larger batches split automatically.
+ */
+export async function lookupCardsByIdentifiers(
+  identifiers: Array<{ name: string; set?: string }>
+): Promise<{ found: ScryfallCard[]; notFound: string[] }> {
   const found: ScryfallCard[] = []
   const notFound: string[] = []
 
-  // Scryfall /cards/collection accepts max 75 identifiers per request
   const BATCH_SIZE = 75
-  for (let i = 0; i < names.length; i += BATCH_SIZE) {
-    const batch = names.slice(i, i + BATCH_SIZE)
-    const identifiers = batch.map((name) => ({ name }))
+  for (let i = 0; i < identifiers.length; i += BATCH_SIZE) {
+    const batch = identifiers.slice(i, i + BATCH_SIZE)
+    const payload = batch.map((id) =>
+      id.set ? { name: id.name, set: id.set.toLowerCase() } : { name: id.name }
+    )
 
     const res = await rateLimitedFetch(
       'https://api.scryfall.com/cards/collection',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifiers }),
+        body: JSON.stringify({ identifiers: payload }),
       }
     )
 
     if (!res.ok) {
-      // If the batch endpoint fails, mark all as not found
-      notFound.push(...batch)
+      notFound.push(...batch.map((id) => id.name))
       continue
     }
 
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       data: ScryfallCard[]
       not_found: { name: string }[]
     }

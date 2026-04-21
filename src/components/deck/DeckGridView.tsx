@@ -125,8 +125,9 @@ export default function DeckGridView({
               </div>
             )}
 
-            {/* Quantity badge */}
-            <div className="absolute top-1.5 left-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-bg-dark/80 px-1.5 text-xs font-bold text-font-primary backdrop-blur-sm">
+            {/* Quantity badge — pinned to bottom-left so it stays clear of the
+                card's name in the top-left of the frame. */}
+            <div className="absolute bottom-1.5 left-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-bg-dark/80 px-1.5 text-xs font-bold text-font-primary backdrop-blur-sm">
               {entry.quantity}x
             </div>
 

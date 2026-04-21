@@ -84,6 +84,8 @@ export default function ImportDeckPage() {
             name: p.name,
             quantity: p.quantity,
             board: p.board,
+            setCode: p.setCode,
+            isFoil: p.isFoil,
           })),
         }),
       })

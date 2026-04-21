@@ -294,8 +294,9 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
                             <span className="text-center text-[9px] text-font-muted">{entry.card.name}</span>
                           </div>
                         )}
-                        {/* Quantity badge */}
-                        <div className="absolute top-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-dark/80 px-1 text-[10px] font-bold text-font-primary backdrop-blur-sm">
+                        {/* Quantity badge — bottom-left keeps it off the
+                            card name in the top-left of the frame. */}
+                        <div className="absolute bottom-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-dark/80 px-1 text-[10px] font-bold text-font-primary backdrop-blur-sm">
                           {entry.quantity}x
                         </div>
                         {/* Checkbox icon */}

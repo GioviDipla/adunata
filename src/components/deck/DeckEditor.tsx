@@ -36,6 +36,8 @@ interface DeckCardEntry {
   card: CardRow
   quantity: number
   board: string
+  /** Persisted at import time from Moxfield-style `*F*` / `*E*` / trailing F/E markers. */
+  isFoil?: boolean
 }
 
 interface DeckEditorProps {

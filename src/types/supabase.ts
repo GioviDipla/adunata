@@ -244,6 +244,7 @@ export interface Database {
           card_id: number
           quantity: number
           board: string
+          is_foil: boolean
           created_at: string
         }
         Insert: {
@@ -252,6 +253,7 @@ export interface Database {
           card_id: number
           quantity?: number
           board?: string
+          is_foil?: boolean
           created_at?: string
         }
         Update: {
@@ -260,6 +262,7 @@ export interface Database {
           card_id?: number
           quantity?: number
           board?: string
+          is_foil?: boolean
           created_at?: string
         }
         Relationships: [
@@ -594,6 +597,10 @@ export interface Database {
       }
       lookup_cards_by_names: {
         Args: { card_names: string[] }
+        Returns: Database['public']['Tables']['cards']['Row'][]
+      }
+      lookup_cards_by_name_and_set: {
+        Args: { pairs: { name: string; set_code: string }[] }
         Returns: Database['public']['Tables']['cards']['Row'][]
       }
       get_deck_covers: {

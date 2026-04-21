@@ -51,6 +51,8 @@ export default function ImportCardsModal({
             name: p.name,
             quantity: p.quantity,
             board: p.board,
+            setCode: p.setCode,
+            isFoil: p.isFoil,
           })),
         }),
       })

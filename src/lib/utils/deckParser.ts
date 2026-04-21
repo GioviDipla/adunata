@@ -3,6 +3,9 @@ export interface ParsedCard {
   quantity: number
   board: string
   setCode?: string
+  /** True when the source line carried a Moxfield / ManaBox / Archidekt
+      foil or etched marker (`*F*`, `*E*`, trailing bare ` F`/` E`). */
+  isFoil?: boolean
 }
 
 /**
@@ -52,11 +55,15 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
       workingLine = workingLine.replace(/^SB:\s*/i, '')
     }
 
-    // Strip foil / etched-foil markers used by Moxfield, ManaBox, Archidekt.
-    // Trailing `*F*` / `*E*` (case-insensitive), trailing bare ` F` / ` E`
-    // (case-sensitive to avoid clipping lowercase letters at the end of a
-    // card name), and the mid-line `*F*` that sometimes appears between
-    // the card name and the set code.
+    // Detect foil / etched markers BEFORE stripping — the flag must
+    // survive into the parsed entry so the importer can persist it.
+    // `*F*` / `*E*` anywhere (case-insensitive) OR a trailing bare ` F` /
+    // ` E` (case-sensitive to avoid clipping lowercase letters at the end
+    // of a card name) both count.
+    const isFoil =
+      /\*[FE]\*/i.test(workingLine) ||
+      /\s+[FE]\s*$/.test(workingLine)
+
     workingLine = workingLine
       .replace(/\s+\*[FE]\*(?=\s|$)/gi, '')
       .replace(/\s+\*[FE]\*\s*$/i, '')
@@ -74,7 +81,7 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
       const name = match[2].trim()
       const setCode = match[3] || undefined
       if (quantity > 0 && name) {
-        cards.push({ name, quantity, board, setCode })
+        cards.push({ name, quantity, board, setCode, isFoil })
       }
     }
   }

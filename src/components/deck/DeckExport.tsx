@@ -11,6 +11,7 @@ interface DeckCardEntry {
   card: CardRow
   quantity: number
   board: string
+  isFoil?: boolean
 }
 
 interface DeckExportProps {
@@ -36,20 +37,22 @@ function generateExport(
     lines.push('')
   }
 
-  // Main deck
-  mainCards.forEach(({ card, quantity }) => {
+  const formatLine = (entry: DeckCardEntry) => {
+    const { card, quantity, isFoil } = entry
+    // `*F*` is the Moxfield convention; MTGO accepts it as a trailing marker
+    // without choking, and our own parser detects it — so round-trip is clean.
+    const foilSuffix = isFoil ? ' *F*' : ''
     switch (format) {
       case 'mtgo':
-        lines.push(`${quantity} ${card.name}`)
-        break
+        return `${quantity} ${card.name}${foilSuffix}`
       case 'moxfield':
-        lines.push(`${quantity} ${card.name} (${card.set_code.toUpperCase()}) ${card.collector_number}`)
-        break
+        return `${quantity} ${card.name} (${card.set_code.toUpperCase()}) ${card.collector_number}${foilSuffix}`
       case 'simple':
-        lines.push(`${quantity}x ${card.name}`)
-        break
+        return `${quantity}x ${card.name}${foilSuffix}`
     }
-  })
+  }
+
+  mainCards.forEach((entry) => lines.push(formatLine(entry)))
 
   if (sideboardCards.length > 0) {
     lines.push('')
@@ -58,20 +61,7 @@ function generateExport(
     } else {
       lines.push('// Sideboard')
     }
-
-    sideboardCards.forEach(({ card, quantity }) => {
-      switch (format) {
-        case 'mtgo':
-          lines.push(`${quantity} ${card.name}`)
-          break
-        case 'moxfield':
-          lines.push(`${quantity} ${card.name} (${card.set_code.toUpperCase()}) ${card.collector_number}`)
-          break
-        case 'simple':
-          lines.push(`${quantity}x ${card.name}`)
-          break
-      }
-    })
+    sideboardCards.forEach((entry) => lines.push(formatLine(entry)))
   }
 
   return lines.join('\n')
