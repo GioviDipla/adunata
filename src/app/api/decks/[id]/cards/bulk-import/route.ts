@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { lookupCardsByIdentifiers, mapScryfallCard } from '@/lib/scryfall'
+import {
+  lookupCardsByIdentifiers,
+  mapScryfallCard,
+  searchCardByExactName,
+} from '@/lib/scryfall'
 import { CARD_DECK_COLUMNS } from '@/lib/supabase/columns'
 import { bulkLimiter, enforceLimit, getClientId } from '@/lib/rate-limit'
 import type { Database } from '@/types/supabase'
@@ -201,6 +205,56 @@ export async function POST(
     }
     const { found } = await lookupCardsByIdentifiers(identifiers)
     await upsertFound(found)
+  }
+
+  // Third pass: Universes Beyond flavor names. /cards/collection (the
+  // batch endpoint used above) matches the canonical `name` only, so
+  // reprints like "Paradise Chocobo" → Birds of Paradise (FIC 483) and
+  // "Balin's Tomb" → Ancient Tomb (LTC 357) come back as not_found.
+  // /cards/named?exact= matches `flavor_name` too. Serial + rate-limited,
+  // but only runs for the handful of entries no batch pass caught.
+  const flavorNeeded = entries.filter((e) => !resolve(e))
+  if (flavorNeeded.length > 0) {
+    const seenKeys = new Set<string>()
+    for (const e of flavorNeeded) {
+      const k = e.setCode ? pairKey(e.name, e.setCode) : nameKey(e.name)
+      if (seenKeys.has(k)) continue
+      seenKeys.add(k)
+
+      const card = await searchCardByExactName(e.name.trim(), e.setCode ?? undefined)
+        .catch((err) => {
+          console.error('[bulk-import] exact-name lookup failed', e.name, err)
+          return null
+        })
+      if (!card) continue
+
+      const [mapped] = [mapScryfallCard(card)]
+      const { data: upserted, error } = await admin
+        .from('cards')
+        .upsert([mapped], { onConflict: 'scryfall_id' })
+        .select(CARD_DECK_COLUMNS)
+      if (error || !upserted?.[0]) {
+        if (error) console.error('[bulk-import] flavor-name upsert failed', error)
+        continue
+      }
+      const row = upserted[0] as CardRow
+
+      // Index the row by BOTH the entry's (flavor) name and the
+      // canonical name, so later entries in this same import that
+      // reference either form also resolve. Without this, a deck that
+      // mixes "Paradise Chocobo" and "Birds of Paradise" would only
+      // resolve the line we looked up.
+      cardByLowerName.set(nameKey(e.name), row)
+      if (!cardByLowerName.has(nameKey(row.name))) {
+        cardByLowerName.set(nameKey(row.name), row)
+      }
+      if (e.setCode) {
+        cardByNameAndSet.set(pairKey(e.name, e.setCode), row)
+      }
+      if (row.set_code) {
+        cardByNameAndSet.set(pairKey(row.name, row.set_code), row)
+      }
+    }
   }
 
   // --- 4. Resolve each entry → card, merge quantities per (cardId, board, foil).

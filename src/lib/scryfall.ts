@@ -107,6 +107,32 @@ export async function searchCardByName(
 }
 
 /**
+ * Exact name lookup, optionally pinned to a set. Unlike `/cards/collection`
+ * this endpoint also matches Universes Beyond flavor names — so pasting
+ * `Paradise Chocobo (FIC)` resolves to Birds of Paradise (FIC 483) and
+ * `Balin's Tomb (LTC)` resolves to Ancient Tomb (LTC 357). The batch
+ * endpoint only matches the canonical `name` and returns these as
+ * not_found, so this is the fallback the bulk importer uses for anything
+ * still missing after the batch passes.
+ */
+export async function searchCardByExactName(
+  name: string,
+  setCode?: string,
+): Promise<ScryfallCard | null> {
+  const params = new URLSearchParams({ exact: name })
+  if (setCode) params.set('set', setCode.toLowerCase())
+  const url = `https://api.scryfall.com/cards/named?${params.toString()}`
+  const res = await rateLimitedFetch(url)
+
+  if (res.status === 404) return null
+  if (!res.ok) {
+    throw new Error(`Scryfall exact search returned ${res.status}`)
+  }
+
+  return (await res.json()) as ScryfallCard
+}
+
+/**
  * Batch lookup cards by name using Scryfall's /cards/collection endpoint.
  * Accepts up to 75 identifiers per request. For larger batches, splits into
  * multiple requests automatically.
