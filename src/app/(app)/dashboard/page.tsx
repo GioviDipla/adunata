@@ -6,7 +6,7 @@ import {
   Plus,
   Upload,
   Layers,
-  Library,
+  Swords,
   ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -17,19 +17,14 @@ export default async function DashboardPage() {
 
   const supabase = await createClient();
 
-  // All queries run in parallel. RLS on `deck_cards` already restricts to
-  // the current user's decks, so we don't need a user_id filter or an extra
-  // query to fetch deck_ids first.
   const [
     { count: deckCount },
-    { data: allDeckCards },
     { data: recentDecks },
   ] = await Promise.all([
     supabase
       .from("decks")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id),
-    supabase.from("deck_cards").select("quantity"),
     supabase
       .from("decks")
       .select("id, name, format, updated_at")
@@ -37,11 +32,6 @@ export default async function DashboardPage() {
       .order("updated_at", { ascending: false })
       .limit(5),
   ]);
-
-  const totalCards = (allDeckCards ?? []).reduce(
-    (sum, c) => sum + (c.quantity ?? 0),
-    0,
-  );
 
   const quickActions = [
     {
@@ -89,19 +79,25 @@ export default async function DashboardPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-border bg-bg-card p-5">
+        <Link
+          href="/play"
+          className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-card p-5 transition-colors hover:border-border-light hover:bg-bg-hover"
+        >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-bg-accent/10">
-              <Library className="h-5 w-5 text-font-accent" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-bg-accent/10 transition-colors group-hover:bg-bg-accent/20">
+              <Swords className="h-5 w-5 text-font-accent" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-font-primary">
-                {totalCards}
+              <p className="text-sm font-semibold text-font-primary">
+                Start a game
               </p>
-              <p className="text-xs text-font-secondary">Total cards</p>
+              <p className="text-xs text-font-secondary">
+                Create or join a lobby
+              </p>
             </div>
           </div>
-        </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-font-muted transition-transform group-hover:translate-x-0.5 group-hover:text-font-accent" />
+        </Link>
       </div>
 
       {/* Quick Actions */}
