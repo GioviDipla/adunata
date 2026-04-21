@@ -32,14 +32,29 @@ export async function POST(request: NextRequest) {
   }
 
   // Verify deck ownership and grab its format
-  const { data: deck } = await supabase
+  // Every failure branch below logs with enough context to diagnose from
+  // the Vercel function tail when a user reports a silent failure — the
+  // Supabase error object serialized includes the message, code, and hint.
+  const fail = (step: string, status: number, err: unknown, fallback: string) => {
+    const message =
+      (err as { message?: string } | null | undefined)?.message ?? fallback
+    console.error(`[/api/lobbies/invite] ${step} failed`, {
+      from: user.id,
+      to: toUserId,
+      deckId,
+      error: err,
+    })
+    return NextResponse.json({ error: `${step}: ${message}` }, { status })
+  }
+
+  const { data: deck, error: deckErr } = await supabase
     .from('decks').select('id, format').eq('id', deckId).eq('user_id', user.id).single()
-  if (!deck) return NextResponse.json({ error: 'Deck not found' }, { status: 404 })
+  if (deckErr || !deck) return fail('deck lookup', 404, deckErr, 'Deck not found')
 
   // Verify the recipient exists and has a profile (community membership)
-  const { data: target } = await supabase
+  const { data: target, error: targetErr } = await supabase
     .from('profiles').select('id').eq('id', toUserId).single()
-  if (!target) return NextResponse.json({ error: 'Recipient not found' }, { status: 404 })
+  if (targetErr || !target) return fail('recipient lookup', 404, targetErr, 'Recipient not found')
 
   const { data: lobby, error: lobbyErr } = await supabase
     .from('game_lobbies').insert({
@@ -51,9 +66,7 @@ export async function POST(request: NextRequest) {
     })
     .select('id, lobby_code, format, status, max_players, host_user_id')
     .single()
-  if (lobbyErr || !lobby) {
-    return NextResponse.json({ error: lobbyErr?.message ?? 'Lobby creation failed' }, { status: 500 })
-  }
+  if (lobbyErr || !lobby) return fail('lobby insert', 500, lobbyErr, 'Lobby creation failed')
 
   const { error: playerErr } = await supabase.from('game_players').insert({
     lobby_id: lobby.id, user_id: user.id, deck_id: deckId, seat_position: 1,
@@ -61,7 +74,7 @@ export async function POST(request: NextRequest) {
   if (playerErr) {
     // Clean up orphan lobby so we don't leave empty rows littering the table.
     await supabase.from('game_lobbies').delete().eq('id', lobby.id)
-    return NextResponse.json({ error: playerErr.message }, { status: 500 })
+    return fail('player insert', 500, playerErr, 'Could not seat sender')
   }
 
   const { data: invitation, error: inviteErr } = await supabase
@@ -73,8 +86,14 @@ export async function POST(request: NextRequest) {
   if (inviteErr || !invitation) {
     // Same cleanup — the lobby exists only to host this invite.
     await supabase.from('game_lobbies').delete().eq('id', lobby.id)
-    return NextResponse.json({ error: inviteErr?.message ?? 'Invitation failed' }, { status: 500 })
+    return fail('invitation insert', 500, inviteErr, 'Invitation failed')
   }
 
+  console.log('[/api/lobbies/invite] sent', {
+    invitationId: invitation.id,
+    lobbyId: lobby.id,
+    from: user.id,
+    to: toUserId,
+  })
   return NextResponse.json({ lobby, invitation }, { status: 201 })
 }
