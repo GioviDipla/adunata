@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { Heart, ChevronLeft } from 'lucide-react'
+import { Heart, ChevronLeft, Minus, Plus, Layers, Archive, Ban } from 'lucide-react'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -151,6 +151,7 @@ export default function PlayGame(props: PlayGameProps) {
   const [cardMap, setCardMap] = useState<CardMap>({})
   const [log, setLog] = useState<LogEntry[]>([])
   const [viewingZone, setViewingZone] = useState<'graveyard' | 'exile' | 'library' | null>(null)
+  const [opponentViewingZone, setOpponentViewingZone] = useState<'graveyard' | 'exile' | 'library' | null>(null)
   const [loading, setLoading] = useState(true)
   const [gameOver, setGameOver] = useState<{ winnerId: string } | null>(null)
   const [playerNames, setPlayerNames] = useState<Record<string, string>>({})
@@ -461,6 +462,41 @@ export default function PlayGame(props: PlayGameProps) {
       })
       .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
   }, [myState, cardMap])
+
+  // Opponent zone cards (goldfish: lets the player manipulate the ghost's
+  // library / graveyard / exile via the same viewer they use for their own).
+  const opponentGraveyardCards = useMemo(() => {
+    if (!opponentState) return []
+    return opponentState.graveyard
+      .map((c) => {
+        const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
+        if (!data) return null
+        return { instanceId: c.instanceId, card: toCardRow(c.cardId, data) }
+      })
+      .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
+  }, [opponentState, cardMap])
+
+  const opponentExileCards = useMemo(() => {
+    if (!opponentState) return []
+    return opponentState.exile
+      .map((c) => {
+        const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
+        if (!data) return null
+        return { instanceId: c.instanceId, card: toCardRow(c.cardId, data) }
+      })
+      .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
+  }, [opponentState, cardMap])
+
+  const opponentLibraryCards = useMemo(() => {
+    if (!opponentState) return []
+    return opponentState.library
+      .map((instanceId) => {
+        const data = cardMap[instanceId]
+        if (!data) return null
+        return { instanceId, card: toCardRow(data.cardId, data) }
+      })
+      .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
+  }, [opponentState, cardMap])
 
   // Check if a card is one of the player's commanders (by cardId)
   const isCommanderCard = useCallback(
@@ -1067,12 +1103,75 @@ export default function PlayGame(props: PlayGameProps) {
             onToggleExpand={() => setOpponentExpanded((v) => !v)}
             onCardPreview={(card, instanceId) => setPreview({ card, zone: 'opponentBattlefield' as PreviewZone, instanceId })}
           />
-        ) : opponentState ? (
-          <div className="flex items-center justify-center gap-3 px-3 py-2">
-            <span className="text-[10px] font-bold text-font-muted uppercase tracking-wider">{playerNames[botId!] ?? 'Goldfish'}</span>
-            <div className="flex items-center gap-1">
-              <Heart className="h-3.5 w-3.5 text-red-400" fill="currentColor" />
-              <span className="text-sm font-bold text-font-primary">{opponentState.life}</span>
+        ) : opponentState && botId ? (
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-2">
+            <span className="text-[10px] font-bold text-font-muted uppercase tracking-wider">
+              {playerNames[botId] ?? 'Goldfish'}
+            </span>
+
+            {/* Opponent life with +/- controls — goldfish mode only, so the
+             *  player can track damage dealt to the ghost without editing
+             *  state by hand. Uses the same life_change action as own life. */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => sendAction(createLifeChange(userId, myName, botId, playerNames[botId] ?? 'Goldfish', -1))}
+                aria-label="Opponent lose 1 life"
+                className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-red"
+              >
+                <Minus size={10} />
+              </button>
+              <div className="flex items-center gap-0.5">
+                <Heart size={11} className="text-bg-red" fill="currentColor" />
+                <span className="min-w-[20px] text-center text-sm font-bold text-font-primary">
+                  {opponentState.life}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => sendAction(createLifeChange(userId, myName, botId, playerNames[botId] ?? 'Goldfish', 1))}
+                aria-label="Opponent gain 1 life"
+                className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-green"
+              >
+                <Plus size={10} />
+              </button>
+            </div>
+
+            {/* Zone counters — tap to inspect. Mirrors the bottom action bar. */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setOpponentViewingZone('graveyard')}
+                className="flex items-center gap-1 active:brightness-125"
+                aria-label="Opponent graveyard"
+              >
+                <Archive size={14} className="text-zinc-400" />
+                <span className="text-xs font-semibold tabular-nums text-font-primary">
+                  {opponentState.graveyard.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpponentViewingZone('exile')}
+                className="flex items-center gap-1 active:brightness-125"
+                aria-label="Opponent exile"
+              >
+                <Ban size={14} className="text-red-400" />
+                <span className="text-xs font-semibold tabular-nums text-font-primary">
+                  {opponentState.exile.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpponentViewingZone('library')}
+                className="flex items-center gap-1 active:brightness-125"
+                aria-label="Opponent library"
+              >
+                <Layers size={14} className="text-blue-400" />
+                <span className="text-xs font-semibold tabular-nums text-font-primary">
+                  {opponentState.libraryCount}
+                </span>
+              </button>
             </div>
           </div>
         ) : null}
@@ -1246,6 +1345,36 @@ export default function PlayGame(props: PlayGameProps) {
           onCloseAndShuffle={handleCloseAndShuffleLibrary}
           onCardPreview={(card) => setPreview({ card })}
           onCardAction={(entry) => setPreview({ card: entry.card, zone: 'library', instanceId: entry.instanceId })}
+        />
+      )}
+
+      {/* Opponent zone viewers — read-only preview (no instance actions),
+       *  since the card preview overlay's ghost-targeted moves aren't wired
+       *  up. Goldfish still benefits from seeing what's piled up there. */}
+      {opponentViewingZone === 'graveyard' && (
+        <CardZoneViewer
+          title={`${playerNames[botId ?? ''] ?? 'Opponent'} — Graveyard`}
+          cards={opponentGraveyardCards}
+          onClose={() => setOpponentViewingZone(null)}
+          onCardPreview={(card) => setPreview({ card })}
+          groupByType
+        />
+      )}
+      {opponentViewingZone === 'exile' && (
+        <CardZoneViewer
+          title={`${playerNames[botId ?? ''] ?? 'Opponent'} — Exile`}
+          cards={opponentExileCards}
+          onClose={() => setOpponentViewingZone(null)}
+          onCardPreview={(card) => setPreview({ card })}
+          groupByType
+        />
+      )}
+      {opponentViewingZone === 'library' && (
+        <CardZoneViewer
+          title={`${playerNames[botId ?? ''] ?? 'Opponent'} — Library`}
+          cards={opponentLibraryCards}
+          onClose={() => setOpponentViewingZone(null)}
+          onCardPreview={(card) => setPreview({ card })}
         />
       )}
 
