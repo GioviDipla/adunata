@@ -109,6 +109,12 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
+## ✅ [STEP] — Applicare migration `20260421140000_drop_ambiguous_process_game_action.sql`
+
+Applicata via Supabase MCP il 2026-04-21. Il DB aveva due overload di `process_game_action` (11 arg senza `p_expected_seq`, 12 arg con). Le chiamate log-only (chat_message / library_view / peak / concede) che non passavano `p_expected_seq` matchavano entrambi gli overload → PostgREST le rifiutava come ambigue. Sintomo: la chat in partita non funzionava, i messaggi non arrivavano mai su `game_log`. Droppato l'overload 11-arg; il 12-arg skippa comunque il check OCC quando `p_expected_seq IS NULL`.
+
+Verifica: `select pronargs from pg_proc where proname='process_game_action'` → deve ritornare una sola riga con `12`.
+
 ## ✅ [STEP] — Applicare migration `20260421130000_deck_cards_foil_and_set_lookup.sql`
 
 Applicata via Supabase MCP il 2026-04-21. Verifica eseguita con `information_schema`:
