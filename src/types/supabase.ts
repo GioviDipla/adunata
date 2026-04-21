@@ -321,6 +321,43 @@ export interface Database {
         }
         Relationships: []
       }
+      lobby_invitations: {
+        Row: {
+          id: string
+          lobby_id: string
+          from_user_id: string
+          to_user_id: string
+          status: 'pending' | 'accepted' | 'declined' | 'cancelled'
+          created_at: string
+          responded_at: string | null
+        }
+        Insert: {
+          id?: string
+          lobby_id: string
+          from_user_id: string
+          to_user_id: string
+          status?: 'pending' | 'accepted' | 'declined' | 'cancelled'
+          created_at?: string
+          responded_at?: string | null
+        }
+        Update: {
+          id?: string
+          lobby_id?: string
+          from_user_id?: string
+          to_user_id?: string
+          status?: 'pending' | 'accepted' | 'declined' | 'cancelled'
+          created_at?: string
+          responded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lobby_invitations_lobby_id_fkey"
+            columns: ["lobby_id"]
+            referencedRelation: "game_lobbies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_players: {
         Row: {
           id: string

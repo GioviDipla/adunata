@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import { initialColor, initialsOf } from '@/lib/utils/user'
 import ProfileStats from '@/components/users/ProfileStats'
+import InvitePlayerButton from '@/components/users/InvitePlayerButton'
 
 interface ProfileStatsRow {
   public_deck_count: number
@@ -37,7 +38,10 @@ export default async function PublicProfilePage({
 
   const isSelf = profile.id === user.id
 
-  const [{ data: statsRows }, { data: publicDecks }] = await Promise.all([
+  // Pull the viewer's decks in parallel so the "Invite to 1v1" button
+  // can render with a preloaded picker instead of deferring to a
+  // fetch-on-open roundtrip.
+  const [{ data: statsRows }, { data: publicDecks }, { data: myDecks }] = await Promise.all([
     supabase.rpc('get_profile_stats', { p_username: username }),
     supabase
       .from('decks')
@@ -45,6 +49,13 @@ export default async function PublicProfilePage({
       .eq('user_id', profile.id)
       .eq('visibility', 'public')
       .order('updated_at', { ascending: false }),
+    isSelf
+      ? Promise.resolve({ data: [] as { id: string; name: string; format: string }[] })
+      : supabase
+          .from('decks')
+          .select('id, name, format')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false }),
   ])
 
   const stats = ((statsRows ?? []) as ProfileStatsRow[])[0] ?? {
@@ -79,13 +90,19 @@ export default async function PublicProfilePage({
             Joined {new Date(profile.created_at).toLocaleDateString()}
           </p>
         </div>
-        {isSelf && (
+        {isSelf ? (
           <Link
             href="/profile"
             className="self-start rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-secondary transition-colors hover:bg-bg-hover"
           >
             Edit profile
           </Link>
+        ) : (
+          <InvitePlayerButton
+            toUserId={profile.id}
+            toDisplayName={profile.display_name}
+            decks={myDecks ?? []}
+          />
         )}
       </div>
 

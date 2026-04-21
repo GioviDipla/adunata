@@ -108,3 +108,31 @@ node --max-old-space-size=4096 scripts/sync-italian-names.mjs
 Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `printed_name` italiani via `oracle_id`, e aggiorna `cards.name_it` via la RPC `apply_italian_names`. Attesa: ~2-5 min a seconda della rete. Idempotente — se rilanciato senza `--force` salta quando il bulk non è cambiato.
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
+
+## [STEP] — Applicare migration `20260421120000_lobby_invitations.sql`
+
+Quando: prima di usare la feature "Invite to 1v1" (menu su `/play` e bottone sul profilo di un utente di community).
+Cosa fare: aprire il Supabase SQL Editor del progetto di produzione e incollare il contenuto di `supabase/migrations/20260421120000_lobby_invitations.sql`, quindi premere *Run*.
+
+La migration è additive e sicura:
+- Crea la tabella `public.lobby_invitations` (FK a `game_lobbies` e `profiles`, tutti con `on delete cascade`).
+- Due index: uno parziale sui pending ricevuti, uno secondario sugli inviati.
+- Policy RLS: select/update per sender o recipient, insert solo da self come sender.
+- `ALTER PUBLICATION supabase_realtime ADD TABLE public.lobby_invitations` — CRITICO per far ricevere in realtime le notifiche in /play. Sintomo se mancante: gli inviti arrivano nel DB ma il client non vede mai l'evento INSERT.
+
+Dove inserire il risultato: niente da inserire — il TypeScript types file (`src/types/supabase.ts`) è già stato aggiornato a mano con la Row/Insert/Update della nuova tabella. Verificato con `npx tsc --noEmit`.
+
+Come verificare a migration applicata:
+```sql
+select column_name, data_type
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'lobby_invitations'
+  order by ordinal_position;
+
+-- Dovrebbero comparire: id, lobby_id, from_user_id, to_user_id, status, created_at, responded_at
+
+select tablename from pg_publication_tables
+  where pubname = 'supabase_realtime' and schemaname = 'public';
+
+-- Tra i risultati deve apparire `lobby_invitations`.
+```

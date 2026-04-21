@@ -7,6 +7,7 @@ import CreateLobby from '@/components/play/CreateLobby'
 import JoinLobby from '@/components/play/JoinLobby'
 import ActiveLobbiesList from '@/components/play/ActiveLobbiesList'
 import GameHistoryList from '@/components/play/GameHistoryList'
+import InvitationsPanel from '@/components/play/invitations/InvitationsPanel'
 
 export default async function PlayPage() {
   const user = await getAuthenticatedUser()
@@ -14,9 +15,10 @@ export default async function PlayPage() {
 
   const supabase = await createClient()
 
-  // Decks and game_players can be fetched in parallel — independent queries.
-  // The final active-lobbies query depends on myPlayers, so it waits.
-  const [{ data: decks }, { data: myPlayers }] = await Promise.all([
+  // Decks, game_players, and incoming invitations fire in parallel —
+  // all independent. The active-lobbies query depends on myPlayers, so
+  // it still waits below.
+  const [{ data: decks }, { data: myPlayers }, { data: pendingInvites }] = await Promise.all([
     supabase
       .from('decks')
       .select('id, name, format')
@@ -26,6 +28,15 @@ export default async function PlayPage() {
       .from('game_players')
       .select('lobby_id')
       .eq('user_id', user.id),
+    supabase
+      .from('lobby_invitations')
+      .select(`
+        id, lobby_id, from_user_id, to_user_id, status, created_at,
+        sender:profiles!from_user_id(username, display_name)
+      `)
+      .eq('to_user_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }),
   ])
 
   const lobbyIds = myPlayers?.map((p) => p.lobby_id) ?? []
@@ -81,6 +92,15 @@ export default async function PlayPage() {
 
       {/* Active games */}
       <ActiveLobbiesList lobbies={activeLobbies} />
+
+      {/* 1v1 invitations — challenge a community member + incoming list */}
+      <div className="mb-6">
+        <InvitationsPanel
+          decks={decks ?? []}
+          initialInvitations={(pendingInvites ?? []) as unknown as Parameters<typeof InvitationsPanel>[0]['initialInvitations']}
+          userId={user.id}
+        />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <CreateLobby decks={decks ?? []} />
