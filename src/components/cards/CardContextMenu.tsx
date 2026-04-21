@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Plus, Heart, Share2, Loader2, Check, ChevronLeft } from 'lucide-react'
 
 interface DeckSummary {
@@ -141,7 +142,15 @@ export default function CardContextMenu({
     }
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  // Portal into document.body so no ancestor (backdrop-filter, transform,
+  // filter, etc.) can become the containing block for our `fixed` nodes.
+  // That was the root of the "popup is offset upward after the user
+  // scrolls down" bug: any ancestor that promotes itself to a containing
+  // block re-anchors fixed descendants to itself instead of the viewport,
+  // so once the ancestor scrolls off-screen the popup goes with it.
+  return createPortal(
     <>
       {/* Invisible backdrop — captures outside clicks and any scroll/touch-scroll
        *  without ever reaching the CardItem underneath, so clicking another card
@@ -257,6 +266,7 @@ export default function CardContextMenu({
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body,
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import { X, Plus, ChevronDown, Loader2, Check, ExternalLink, Heart, Share2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -297,7 +298,13 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     setAddingToDeck(null)
   }
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  // Portal into document.body so the sheet's `fixed` positioning is always
+  // anchored to the viewport. Any ancestor with backdrop-filter / transform /
+  // filter / will-change would otherwise become the containing block and
+  // carry the sheet off-screen when the page is scrolled.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop — tappable top/bottom strips are guaranteed by the sheet
        *  taking at most 85vh on mobile and sitting flush to the bottom, so
@@ -642,6 +649,7 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
