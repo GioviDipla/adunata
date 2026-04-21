@@ -127,3 +127,12 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 - **Deep-link `?open=<id>`** — `CardBrowser` al mount legge il query param, apre il `CardDetail` sulla carta corrispondente (cerca prima in `initialCards`, altrimenti fetcha). Consente a chi riceve lo share di arrivare al detail.
 - **Long-press + right-click coerenti** — `CardItem` integra il `useLongPress` esistente. onContextMenu (right-click) passa `e.clientX/Y`; onLongPress passa il centro del bounding rect della card. Il click normale è soppresso se `wasLongPress()` è true.
 - **Filtro "Liked only"** — toggle nel pannello Filters che applica `.in('id', Array.from(likedIds))`. Quando `likedIds.size === 0` usa un UUID impossibile come shortcut (PostgREST non accetta `.in('id', [])`).
+
+## Sessione 2026-04-21 — fix /cards empty after nightly sync (commit su `claude/fix-cards-section-GyA9N`)
+
+- **Rimosso `unstable_cache` dal wrapper "Newest 40 + sets" in `src/app/(app)/cards/page.tsx`.** Diagnosi: dopo il primo run del cron `daily-sync` la pagina `/cards` mostrava 0 carte e 0 set. Root cause: combinazione di due bug.
+  1. `revalidateTag('cards', 'max')` in Next.js 16 **non evicta**: con il profilo `'max'` marca l'entry come stale-but-usable per 1 anno (`expire: 31536000`). L'entry resta in cache e viene servita stale mentre una revalidation va in background.
+  2. Il wrapper `unstable_cache` faceva `data || []` sia sulla query delle 40 carte che sulla RPC `get_distinct_sets`. Qualunque errore transitorio Supabase durante la revalidation in background → `data = null` → `[]` persistito in cache → ogni visitatore vede pagina vuota fino al TTL di 1h.
+- **Fix minimale**: query inline su ogni request. 40 righe + GROUP BY su 34k con indice → costi trascurabili rispetto al valore di avere sempre dati corretti. Gli errori Supabase ora loggano invece di essere swallowati in un empty array.
+- **`revalidateTag(...)` rimossi** da entrambi i cron (`daily-sync`, `update-prices`) visto che non c'è più un bundle cached da invalidare. Se in futuro si riaggiunge la cache, usare `'use cache'` con profilo esplicito o wrappare la cache SOLO sul ramo success (non cachare mai risultati vuoti).
+- **Lezione generica**: ogni `unstable_cache(fn)` dove `fn` fa fallback silenzioso su `[]/null` in caso di errore è una trappola — il primo errore transitorio avvelena la cache. Pattern corretto: (a) propagare l'errore e non cacheare, oppure (b) avere una guardia `if (data == null) throw new Error(...)` dentro la funzione cachata, così Next non memorizza il risultato.

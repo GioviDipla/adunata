@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { mapScryfallCard, type ScryfallCard } from '@/lib/scryfall'
 
@@ -106,9 +105,6 @@ export async function GET(request: NextRequest) {
       { onConflict: 'key' },
     )
   }
-
-  // 7. Invalidate the Next cache tag so /cards serves fresh data
-  revalidateTag('cards', 'max')
 
   return NextResponse.json({
     upserted,
