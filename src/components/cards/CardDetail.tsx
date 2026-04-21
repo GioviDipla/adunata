@@ -25,19 +25,26 @@ interface CardFace {
 }
 
 /**
- * Build a Cardmarket product URL from a card name.
- * Example: "Anikthea, Hand of Erebos" → ".../Anikthea-Hand-of-Erebos"
- * For double-faced cards, Cardmarket indexes only the front-face name.
+ * Build a Cardmarket product URL for a specific printing.
+ * Real format: /it/Magic/Products/Singles/{Set-Slug}/{Card-Slug}
+ * Example: "Emeritus of Ideation // Ancestral Recall" in "Secrets of Strixhaven"
+ *   → .../Products/Singles/Secrets-of-Strixhaven/Emeritus-of-Ideation-Ancestral-Recall
+ * Double-faced cards keep both faces joined (the `//` is treated as whitespace).
+ * Without a set, fall back to Cardmarket's search so the link still resolves.
  */
-function cardmarketUrl(cardName: string): string {
-  const frontName = cardName.split('//')[0].trim()
-  const slug = frontName
-    // Strip punctuation that doesn't appear in Cardmarket slugs.
-    .replace(/[,'":!?.()]/g, '')
-    // Collapse whitespace to single hyphens.
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-  return `https://www.cardmarket.com/it/Magic/Cards/${slug}`
+function cardmarketUrl(card: { name: string; set_name?: string | null }): string {
+  const slugify = (s: string) =>
+    s
+      .replace(/[,'":!?.()]/g, '')
+      .replace(/\s*\/\/\s*/g, ' ')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+
+  const cardSlug = slugify(card.name)
+  if (card.set_name) {
+    return `https://www.cardmarket.com/it/Magic/Products/Singles/${slugify(card.set_name)}/${cardSlug}`
+  }
+  return `https://www.cardmarket.com/it/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`
 }
 
 const LEGALITY_COLORS: Record<string, string> = {
@@ -493,7 +500,7 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
 
                 {/* Primary: big Cardmarket card — the whole thing is a buy link */}
                 <a
-                  href={cardmarketUrl(displayCard.name)}
+                  href={cardmarketUrl(displayCard)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group flex items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-blue-900/60 to-blue-950/60 px-4 py-3 ring-1 ring-blue-500/40 transition-all hover:from-blue-800/70 hover:to-blue-900/70 hover:ring-blue-400/70 active:brightness-95"
