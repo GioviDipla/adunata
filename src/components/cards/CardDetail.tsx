@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { X, Plus, ChevronDown, Loader2, Check, ExternalLink, Heart, Share2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -81,6 +81,61 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   const [liked, setLiked] = useState(false)
   const [likeBusy, setLikeBusy] = useState(false)
   const [shareFeedback, setShareFeedback] = useState<null | 'copied'>(null)
+
+  // Scroll container ref — used by the swipe-down-to-close gesture so we only
+  // trigger the dismiss when the sheet is already scrolled to the top (i.e.
+  // the user isn't mid-scroll of the card body).
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const dragStartRef = useRef<{ y: number; atTop: boolean } | null>(null)
+  const [dragDelta, setDragDelta] = useState(0)
+
+  // Lock body scroll + close on Escape while the modal is mounted. Without
+  // the scroll lock, touch-scrolling inside the modal on mobile ends up
+  // scrolling the page underneath (the classic "rubber-band" leak) which
+  // offsets the backdrop and leaves the action buttons out of reach.
+  useEffect(() => {
+    const { body } = document
+    const prevOverflow = body.style.overflow
+    const prevPaddingRight = body.style.paddingRight
+    const scrollbarGap = window.innerWidth - document.documentElement.clientWidth
+    body.style.overflow = 'hidden'
+    if (scrollbarGap > 0) body.style.paddingRight = `${scrollbarGap}px`
+
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+
+    return () => {
+      body.style.overflow = prevOverflow
+      body.style.paddingRight = prevPaddingRight
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  // Swipe-down-to-close — only engages when the scroll area is at the top,
+  // so internal scrolling still works. Threshold 80px or 25% of sheet
+  // height, whichever is smaller.
+  const onTouchStart = (e: React.TouchEvent) => {
+    const el = scrollRef.current
+    if (!el) return
+    dragStartRef.current = { y: e.touches[0].clientY, atTop: el.scrollTop <= 0 }
+    setDragDelta(0)
+  }
+  const onTouchMove = (e: React.TouchEvent) => {
+    const start = dragStartRef.current
+    if (!start || !start.atTop) return
+    const dy = e.touches[0].clientY - start.y
+    if (dy > 0) setDragDelta(dy)
+  }
+  const onTouchEnd = () => {
+    const start = dragStartRef.current
+    dragStartRef.current = null
+    const threshold = Math.min(80, (scrollRef.current?.clientHeight ?? 600) * 0.25)
+    if (start?.atTop && dragDelta > threshold) {
+      onClose()
+      return
+    }
+    setDragDelta(0)
+  }
 
   const legalities = displayCard.legalities as Record<string, string> | null
   const cardFaces = displayCard.card_faces as CardFace[] | null
@@ -243,15 +298,33 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      {/* Backdrop — tappable top/bottom strips are guaranteed by the sheet
+       *  taking at most 85vh on mobile and sitting flush to the bottom, so
+       *  there is always a visible backdrop area above the sheet to tap. */}
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-bg-surface border border-border shadow-2xl">
+      {/* Modal sheet */}
+      <div
+        ref={scrollRef}
+        className="relative z-10 flex w-full max-w-3xl max-h-[85vh] sm:max-h-[90vh] flex-col overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-xl bg-bg-surface border border-border shadow-2xl transition-transform duration-150 ease-out"
+        style={{
+          transform: dragDelta > 0 ? `translateY(${dragDelta}px)` : undefined,
+          touchAction: 'pan-y',
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+      >
+        {/* Drag handle — mobile-only affordance for swipe-down-to-close */}
+        <div className="flex justify-center pt-2 pb-1 sm:hidden" aria-hidden="true">
+          <div className="h-1 w-10 rounded-full bg-border" />
+        </div>
+
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-bg-surface border-b border-border">
           <div className="flex items-center gap-3">
