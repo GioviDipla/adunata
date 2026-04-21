@@ -226,12 +226,20 @@ export default function DeckCard({
         </div>
       )}
 
-      {/* Context menu for moving between boards */}
+      {/* Context menu for moving between boards + inline quantity / commander */}
       {contextMenu && onMoveToBoard && (
         <CardContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           currentBoard={board}
+          quantity={quantity}
+          onQuantityChange={
+            onQuantityChange ? (next) => onQuantityChange(card.id, next, board) : undefined
+          }
+          isCommander={isCommander}
+          onToggleCommander={
+            onToggleCommander ? () => onToggleCommander(card.id, board) : undefined
+          }
           onMoveToBoard={(toBoard) => onMoveToBoard(card.id, board, toBoard)}
           onRemove={onRemove ? () => onRemove(card.id, board) : undefined}
           onClose={() => setContextMenu(null)}

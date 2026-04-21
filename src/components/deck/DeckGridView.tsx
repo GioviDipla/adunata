@@ -191,16 +191,33 @@ export default function DeckGridView({
           </div>
         )
       })}
-      {contextMenu && onMoveToBoard && (
-        <CardContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          currentBoard={contextMenu.board}
-          onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}
-          onRemove={onRemove ? () => onRemove(contextMenu.cardId, contextMenu.board) : undefined}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
+      {contextMenu && onMoveToBoard && (() => {
+        const entry = cards.find(
+          (e) => e.card.id === contextMenu.cardId && e.board === contextMenu.board,
+        )
+        return (
+          <CardContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            currentBoard={contextMenu.board}
+            quantity={entry?.quantity}
+            onQuantityChange={
+              onQuantityChange
+                ? (next) => onQuantityChange(contextMenu.cardId, next, contextMenu.board)
+                : undefined
+            }
+            isCommander={isCommander?.(contextMenu.cardId) ?? false}
+            onToggleCommander={
+              onToggleCommander
+                ? () => onToggleCommander(contextMenu.cardId, contextMenu.board)
+                : undefined
+            }
+            onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}
+            onRemove={onRemove ? () => onRemove(contextMenu.cardId, contextMenu.board) : undefined}
+            onClose={() => setContextMenu(null)}
+          />
+        )
+      })()}
     </div>
   )
 }

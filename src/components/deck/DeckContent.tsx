@@ -278,6 +278,8 @@ export default function DeckContent({
               onToggleCommander={onToggleCommander}
               onCardClick={onCardClick}
               onMoveToBoard={onMoveToBoard}
+              onQuantityChange={onQuantityChange}
+              onRemove={onRemove}
             />
           ) : (
             <div className="flex flex-col gap-1">
@@ -361,6 +363,8 @@ export default function DeckContent({
           onToggleCommander={onToggleCommander}
           onCardClick={onCardClick}
           onMoveToBoard={onMoveToBoard}
+          onQuantityChange={onQuantityChange}
+          onRemove={onRemove}
         />
       )}
     </div>
