@@ -21,9 +21,11 @@ export const CARD_GRID_COLUMNS =
 export const CARD_GAME_COLUMNS =
   'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, power, toughness, keywords, produced_mana, layout, card_faces, has_upkeep_trigger, has_etb_trigger, has_attacks_trigger, has_dies_trigger, has_end_step_trigger, has_cast_trigger'
 
-/** Deck view / editor: game-level data + prices + released_at (for sorting/stats). No legalities, no search_vector. */
+/** Deck view / editor: game-level data + prices + released_at (for sorting/stats). No legalities, no search_vector.
+ *  `flavor_name` is carried so the bulk importer can index just-upserted UB reprints
+ *  under both the canonical and flavor name in its in-memory resolution maps. */
 export const CARD_DECK_COLUMNS =
-  'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, released_at'
+  'id, scryfall_id, name, flavor_name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, released_at'
 
 /** CardDetail modal: deck columns + legalities. Everything except search_vector and timestamps. */
 export const CARD_DETAIL_COLUMNS =

@@ -15,6 +15,7 @@ export interface Database {
           scryfall_id: string
           name: string
           name_it: string | null
+          flavor_name: string | null
           mana_cost: string | null
           cmc: number
           type_line: string
@@ -56,6 +57,7 @@ export interface Database {
           scryfall_id: string
           name: string
           name_it?: string | null
+          flavor_name?: string | null
           mana_cost?: string | null
           cmc: number
           type_line: string
@@ -97,6 +99,7 @@ export interface Database {
           scryfall_id?: string
           name?: string
           name_it?: string | null
+          flavor_name?: string | null
           mana_cost?: string | null
           cmc?: number
           type_line?: string

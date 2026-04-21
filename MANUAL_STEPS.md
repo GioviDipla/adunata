@@ -109,6 +109,10 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
+## ✅ [STEP] — Applicare migration `20260421150000_cards_flavor_name_for_ub_reprints.sql`
+
+Applicata via Supabase MCP il 2026-04-21. Aggiunge `cards.flavor_name` + indice funzionale `lower(flavor_name)`, ed estende `lookup_cards_by_names` e `lookup_cards_by_name_and_set` a matchare anche sul flavor name. Sblocca l'import di Universes Beyond reprints (Paradise Chocobo → Birds of Paradise, Balin's Tomb → Ancient Tomb) senza round-trip Scryfall su import ripetuti.
+
 ## ✅ [STEP] — Applicare migration `20260421140000_drop_ambiguous_process_game_action.sql`
 
 Applicata via Supabase MCP il 2026-04-21. Il DB aveva due overload di `process_game_action` (11 arg senza `p_expected_seq`, 12 arg con). Le chiamate log-only (chat_message / library_view / peak / concede) che non passavano `p_expected_seq` matchavano entrambi gli overload → PostgREST le rifiutava come ambigue. Sintomo: la chat in partita non funzionava, i messaggi non arrivavano mai su `game_log`. Droppato l'overload 11-arg; il 12-arg skippa comunque il check OCC quando `p_expected_seq IS NULL`.

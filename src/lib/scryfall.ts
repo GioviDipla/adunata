@@ -30,6 +30,9 @@ export interface ScryfallCard {
   card_faces?: ScryfallCardFace[]
   lang?: string
   printed_name?: string
+  /** Universes Beyond reprint flavor name — "Paradise Chocobo" on the
+   *  "Birds of Paradise" Scryfall card, etc. Absent on most printings. */
+  flavor_name?: string
   prices?: {
     usd?: string | null
     usd_foil?: string | null
@@ -237,6 +240,7 @@ export function mapScryfallCard(card: ScryfallCard): CardInsert {
   return {
     scryfall_id: card.id,
     name: card.name,
+    flavor_name: card.flavor_name ?? null,
     mana_cost: card.mana_cost ?? frontFace?.mana_cost ?? null,
     cmc: card.cmc ?? 0,
     type_line: card.type_line ?? frontFace?.type_line ?? 'Unknown',

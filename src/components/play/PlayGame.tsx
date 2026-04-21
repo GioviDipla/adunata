@@ -48,6 +48,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     scryfall_id: '',
     name: data.name,
     name_it: null,
+    flavor_name: null,
     mana_cost: data.manaCost ?? null,
     cmc: 0,
     type_line: data.typeLine,

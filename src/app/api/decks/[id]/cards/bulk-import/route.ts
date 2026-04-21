@@ -106,7 +106,16 @@ export async function POST(
       return NextResponse.json({ error: setRpcError.message }, { status: 500 })
     }
     for (const c of (setCards ?? []) as CardRow[]) {
-      if (c.set_code) cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
+      if (c.set_code) {
+        cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
+        // Index UB reprints under the flavor name too so a paste of
+        // "Paradise Chocobo (FIC)" resolves via the in-memory map
+        // populated from the local `cards` row whose canonical name
+        // is "Birds of Paradise".
+        if (c.flavor_name) {
+          cardByNameAndSet.set(pairKey(c.flavor_name, c.set_code), c)
+        }
+      }
     }
   }
 
@@ -133,6 +142,7 @@ export async function POST(
     }
     for (const c of (localCards ?? []) as CardRow[]) {
       cardByLowerName.set(nameKey(c.name), c)
+      if (c.flavor_name) cardByLowerName.set(nameKey(c.flavor_name), c)
     }
   }
 
@@ -163,9 +173,17 @@ export async function POST(
       return
     }
     for (const c of (upserted ?? []) as CardRow[]) {
-      if (c.set_code) cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
+      if (c.set_code) {
+        cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
+        if (c.flavor_name) {
+          cardByNameAndSet.set(pairKey(c.flavor_name, c.set_code), c)
+        }
+      }
       if (!cardByLowerName.has(nameKey(c.name))) {
         cardByLowerName.set(nameKey(c.name), c)
+      }
+      if (c.flavor_name && !cardByLowerName.has(nameKey(c.flavor_name))) {
+        cardByLowerName.set(nameKey(c.flavor_name), c)
       }
     }
   }
