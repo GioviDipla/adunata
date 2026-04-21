@@ -820,6 +820,7 @@ export default function CardBrowser({
 
       {contextMenu && (
         <CardContextMenu
+          cardId={contextMenu.card.id}
           cardName={contextMenu.card.name}
           shareUrl={
             typeof window !== 'undefined'
@@ -829,7 +830,7 @@ export default function CardBrowser({
           x={contextMenu.x}
           y={contextMenu.y}
           liked={likedIds.has(String(contextMenu.card.id))}
-          onAddToDeck={() => setSelectedCard(contextMenu.card)}
+          userDecks={userDecks}
           onToggleLike={() => toggleLike(contextMenu.card)}
           onClose={() => setContextMenu(null)}
         />
