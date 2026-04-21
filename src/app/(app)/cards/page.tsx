@@ -1,4 +1,3 @@
-import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
@@ -7,42 +6,36 @@ import CardBrowser from '@/components/cards/CardBrowser'
 import type { Database } from '@/types/supabase'
 
 type Card = Database['public']['Tables']['cards']['Row']
+type SetInfo = { set_code: string; set_name: string; latest_release: string }
 
 export const metadata = {
   title: 'Card Database - Adunata!!!',
   description: 'Browse and search Magic: The Gathering cards',
 }
 
-/**
- * Shared across users — "Newest 40" + the distinct sets list both change
- * on a cadence of hours, so we pin them behind Next's data cache with a
- * tag and let ISR-style revalidation serve the warm copy.
- *
- * Must use the admin client here: the SSR client reads auth cookies and
- * Next.js forbids cookies() inside unstable_cache. Everything fetched
- * here is public catalog data, so bypassing RLS via service role is
- * semantically equivalent and safe.
- */
-const getPublicCardsData = unstable_cache(
-  async () => {
-    const admin = createAdminClient()
-    const [{ data: initialCards }, { data: sets }] = await Promise.all([
-      admin
-        .from('cards')
-        .select(CARD_GRID_COLUMNS)
-        .not('released_at', 'is', null)
-        .order('released_at', { ascending: false })
-        .limit(40),
-      admin.rpc('get_distinct_sets'),
-    ])
-    return {
-      initialCards: (initialCards || []) as unknown as Card[],
-      sets: (sets as { set_code: string; set_name: string; latest_release: string }[]) || [],
-    }
-  },
-  ['cards-page-public'],
-  { revalidate: 3600, tags: ['cards', 'sets'] }
-)
+// Refetch the shared "Newest 40" + sets bundle on every request. A previous
+// unstable_cache wrapper poisoned itself on transient Supabase errors — the
+// fallback `data || []` was written into the cache and then served to every
+// visitor until the 1h TTL expired. The queries are cheap enough (limit 40
+// + a 34k-row GROUP BY through a stable index) to run inline.
+async function getPublicCardsData(): Promise<{ initialCards: Card[]; sets: SetInfo[] }> {
+  const admin = createAdminClient()
+  const [cardsRes, setsRes] = await Promise.all([
+    admin
+      .from('cards')
+      .select(CARD_GRID_COLUMNS)
+      .not('released_at', 'is', null)
+      .order('released_at', { ascending: false })
+      .limit(40),
+    admin.rpc('get_distinct_sets'),
+  ])
+  if (cardsRes.error) console.error('cards/page newest-40 failed:', cardsRes.error.message)
+  if (setsRes.error) console.error('cards/page get_distinct_sets failed:', setsRes.error.message)
+  return {
+    initialCards: (cardsRes.data || []) as unknown as Card[],
+    sets: (setsRes.data as SetInfo[]) || [],
+  }
+}
 
 export default async function CardsPage() {
   const supabase = await createClient()
