@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { DECK_LIST_COLUMNS } from '@/lib/supabase/columns'
 
@@ -68,5 +69,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  revalidatePath('/decks')
   return NextResponse.json({ deck }, { status: 201 })
 }

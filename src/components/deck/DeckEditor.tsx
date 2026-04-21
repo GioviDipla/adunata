@@ -391,7 +391,10 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     setDeleting(true)
     const res = await fetch(`/api/decks/${deck.id}`, { method: 'DELETE' })
     if (res.ok) {
-      router.push('/decks')
+      // router.refresh() invalidates the client Router Cache so the /decks
+      // list re-fetches after push — without it the deleted deck can linger.
+      router.replace('/decks')
+      router.refresh()
     }
     setDeleting(false)
   }

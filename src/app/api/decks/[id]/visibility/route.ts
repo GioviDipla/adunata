@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 export async function PATCH(
@@ -37,5 +38,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Deck not found' }, { status: 404 })
   }
 
+  revalidatePath(`/decks/${deckId}`)
+  revalidatePath('/decks')
   return NextResponse.json({ visibility: data.visibility })
 }

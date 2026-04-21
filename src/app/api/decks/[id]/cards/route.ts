@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { DECK_CARD_COLUMNS } from '@/lib/supabase/columns'
+
+function revalidateDeckRoutes(deckId: string) {
+  revalidatePath(`/decks/${deckId}`)
+  revalidatePath('/decks')
+}
 
 async function verifyDeckOwnership(supabase: Awaited<ReturnType<typeof createClient>>, deckId: string, userId: string) {
   const { data: deck } = await supabase
@@ -63,6 +69,7 @@ export async function POST(
       .update({ updated_at: new Date().toISOString() })
       .eq('id', deckId)
 
+    revalidateDeckRoutes(deckId)
     return NextResponse.json({ deck_card: updated })
   }
 
@@ -83,6 +90,7 @@ export async function POST(
     .update({ updated_at: new Date().toISOString() })
     .eq('id', deckId)
 
+  revalidateDeckRoutes(deckId)
   return NextResponse.json({ deck_card: deckCard }, { status: 201 })
 }
 
@@ -127,6 +135,7 @@ export async function PUT(
       .update({ updated_at: new Date().toISOString() })
       .eq('id', deckId)
 
+    revalidateDeckRoutes(deckId)
     return NextResponse.json({ deleted: true })
   }
 
@@ -152,6 +161,7 @@ export async function PUT(
     .update({ updated_at: new Date().toISOString() })
     .eq('id', deckId)
 
+  revalidateDeckRoutes(deckId)
   return NextResponse.json({ deck_card: updated })
 }
 
@@ -194,5 +204,6 @@ export async function DELETE(
     .update({ updated_at: new Date().toISOString() })
     .eq('id', deckId)
 
+  revalidateDeckRoutes(deckId)
   return NextResponse.json({ success: true })
 }

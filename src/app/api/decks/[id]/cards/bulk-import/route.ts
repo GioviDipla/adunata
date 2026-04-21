@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { lookupCardsByNames, mapScryfallCard } from '@/lib/scryfall'
@@ -205,6 +206,9 @@ export async function POST(
       .from('decks')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', deckId)
+
+    revalidatePath(`/decks/${deckId}`)
+    revalidatePath('/decks')
   }
 
   return NextResponse.json({

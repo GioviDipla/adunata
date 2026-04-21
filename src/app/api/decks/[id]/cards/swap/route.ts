@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { DECK_CARD_COLUMNS } from '@/lib/supabase/columns'
 
@@ -57,5 +58,7 @@ export async function PUT(
     .update({ updated_at: new Date().toISOString() })
     .eq('id', deckId)
 
+  revalidatePath(`/decks/${deckId}`)
+  revalidatePath('/decks')
   return NextResponse.json({ updated })
 }

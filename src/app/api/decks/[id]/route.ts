@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { CARD_DECK_COLUMNS, DECK_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 
@@ -70,6 +71,8 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  revalidatePath('/decks')
+  revalidatePath(`/decks/${id}`)
   return NextResponse.json({ deck })
 }
 
@@ -98,5 +101,7 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  revalidatePath('/decks')
+  revalidatePath(`/decks/${id}`)
   return NextResponse.json({ success: true })
 }
