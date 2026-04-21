@@ -73,12 +73,17 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
     // Quantity is optional — default to 1 when the line starts with the
     // card name directly (common when users hand-write the list).
     //
-    // Collector pattern accepts alphanumerics (e.g. `266p` for promo
-    // variants) plus `★` and `-` so we don't greedy-absorb the suffix
-    // into the card name. The old `\d+` pattern refused to match `266p`,
-    // forcing the non-greedy name capture to swallow the whole tail.
+    // Collector only appears AFTER a set code — that's how Moxfield /
+    // Manabox / Archidekt emit them. Tying the collector to the set
+    // group stops the alphanumeric pattern from eating the last word
+    // of a card name on lines without a set (e.g. "1 Balin's Tomb"
+    // used to parse as name="Balin's" + collector="Tomb").
+    //
+    // Inside that group the collector accepts alphanumerics plus `★`
+    // and `-` so promo variants like `266p` or The-List entries like
+    // `KHM-251` don't fall back into the name.
     const match = workingLine.match(
-      /^(?:(\d+)\s*x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]+)\))?(?:\s+[A-Za-z0-9★\-]+)?$/
+      /^(?:(\d+)\s*x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]+)\)(?:\s+[A-Za-z0-9★\-]+)?)?$/
     )
 
     if (match) {
