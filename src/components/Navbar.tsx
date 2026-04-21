@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
-import PendingInvitesIndicator from "./PendingInvitesIndicator";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -87,14 +86,13 @@ export function Navbar() {
                 title={item.label}
               >
                 <span
-                  className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full backdrop-blur-md ring-1 transition-colors ${
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full backdrop-blur-md ring-1 transition-colors ${
                     active
                       ? "bg-bg-accent/80 text-font-white ring-font-white/30"
                       : "bg-bg-dark/60 text-font-primary ring-white/10 group-hover:bg-white/10"
                   }`}
                 >
                   <Icon className="h-5 w-5" />
-                  {item.href === "/play" && <PendingInvitesIndicator />}
                 </span>
                 {!collapsed && item.label}
               </Link>
@@ -206,14 +204,13 @@ export function Navbar() {
                   }`}
                 >
                   <span
-                    className={`relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
+                    className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                       active
                         ? "bg-bg-accent/85 text-font-white ring-font-white/40"
                         : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
                     }`}
                   >
                     <Icon className="h-8 w-8" />
-                    {item.href === "/play" && <PendingInvitesIndicator />}
                   </span>
                   <span
                     className={`rounded-full px-4 py-2 text-base ring-1 backdrop-blur-xl transition-colors ${
