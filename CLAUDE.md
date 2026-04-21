@@ -1,5 +1,25 @@
 # Istruzioni operative — Adunata
 
+## Branch strategy (GitFlow semplificato)
+
+**Non pushare mai direttamente su `main`.** Il repo ha tre branch long-lived:
+
+- `dev` — dove si lavora giorno per giorno. Ogni commit parte da qui. Vercel produce preview URL per ogni push.
+- `release` — staging. Ci finisce quando `dev` è pronto a essere validato. Anche qui preview Vercel.
+- `main` — produzione (`adunata.studiob35.com`). Ci finisce solo quando `release` è validato.
+
+Flow ad ogni iterazione:
+1. Checkout `dev`, lavora, commit, push → `origin/dev`.
+2. Quando il set di change è pronto per staging: apri PR `dev → release` (o fast-forward se non ci sono conflitti).
+3. Quando `release` è validato: apri PR `release → main`.
+4. Dopo ogni merge in `main`: merge-back `main → dev` per mantenere i branch allineati (evita drift su hotfix applicati direttamente).
+
+**Hotfix d'emergenza**: branch `hotfix/*` da `main`, merge in `main`, poi merge-back in `dev` e `release`. Niente da cherry-pick manuale.
+
+Lo strumento `commit-commands:commit-push-pr` e le operazioni autonome di commit/push devono sempre operare su `dev` di default. Solo quando l'utente chiede esplicitamente "promuovi a release" o "deploya in produzione" si fa il PR verso `release`/`main`.
+
+Nota su Supabase e MCP: il DB è condiviso tra tutti gli ambienti (un solo progetto Supabase). Le migration applicate via MCP impattano subito anche `main` — trattale come "production-first" e applicale solo quando il codice che le usa è pronto a essere mergiato.
+
 ## Comportamento richiesto
 
 Lavora in modo completamente autonomo, senza mai fermarti per chiedere conferme, approvazioni o chiarimenti. Non fare domande. Non aspettare input dall'utente. Non chiedere "sei sicuro?", "posso procedere?", "vuoi che continui?". Mai.
