@@ -6,11 +6,16 @@ import { Lock, Globe, Loader2 } from 'lucide-react'
 interface VisibilityToggleProps {
   deckId: string
   initialVisibility: 'private' | 'public'
+  /** Fires after a successful flip — the ShareDeckButton uses this to
+   *  stay in sync so it skips the "make public first?" confirm when
+   *  the user already flipped the pill. */
+  onChange?: (next: 'private' | 'public') => void
 }
 
 export default function VisibilityToggle({
   deckId,
   initialVisibility,
+  onChange,
 }: VisibilityToggleProps) {
   const [visibility, setVisibility] = useState(initialVisibility)
   const [pending, startTransition] = useTransition()
@@ -35,6 +40,7 @@ export default function VisibilityToggle({
           setError(data.error ?? 'Update failed')
           return
         }
+        onChange?.(next)
       } catch (e) {
         setVisibility(previous)
         setError(e instanceof Error ? e.message : 'Network error')

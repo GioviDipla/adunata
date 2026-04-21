@@ -26,6 +26,7 @@ import CardDetail from '@/components/cards/CardDetail'
 import ImportCardsModal from './ImportCardsModal'
 import DeckContent from './DeckContent'
 import VisibilityToggle from './VisibilityToggle'
+import ShareDeckButton from './ShareDeckButton'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -60,6 +61,12 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const [deleting, setDeleting] = useState(false)
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [showImport, setShowImport] = useState(false)
+  // Lifted so the ShareDeckButton sees the current value even after the
+  // user flips the VisibilityToggle pills — it skips the "make public
+  // first?" confirm if the deck is already public.
+  const [deckVisibility, setDeckVisibility] = useState<'private' | 'public'>(
+    (deck.visibility as 'private' | 'public') ?? 'private',
+  )
   // Pre-filled text for the import-from-string modal. Populated on
   // mount when the deck was just created via /decks/import and some
   // lines failed; the import page stashes the original failed lines
@@ -484,7 +491,15 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           </Link>
           <VisibilityToggle
             deckId={deck.id}
-            initialVisibility={(deck.visibility as 'private' | 'public') ?? 'private'}
+            initialVisibility={deckVisibility}
+            onChange={setDeckVisibility}
+          />
+          <ShareDeckButton
+            deckId={deck.id}
+            deckName={deckName}
+            visibility={deckVisibility}
+            isOwner
+            onVisibilityChanged={(next) => setDeckVisibility(next)}
           />
           <Button
             variant="secondary"

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Copy, Check, Globe, Printer } from 'lucide-react'
 import DeckContent, { type DeckCardEntry } from './DeckContent'
 import ProxyPrintModal from './ProxyPrintModal'
+import ShareDeckButton from './ShareDeckButton'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
 import DeckEngagement from './DeckEngagement'
@@ -131,6 +132,12 @@ export default function DeckView({
           >
             <Printer className="h-3.5 w-3.5" /> Proxy
           </button>
+          <ShareDeckButton
+            deckId={deck.id}
+            deckName={deck.name}
+            visibility="public"
+            isOwner={false}
+          />
           {copyError && (
             <span className="text-[11px] text-bg-red">{copyError}</span>
           )}
