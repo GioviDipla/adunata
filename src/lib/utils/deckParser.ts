@@ -72,13 +72,22 @@ export function parseDeckList(text: string, defaultBoard = 'main'): ParsedCard[]
 
     // Quantity is optional — default to 1 when the line starts with the
     // card name directly (common when users hand-write the list).
+    //
+    // Collector pattern accepts alphanumerics (e.g. `266p` for promo
+    // variants) plus `★` and `-` so we don't greedy-absorb the suffix
+    // into the card name. The old `\d+` pattern refused to match `266p`,
+    // forcing the non-greedy name capture to swallow the whole tail.
     const match = workingLine.match(
-      /^(?:(\d+)\s*x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]+)\))?(?:\s+\d+)?$/
+      /^(?:(\d+)\s*x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]+)\))?(?:\s+[A-Za-z0-9★\-]+)?$/
     )
 
     if (match) {
       const quantity = match[1] ? parseInt(match[1], 10) : 1
-      const name = match[2].trim()
+      // Moxfield / Manabox / Archidekt export DFCs with ` / ` (single
+      // slash); Scryfall — and therefore our `cards` table — stores
+      // them as ` // ` (double slash). Normalize here so the lookup
+      // matches both locally and at the Scryfall fallback.
+      const name = match[2].trim().replace(/\s+\/\s+/g, ' // ')
       const setCode = match[3] || undefined
       if (quantity > 0 && name) {
         cards.push({ name, quantity, board, setCode, isFoil })

@@ -142,6 +142,32 @@ export async function POST(
     return cardByLowerName.get(nameKey(entry.name)) ?? null
   }
 
+  const upsertFound = async (
+    found: Awaited<ReturnType<typeof lookupCardsByIdentifiers>>['found'],
+  ) => {
+    const toUpsert = found.map(mapScryfallCard)
+    if (toUpsert.length === 0) return
+    const { data: upserted, error: upsertErr } = await admin
+      .from('cards')
+      .upsert(toUpsert, { onConflict: 'scryfall_id' })
+      .select(CARD_DECK_COLUMNS)
+    if (upsertErr) {
+      // Don't fail the whole import — log so the server tail shows the
+      // mapping / schema mismatch, and let the affected entries fall
+      // into the `failures` bucket at the final resolve step.
+      console.error('[bulk-import] card upsert failed', upsertErr)
+      return
+    }
+    for (const c of (upserted ?? []) as CardRow[]) {
+      if (c.set_code) cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
+      if (!cardByLowerName.has(nameKey(c.name))) {
+        cardByLowerName.set(nameKey(c.name), c)
+      }
+    }
+  }
+
+  // First pass: ask Scryfall with `(name, set)` so we get the exact
+  // printing when the user pinned one.
   const scryfallNeeded = entries.filter((e) => !resolve(e))
   if (scryfallNeeded.length > 0) {
     const seen = new Set<string>()
@@ -154,23 +180,27 @@ export async function POST(
     }
 
     const { found } = await lookupCardsByIdentifiers(identifiers)
-    const toUpsert = found.map(mapScryfallCard)
+    await upsertFound(found)
+  }
 
-    if (toUpsert.length > 0) {
-      const { data: upserted } = await admin
-        .from('cards')
-        .upsert(toUpsert, { onConflict: 'scryfall_id' })
-        .select(CARD_DECK_COLUMNS)
-
-      for (const c of (upserted ?? []) as CardRow[]) {
-        if (c.set_code) cardByNameAndSet.set(pairKey(c.name, c.set_code), c)
-        // Populate name-only map as a fallback so entries without setCode
-        // that share a name with a just-imported printing still resolve.
-        if (!cardByLowerName.has(nameKey(c.name))) {
-          cardByLowerName.set(nameKey(c.name), c)
-        }
-      }
+  // Second pass: anything still unresolved — either the `(name, set)`
+  // lookup missed (set code wrong, printing not on Scryfall, surge-foil
+  // variant quirks) or the entry had no set to begin with. Retry with
+  // name only so we at least land on some printing rather than 404'ing
+  // the user. If Scryfall finds a different printing we prefer exact
+  // first, so any previously-populated set-specific hit still wins.
+  const stillNeeded = entries.filter((e) => !resolve(e))
+  if (stillNeeded.length > 0) {
+    const seen = new Set<string>()
+    const identifiers: { name: string }[] = []
+    for (const e of stillNeeded) {
+      const k = nameKey(e.name)
+      if (seen.has(k)) continue
+      seen.add(k)
+      identifiers.push({ name: e.name.trim() })
     }
+    const { found } = await lookupCardsByIdentifiers(identifiers)
+    await upsertFound(found)
   }
 
   // --- 4. Resolve each entry → card, merge quantities per (cardId, board, foil).

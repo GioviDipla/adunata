@@ -60,7 +60,23 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
   const [deleting, setDeleting] = useState(false)
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [showImport, setShowImport] = useState(false)
+  // Pre-filled text for the import-from-string modal. Populated on
+  // mount when the deck was just created via /decks/import and some
+  // lines failed; the import page stashes the original failed lines
+  // in sessionStorage so the user can retry them without re-typing.
+  const [importPrefill, setImportPrefill] = useState<string>('')
   const [showExpandedStats, setShowExpandedStats] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = `retry-import-${deck.id}`
+    const pending = sessionStorage.getItem(key)
+    if (pending) {
+      sessionStorage.removeItem(key)
+      setImportPrefill(pending)
+      setShowImport(true)
+    }
+  }, [deck.id])
   const [tokenSearch, setTokenSearch] = useState('')
   const [tokenSearchResults, setTokenSearchResults] = useState<CardRow[]>([])
   const [searchingTokens, setSearchingTokens] = useState(false)
@@ -698,7 +714,11 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
         <ImportCardsModal
           deckId={deck.id}
           currentBoard={activeTab}
-          onClose={() => setShowImport(false)}
+          initialText={importPrefill}
+          onClose={() => {
+            setShowImport(false)
+            setImportPrefill('')
+          }}
           onCardsImported={(imported) => {
             for (const { card, board } of imported) {
               handleCardAdded(card, board)

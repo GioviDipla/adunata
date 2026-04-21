@@ -11,6 +11,8 @@ type CardRow = Database['public']['Tables']['cards']['Row']
 interface ImportCardsModalProps {
   deckId: string
   currentBoard: string
+  /** Pre-fills the textarea — used by the import-retry flow. */
+  initialText?: string
   onClose: () => void
   onCardsImported: (cards: { card: CardRow; board: string }[]) => void
 }
@@ -18,10 +20,11 @@ interface ImportCardsModalProps {
 export default function ImportCardsModal({
   deckId,
   currentBoard,
+  initialText,
   onClose,
   onCardsImported,
 }: ImportCardsModalProps) {
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText ?? '')
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failures, setFailures] = useState<string[]>([])

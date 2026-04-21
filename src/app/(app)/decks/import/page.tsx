@@ -31,6 +31,10 @@ export default function ImportDeckPage() {
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failures, setFailures] = useState<string[]>([])
+  // Original paste lines for each failed card — threaded through sessionStorage
+  // into the deck editor so the retry modal opens with the exact text the user
+  // pasted (set codes + foil markers preserved).
+  const [failureLines, setFailureLines] = useState<string[]>([])
   const deckIdRef = useRef<string>('')
 
   async function handleImport(e: React.FormEvent) {
@@ -105,6 +109,23 @@ export default function ImportDeckPage() {
       const importFailures = data.failures ?? []
       if (importFailures.length > 0) {
         setFailures(importFailures.map((f) => f.name))
+        // Map each failed parsed-name back to the line the user pasted,
+        // so "Continue to Deck" can pre-fill the retry modal with the
+        // full original syntax (set codes, collector numbers, foil
+        // markers) instead of just a bare card name.
+        const failedNames = new Set(
+          importFailures.map((f) => f.name.trim().toLowerCase()),
+        )
+        const originals: string[] = []
+        for (const rawLine of deckText.split('\n')) {
+          const line = rawLine.trim()
+          if (!line || line.startsWith('//')) continue
+          const [parsed] = parseDeckList(line)
+          if (parsed && failedNames.has(parsed.name.trim().toLowerCase())) {
+            originals.push(line)
+          }
+        }
+        setFailureLines(originals)
       } else {
         router.push(`/decks/${deck.id}`)
       }
@@ -222,7 +243,19 @@ export default function ImportDeckPage() {
             ))}
           </ul>
           <button
-            onClick={() => router.push(`/decks/${deckIdRef.current}`)}
+            onClick={() => {
+              const deckId = deckIdRef.current
+              // Stash the failed lines so the deck page can auto-open
+              // the import-from-text modal pre-filled. Keyed by deck id
+              // to survive the navigation; cleared after read.
+              if (failureLines.length > 0 && typeof window !== 'undefined') {
+                sessionStorage.setItem(
+                  `retry-import-${deckId}`,
+                  failureLines.join('\n'),
+                )
+              }
+              router.push(`/decks/${deckId}`)
+            }}
             className="rounded-lg bg-bg-accent px-4 py-2 text-sm font-medium text-font-white hover:bg-bg-accent-dark transition-colors"
           >
             Continue to Deck
