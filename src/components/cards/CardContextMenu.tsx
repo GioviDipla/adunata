@@ -22,20 +22,12 @@ interface CardContextMenuProps {
 }
 
 /**
- * Contextual actions over a card in the browser.
+ * Floating context menu shown on long-press (mobile) or right-click
+ * (desktop) over a card in the browser. Positioned near the pointer,
+ * clamped inside the viewport, dismissed on outside click or Escape.
  *
- * Layout:
- *  - Desktop (sm and up): floating menu anchored at the (x, y) pointer
- *    position with viewport clamping — matches the right-click mental
- *    model.
- *  - Mobile (< sm): bottom sheet. The pointer coords make no sense for a
- *    thumb-sized UI, and a properly modal sheet solves the old bug where
- *    scrolling the page behind would drag the menu "off" the actual
- *    buttons. Body scroll is locked while the sheet is mounted.
- *
- * "Add to Deck" swaps the sheet's contents for a scrollable deck picker
- * in-place — no second modal, no context switch. Escape first backs out
- * of the picker, then closes.
+ * When the user taps "Add to Deck" the menu swaps its contents in-place
+ * for a scrollable deck picker — no full-screen modal, no context switch.
  */
 export default function CardContextMenu({
   cardId,
@@ -55,17 +47,21 @@ export default function CardContextMenu({
   const [addingToDeckId, setAddingToDeckId] = useState<string | null>(null)
   const [addedToDeckId, setAddedToDeckId] = useState<string | null>(null)
 
-  // Escape: deck picker → main menu → close. Body scroll lock while
-  // mounted so a stray touch-scroll on mobile can't drag the page
-  // behind the sheet and visually detach the buttons from the finger.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      if (mode === 'decks') setMode('menu')
-      else onClose()
+      if (e.key === 'Escape') {
+        // If inside the deck picker, escape steps back to the main menu
+        // first — the user's "back" expectation before actually closing.
+        if (mode === 'decks') setMode('menu')
+        else onClose()
+      }
     }
     document.addEventListener('keydown', onKey)
 
+    // Lock body scroll while the menu is open so a stray touch-scroll on
+    // mobile can't drag the page behind — which used to visually detach
+    // the floating panel from the buttons the user was trying to tap.
+    // Pure CSS lock; the menu stays a floating context menu, not a sheet.
     const { body } = document
     const prevOverflow = body.style.overflow
     const prevPaddingRight = body.style.paddingRight
@@ -80,15 +76,15 @@ export default function CardContextMenu({
     }
   }, [onClose, mode])
 
-  // Desktop-only clamping. On mobile we ignore (x, y) entirely and let
-  // the bottom-sheet classes position the panel.
+  // Clamp position so the menu fits inside the viewport. The deck picker
+  // reserves more vertical space so long deck lists don't get clipped.
   const MENU_W = 240
   const MENU_H = mode === 'decks' ? 280 : 160
   const pad = 8
   const viewW = typeof window !== 'undefined' ? window.innerWidth : 0
   const viewH = typeof window !== 'undefined' ? window.innerHeight : 0
-  const left = Math.min(Math.max(pad, x - MENU_W / 2), Math.max(pad, viewW - MENU_W - pad))
-  const top = Math.min(Math.max(pad, y - MENU_H / 2), Math.max(pad, viewH - MENU_H - pad))
+  const left = Math.min(Math.max(pad, x - MENU_W / 2), viewW - MENU_W - pad)
+  const top = Math.min(Math.max(pad, y - MENU_H / 2), viewH - MENU_H - pad)
 
   const handleLike = async () => {
     if (likeBusy) return
@@ -102,6 +98,7 @@ export default function CardContextMenu({
 
   const handleShare = async () => {
     const data: ShareData = { title: cardName, url: shareUrl }
+    // Prefer native share sheet when available (mobile + some desktops).
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
         await navigator.share(data)
@@ -134,10 +131,11 @@ export default function CardContextMenu({
       })
       if (res.ok) {
         setAddedToDeckId(deckId)
+        // Short success tick, then close the menu entirely.
         setTimeout(onClose, 700)
       }
     } catch {
-      /* ignore — sheet stays open so user can retry */
+      /* ignore — menu stays open so user can retry */
     } finally {
       setAddingToDeckId(null)
     }
@@ -145,44 +143,35 @@ export default function CardContextMenu({
 
   return (
     <>
-      {/* Backdrop — closes on tap. Intercepts every touch so the page
-       *  behind can never scroll while the menu/sheet is open. */}
+      {/* Invisible backdrop — captures outside clicks and any scroll/touch-scroll
+       *  without ever reaching the CardItem underneath, so clicking another card
+       *  or starting to scroll just closes the menu. */}
       <div
-        className="fixed inset-0 z-40 bg-black/40 sm:bg-transparent backdrop-blur-sm sm:backdrop-blur-0"
+        className="fixed inset-0 z-40"
         onMouseDown={onClose}
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClose() }}
         onContextMenu={(e) => { e.preventDefault(); onClose() }}
         onWheel={onClose}
         onTouchStart={onClose}
+        onTouchMove={onClose}
       />
-
-      {/* Panel — floating menu on desktop, bottom sheet on mobile */}
       <div
         ref={ref}
         role="menu"
         aria-label={`Actions for ${cardName}`}
-        className="fixed z-50 rounded-t-2xl sm:rounded-xl border border-border bg-bg-surface p-1.5 shadow-2xl backdrop-blur-xl
-                   inset-x-0 bottom-0 pb-[max(env(safe-area-inset-bottom),12px)] w-full
-                   sm:inset-auto sm:bottom-auto sm:w-[240px] sm:pb-1.5"
-        style={typeof window !== 'undefined' && window.innerWidth >= 640
-          ? { left, top }
-          : undefined}
+        className="fixed z-50 w-[240px] rounded-xl border border-border bg-bg-surface p-1.5 shadow-2xl backdrop-blur-xl"
+        style={{ left, top }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.stopPropagation()}
       >
-        {/* Drag handle — mobile affordance */}
-        <div className="flex justify-center pt-1.5 pb-1 sm:hidden" aria-hidden="true">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
-
         {mode === 'menu' && (
           <>
             <button
               type="button"
               onClick={() => setMode('decks')}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-3 sm:py-2.5 text-sm text-font-primary transition-colors hover:bg-bg-hover active:bg-bg-hover"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-font-primary transition-colors hover:bg-bg-hover active:bg-bg-hover"
             >
               <Plus size={18} className="shrink-0 text-font-accent" />
               Add to Deck
@@ -192,7 +181,7 @@ export default function CardContextMenu({
               type="button"
               onClick={handleLike}
               disabled={likeBusy}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-3 sm:py-2.5 text-sm text-font-primary transition-colors hover:bg-bg-hover active:bg-bg-hover disabled:opacity-60"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-font-primary transition-colors hover:bg-bg-hover active:bg-bg-hover disabled:opacity-60"
             >
               {likeBusy
                 ? <Loader2 size={18} className="shrink-0 animate-spin text-font-muted" />
@@ -206,7 +195,7 @@ export default function CardContextMenu({
             <button
               type="button"
               onClick={handleShare}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-3 sm:py-2.5 text-sm text-font-primary transition-colors hover:bg-bg-hover active:bg-bg-hover"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-font-primary transition-colors hover:bg-bg-hover active:bg-bg-hover"
             >
               {shareFeedback === 'copied'
                 ? <Check size={18} className="shrink-0 text-bg-green" />
@@ -217,7 +206,7 @@ export default function CardContextMenu({
         )}
 
         {mode === 'decks' && (
-          <div className="flex max-h-[55vh] sm:max-h-64 flex-col">
+          <div className="flex max-h-64 flex-col">
             <div className="flex items-center gap-1 px-1 py-0.5">
               <button
                 type="button"
@@ -233,7 +222,7 @@ export default function CardContextMenu({
               </span>
             </div>
 
-            <div className="mt-1 flex-1 overflow-y-auto overscroll-contain" style={{ touchAction: 'pan-y' }}>
+            <div className="mt-1 flex-1 overflow-y-auto overscroll-contain">
               {userDecks.length === 0 ? (
                 <div className="px-3 py-6 text-center text-xs text-font-muted">
                   No decks yet. Create one first.
@@ -248,7 +237,7 @@ export default function CardContextMenu({
                       type="button"
                       onClick={() => addToDeck(deck.id)}
                       disabled={isAdding || addedToDeckId != null}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 sm:py-2 text-left text-sm transition-colors hover:bg-bg-hover disabled:opacity-60"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-bg-hover disabled:opacity-60"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-font-primary">{deck.name}</div>
