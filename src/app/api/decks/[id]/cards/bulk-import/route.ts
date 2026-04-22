@@ -179,16 +179,29 @@ export async function POST(
 
   // --- 3. Scryfall fallback for anything still missing. Pass `set` when the
   // entry had one so we land on the right printing.
-  const resolve = (entry: ImportEntry): CardRow | null => {
+  //
+  // `strict` controls whether we allow broader maps to mask a missing exact
+  // match. Filter passes (which decide what to ask Scryfall next) MUST run
+  // strict, otherwise a paste like `Windswept Heath (MH3) 466` with only
+  // MH3 235 in the local DB silently resolves to 235 via `cardByLowerName`
+  // and the Scryfall `{set, collector}` pin never gets attempted. The final
+  // assembly step uses `strict: false` so we still deliver *some* printing
+  // even when Scryfall can't find the exact collector either.
+  const resolve = (
+    entry: ImportEntry,
+    { strict = false }: { strict?: boolean } = {},
+  ): CardRow | null => {
     if (entry.setCode && entry.collectorNumber) {
       const hit = cardByTriple.get(
         tripleKey(entry.name, entry.setCode, entry.collectorNumber),
       )
       if (hit) return hit
+      if (strict) return null
     }
     if (entry.setCode) {
       const hit = cardByNameAndSet.get(pairKey(entry.name, entry.setCode))
       if (hit) return hit
+      if (strict) return null
     }
     return cardByLowerName.get(nameKey(entry.name)) ?? null
   }
@@ -236,7 +249,7 @@ export async function POST(
 
   // First pass: ask Scryfall with `(name, set)` so we get the exact
   // printing when the user pinned one.
-  const scryfallNeeded = entries.filter((e) => !resolve(e))
+  const scryfallNeeded = entries.filter((e) => !resolve(e, { strict: true }))
   if (scryfallNeeded.length > 0) {
     const seen = new Set<string>()
     const identifiers: {
@@ -264,21 +277,25 @@ export async function POST(
     await upsertFound(found)
   }
 
-  // Second pass: anything still unresolved — either the `(name, set)`
-  // lookup missed (set code wrong, printing not on Scryfall, surge-foil
-  // variant quirks) or the entry had no set to begin with. Retry with
-  // name only so we at least land on some printing rather than 404'ing
-  // the user. If Scryfall finds a different printing we prefer exact
-  // first, so any previously-populated set-specific hit still wins.
-  const stillNeeded = entries.filter((e) => !resolve(e))
+  // Second pass: anything still unresolved — either the `(name, set,
+  // collector)` pin missed (collector is on Scryfall but the user typo'd
+  // it, or Scryfall didn't find the exact slot) or the entry had no set.
+  // For entries that had a set code, retry with `{name, set}` so at least
+  // we pin the right set even when the collector was off. For the rest,
+  // name-only as before. If a later pass finds a different printing the
+  // strict-resolve below keeps it out of the subsequent passes.
+  const stillNeeded = entries.filter((e) => !resolve(e, { strict: true }))
   if (stillNeeded.length > 0) {
     const seen = new Set<string>()
-    const identifiers: { name: string }[] = []
+    const identifiers: { name: string; set?: string }[] = []
     for (const e of stillNeeded) {
-      const k = nameKey(e.name)
+      const k = e.setCode ? pairKey(e.name, e.setCode) : nameKey(e.name)
       if (seen.has(k)) continue
       seen.add(k)
-      identifiers.push({ name: e.name.trim() })
+      identifiers.push({
+        name: e.name.trim(),
+        set: e.setCode ?? undefined,
+      })
     }
     const { found } = await lookupCardsByIdentifiers(identifiers)
     await upsertFound(found)
@@ -290,7 +307,7 @@ export async function POST(
   // "Balin's Tomb" → Ancient Tomb (LTC 357) come back as not_found.
   // /cards/named?exact= matches `flavor_name` too. Serial + rate-limited,
   // but only runs for the handful of entries no batch pass caught.
-  const flavorNeeded = entries.filter((e) => !resolve(e))
+  const flavorNeeded = entries.filter((e) => !resolve(e, { strict: true }))
   if (flavorNeeded.length > 0) {
     const seenKeys = new Set<string>()
     for (const e of flavorNeeded) {
