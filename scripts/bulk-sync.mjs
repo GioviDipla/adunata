@@ -29,7 +29,12 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 const args = process.argv.slice(2)
-const bulkType = args.find(a => a.startsWith('--type='))?.split('=')[1] || 'oracle_cards'
+// Default to `default_cards` (one row per printing, English only) so every
+// borderless / showcase / Secret Lair variant lives in the DB. `oracle_cards`
+// (one row per oracle_id) leaves the import flow having to hit Scryfall for
+// any non-default printing. Override with `--type=oracle_cards` when you
+// just want the canonical catalog for a dev seed.
+const bulkType = args.find(a => a.startsWith('--type='))?.split('=')[1] || 'default_cards'
 const force = args.includes('--force')
 const TMP_FILE = resolve(__dirname, '..', `.tmp-bulk-${bulkType}.json`)
 
@@ -47,18 +52,26 @@ const TRIGGER_PATTERNS = {
   cast: /(when|whenever) [^.]*casts?\s/i,
 }
 
+// Keep this aligned with `mapScryfallCard` in `src/lib/scryfall.ts`. Every
+// column the runtime mapper fills must be present here too, otherwise an
+// upsert from this script NULLs those columns on existing rows (Supabase
+// ON CONFLICT DO UPDATE rewrites exactly the provided fields).
 function mapCard(card) {
   const ff = card.card_faces?.[0]
   const img = card.image_uris ?? ff?.image_uris
   const pu = card.prices?.usd ? parseFloat(card.prices.usd) : null
-  const pf = card.prices?.usd_foil ? parseFloat(card.prices.usd_foil) : null
+  const puf = card.prices?.usd_foil ? parseFloat(card.prices.usd_foil) : null
+  const pe = card.prices?.eur ? parseFloat(card.prices.eur) : null
+  const pef = card.prices?.eur_foil ? parseFloat(card.prices.eur_foil) : null
   const oracle = card.oracle_text ?? ff?.oracle_text ?? null
   // Concatenate both faces' oracle so flip/DFC cards still get flagged.
   const oracleFull = card.card_faces?.length
     ? card.card_faces.map(f => f.oracle_text ?? '').join('\n')
     : oracle ?? ''
   return {
-    scryfall_id: card.id, name: card.name,
+    scryfall_id: card.id,
+    name: card.name,
+    flavor_name: card.flavor_name ?? null,
     mana_cost: card.mana_cost ?? ff?.mana_cost ?? null,
     cmc: card.cmc ?? 0,
     type_line: card.type_line ?? ff?.type_line ?? 'Unknown',
@@ -66,16 +79,24 @@ function mapCard(card) {
     colors: card.colors ?? ff?.colors ?? null,
     color_identity: card.color_identity ?? [],
     rarity: card.rarity ?? 'common',
-    set_code: card.set, set_name: card.set_name ?? card.set,
+    set_code: card.set,
+    set_name: card.set_name ?? card.set,
     collector_number: card.collector_number ?? '0',
-    image_small: img?.small ?? null, image_normal: img?.normal ?? null,
+    image_small: img?.small ?? null,
+    image_normal: img?.normal ?? null,
     image_art_crop: img?.art_crop ?? null,
-    prices_usd: isNaN(pu) ? null : pu, prices_usd_foil: isNaN(pf) ? null : pf,
+    prices_usd: isNaN(pu) ? null : pu,
+    prices_usd_foil: isNaN(puf) ? null : puf,
+    prices_eur: isNaN(pe) ? null : pe,
+    prices_eur_foil: isNaN(pef) ? null : pef,
+    released_at: card.released_at ?? null,
     legalities: card.legalities ?? null,
     power: card.power ?? ff?.power ?? null,
     toughness: card.toughness ?? ff?.toughness ?? null,
-    keywords: card.keywords ?? null, produced_mana: card.produced_mana ?? null,
-    layout: card.layout ?? null, card_faces: card.card_faces ?? null,
+    keywords: card.keywords ?? null,
+    produced_mana: card.produced_mana ?? null,
+    layout: card.layout ?? null,
+    card_faces: card.card_faces ?? null,
     has_upkeep_trigger: TRIGGER_PATTERNS.upkeep.test(oracleFull),
     has_etb_trigger: TRIGGER_PATTERNS.etb.test(oracleFull),
     has_attacks_trigger: TRIGGER_PATTERNS.attacks.test(oracleFull),
