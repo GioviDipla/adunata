@@ -109,6 +109,36 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
+## [STEP] — Applicare migration `20260424130448_deck_sections.sql`
+
+Quando: **prima di usare la feature "Sezioni e tag nei deck"** (P0 dal piano 2026-04-24). Senza migration, la pagina deck fallisce perché `DECK_CARD_COLUMNS` include `section_id`, `tags`, `position_in_section`.
+
+Cosa fare: aprire Supabase Dashboard → SQL Editor del progetto di produzione, incollare il contenuto di `supabase/migrations/20260424130448_deck_sections.sql`, premere **Run**.
+
+La migration è additive e sicura:
+- Crea `public.deck_sections` (FK `decks.id` on delete cascade, index su `(deck_id, position)`).
+- Estende `public.deck_cards` con `section_id` (FK on delete set null), `tags text[] default '{}'`, `position_in_section int`.
+- Due index nuovi su `deck_cards`: `deck_cards_section_idx` e GIN su `tags`.
+- RLS su `deck_sections` con due policy: select se deck pubblico o proprietario, mutate se proprietario.
+
+Verifica a migration applicata:
+```sql
+select column_name, data_type
+  from information_schema.columns
+  where table_schema = 'public'
+    and table_name in ('deck_sections', 'deck_cards')
+    and column_name in ('section_id','tags','position_in_section','id','deck_id','name','position','color','is_collapsed')
+  order by table_name, ordinal_position;
+
+select tablename, policyname, cmd
+  from pg_policies
+  where tablename = 'deck_sections';
+
+-- Devono comparire: deck_sections_select_visible (SELECT), deck_sections_mutate_owner (ALL).
+```
+
+Dove inserire il risultato: niente — `src/types/supabase.ts` è già stato aggiornato a mano con le nuove Row/Insert/Update.
+
 ## ✅ [STEP] — Applicare migration `20260421180000_lookup_cards_with_collector_number.sql`
 
 Applicata via Supabase MCP il 2026-04-21. L'RPC `lookup_cards_by_name_and_set` ora accetta un `collector_number` opzionale per pair. Con pair tipo `{name, set_code, collector_number: "689"}`, matcha quella riga esatta invece di lasciare a DISTINCT ON la scelta arbitraria tra printings dello stesso (name, set). Risolve: "Arcane Signet (CMR) 689 *F*" → la riga 689 invece della 297.

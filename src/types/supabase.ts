@@ -248,6 +248,9 @@ export interface Database {
           quantity: number
           board: string
           is_foil: boolean
+          section_id: string | null
+          tags: string[]
+          position_in_section: number | null
           created_at: string
         }
         Insert: {
@@ -257,6 +260,9 @@ export interface Database {
           quantity?: number
           board?: string
           is_foil?: boolean
+          section_id?: string | null
+          tags?: string[]
+          position_in_section?: number | null
           created_at?: string
         }
         Update: {
@@ -266,6 +272,9 @@ export interface Database {
           quantity?: number
           board?: string
           is_foil?: boolean
+          section_id?: string | null
+          tags?: string[]
+          position_in_section?: number | null
           created_at?: string
         }
         Relationships: [
@@ -281,6 +290,51 @@ export interface Database {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deck_cards_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "deck_sections"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      deck_sections: {
+        Row: {
+          id: string
+          deck_id: string
+          name: string
+          position: number
+          color: string | null
+          is_collapsed: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          deck_id: string
+          name: string
+          position?: number
+          color?: string | null
+          is_collapsed?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          deck_id?: string
+          name?: string
+          position?: number
+          color?: string | null
+          is_collapsed?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deck_sections_deck_id_fkey"
+            columns: ["deck_id"]
+            isOneToOne: false
+            referencedRelation: "decks"
             referencedColumns: ["id"]
           }
         ]
