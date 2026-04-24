@@ -1,17 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
-import { getCardTypeCategory } from '@/lib/utils/card'
 import { TYPE_ICONS } from '@/lib/utils/typeIcons'
-import type { Database } from '@/types/supabase'
-
-type CardRow = Database['public']['Tables']['cards']['Row']
-
-interface DeckCardEntry {
-  card: CardRow
-  quantity: number
-  board: string
-}
+import { useDeckStats, type DeckCardEntry } from '@/lib/hooks/useDeckStats'
 
 interface DeckStatsProps {
   cards: DeckCardEntry[]
@@ -26,126 +16,8 @@ const COLOR_SYMBOL_TEXT: Record<string, string> = { W: 'text-bg-dark', U: 'text-
 
 const CMC_BUCKETS = ['0', '1', '2', '3', '4', '5', '6', '7+'] as const
 
-/** Count mana pips in a mana_cost string like "{2}{W}{U}{U}" */
-function countManaPips(manaCost: string | null): Record<string, number> {
-  if (!manaCost) return {}
-  const pips: Record<string, number> = {}
-  const symbols = manaCost.match(/\{([^}]+)\}/g) || []
-  for (const sym of symbols) {
-    const s = sym.replace(/[{}]/g, '')
-    if (['W', 'U', 'B', 'R', 'G'].includes(s)) {
-      pips[s] = (pips[s] || 0) + 1
-    }
-  }
-  return pips
-}
-
 export default function DeckStats({ cards }: DeckStatsProps) {
-  const stats = useMemo(() => {
-    const mainCards = cards.filter((c) => c.board === 'main' || c.board === 'commander')
-    const sideboardCards = cards.filter((c) => c.board === 'sideboard')
-    const allDeckCards = [...mainCards, ...sideboardCards]
-
-    const totalMain = mainCards.reduce((s, c) => s + c.quantity, 0)
-    const totalSideboard = sideboardCards.reduce((s, c) => s + c.quantity, 0)
-
-    // Non-land cards
-    const nonLandCards = mainCards.filter((c) => !c.card.type_line?.toLowerCase().includes('land'))
-    const totalCMC = nonLandCards.reduce((s, c) => s + c.card.cmc * c.quantity, 0)
-    const totalNonLandCount = nonLandCards.reduce((s, c) => s + c.quantity, 0)
-    const avgCMC = totalNonLandCount > 0 ? totalCMC / totalNonLandCount : 0
-    const totalManaValue = mainCards.reduce((s, c) => s + c.card.cmc * c.quantity, 0)
-
-    // --- Mana Cost (pips) per color ---
-    const costPips: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0 }
-    let totalCostPips = 0
-    nonLandCards.forEach(({ card, quantity }) => {
-      const pips = countManaPips(card.mana_cost)
-      for (const [color, count] of Object.entries(pips)) {
-        costPips[color] = (costPips[color] || 0) + count * quantity
-        totalCostPips += count * quantity
-      }
-    })
-
-    // --- Mana Production per color ---
-    const productionCounts: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 }
-    let totalProduction = 0
-    mainCards.forEach(({ card, quantity }) => {
-      const pm = card.produced_mana as string[] | null
-      if (pm && pm.length > 0) {
-        for (const color of pm) {
-          if (color in productionCounts) {
-            productionCounts[color] += quantity
-            totalProduction += quantity
-          } else if (color === 'C' || !['W', 'U', 'B', 'R', 'G'].includes(color)) {
-            productionCounts['C'] += quantity
-            totalProduction += quantity
-          }
-        }
-      }
-    })
-
-    // --- Mana curve ---
-    const manaCurve: Record<string, number> = {}
-    const cmcByColor: Record<string, Record<string, number>> = {}
-    for (const b of CMC_BUCKETS) { manaCurve[b] = 0; cmcByColor[b] = {} }
-
-    nonLandCards.forEach(({ card, quantity }) => {
-      const bucket = card.cmc >= 7 ? '7+' : String(Math.floor(card.cmc))
-      manaCurve[bucket] += quantity
-      const colors = card.colors && card.colors.length > 0 ? card.colors : ['C']
-      for (const color of colors) {
-        cmcByColor[bucket][color] = (cmcByColor[bucket][color] || 0) + quantity
-      }
-    })
-    const maxCurve = Math.max(...Object.values(manaCurve), 1)
-
-    // --- Mana curve PER COLOR (for the per-color mini histograms) ---
-    const perColorCurve: Record<string, Record<string, number>> = {}
-    for (const color of COLORS) {
-      perColorCurve[color] = {}
-      for (const b of CMC_BUCKETS) perColorCurve[color][b] = 0
-    }
-    nonLandCards.forEach(({ card, quantity }) => {
-      const bucket = card.cmc >= 7 ? '7+' : String(Math.floor(card.cmc))
-      const colors = card.colors && card.colors.length > 0 ? card.colors : ['C']
-      for (const color of colors) {
-        if (color in perColorCurve) {
-          perColorCurve[color][bucket] += quantity
-        }
-      }
-    })
-
-    // --- Color distribution (card count) ---
-    const colorCounts: Record<string, number> = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 }
-    mainCards.forEach(({ card, quantity }) => {
-      if (card.colors && card.colors.length > 0) {
-        card.colors.forEach((c) => { if (c in colorCounts) colorCounts[c] += quantity })
-      } else if (!card.type_line?.toLowerCase().includes('land')) {
-        colorCounts['C'] += quantity
-      }
-    })
-    const totalColoredCards = Object.values(colorCounts).reduce((a, b) => a + b, 0) || 1
-
-    // --- Type distribution ---
-    const typeCounts: Record<string, number> = {}
-    mainCards.forEach(({ card, quantity }) => {
-      typeCounts[getCardTypeCategory(card.type_line)] = (typeCounts[getCardTypeCategory(card.type_line)] || 0) + quantity
-    })
-    const landCount = typeCounts['Lands'] || 0
-
-    // --- Prices ---
-    const totalValueEur = allDeckCards.reduce((s, c) => s + (c.card.prices_eur || 0) * c.quantity, 0)
-    const totalValueUsd = allDeckCards.reduce((s, c) => s + (c.card.prices_usd || 0) * c.quantity, 0)
-
-    return {
-      totalMain, totalSideboard, avgCMC, totalManaValue, landCount,
-      costPips, totalCostPips, productionCounts, totalProduction,
-      manaCurve, cmcByColor, maxCurve, perColorCurve,
-      colorCounts, totalColoredCards, typeCounts,
-      totalValueEur, totalValueUsd,
-    }
-  }, [cards])
+  const stats = useDeckStats(cards)
 
   function getDominantColorClass(bucket: string): string {
     const colors = stats.cmcByColor[bucket]
