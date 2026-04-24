@@ -11,6 +11,7 @@ import DeckStatsBar from './DeckStatsBar'
 import DeckEngagement from './DeckEngagement'
 import CardDetail from '@/components/cards/CardDetail'
 import type { Database } from '@/types/supabase'
+import type { SectionRow } from '@/types/deck'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 type DeckRow = Database['public']['Tables']['decks']['Row']
@@ -20,6 +21,7 @@ type BoardTab = 'main' | 'sideboard' | 'maybeboard'
 interface DeckViewProps {
   deck: DeckRow
   cards: DeckCardEntry[]
+  sections?: SectionRow[]
   ownerUsername: string
   ownerDisplayName: string
   viewerId: string | null
@@ -28,6 +30,7 @@ interface DeckViewProps {
 export default function DeckView({
   deck,
   cards,
+  sections = [],
   ownerUsername,
   ownerDisplayName,
   viewerId,
@@ -193,6 +196,7 @@ export default function DeckView({
           <DeckContent
             cards={filteredCards}
             commanderCards={commanderCards}
+            sections={sections}
             isCommander={isCommander}
             onCardClick={setSelectedDetailCard}
           />

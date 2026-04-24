@@ -14,6 +14,7 @@ import DeckGridView from './DeckGridView'
 import DeckTextView from './DeckTextView'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
+import type { SectionRow } from '@/types/deck'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -24,6 +25,12 @@ export interface DeckCardEntry {
   board: string
   /** True when the row was imported with a foil / etched marker. */
   isFoil?: boolean
+  /** Section this card lives in (null = uncategorized). */
+  section_id?: string | null
+  /** Free-form user tags. */
+  tags?: string[]
+  /** Manual ordering within a section. */
+  position_in_section?: number | null
 }
 
 type ViewMode = 'list' | 'grid' | 'text'
@@ -48,6 +55,10 @@ interface DeckContentProps {
   cards: DeckCardEntry[]
   /** Commander cards (rendered in their own section above the main list) */
   commanderCards: DeckCardEntry[]
+  /** Sections for the deck, if any. Enables the section sort mode + filter. */
+  sections?: SectionRow[]
+  /** Deck id — required when section/tag editing is enabled (owner only). */
+  deckId?: string
   /** Opens the CardDetail modal when a card is tapped */
   onCardClick?: (card: CardRow) => void
   /** Returns true if the given cardId is a commander */
@@ -58,17 +69,25 @@ interface DeckContentProps {
   onRemove?: (cardId: number, board: string) => void
   onToggleCommander?: (cardId: number, board: string) => void
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
+  /** Called after a section assignment is persisted (owner edit only). */
+  onSectionChange?: (deckCardId: string, sectionId: string | null) => void
+  /** Called after tag changes are persisted (owner edit only). */
+  onTagsChange?: (deckCardId: string, tags: string[]) => void
 }
 
 export default function DeckContent({
   cards,
   commanderCards,
+  sections,
+  deckId,
   onCardClick,
   isCommander,
   onQuantityChange,
   onRemove,
   onToggleCommander,
   onMoveToBoard,
+  onSectionChange,
+  onTagsChange,
 }: DeckContentProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [sortMode, setSortMode] = useState<SortMode>('type')

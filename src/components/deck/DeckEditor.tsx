@@ -28,6 +28,7 @@ import DeckContent from './DeckContent'
 import VisibilityToggle from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
 import type { Database } from '@/types/supabase'
+import type { SectionRow } from '@/types/deck'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 type DeckRow = Database['public']['Tables']['decks']['Row']
@@ -39,18 +40,23 @@ interface DeckCardEntry {
   board: string
   /** Persisted at import time from Moxfield-style `*F*` / `*E*` / trailing F/E markers. */
   isFoil?: boolean
+  section_id?: string | null
+  tags?: string[]
+  position_in_section?: number | null
 }
 
 interface DeckEditorProps {
   deck: DeckRow
   initialCards: DeckCardEntry[]
+  initialSections?: SectionRow[]
 }
 
 type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens'
 
-export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
+export default function DeckEditor({ deck, initialCards, initialSections = [] }: DeckEditorProps) {
   const router = useRouter()
   const [cards, setCards] = useState<DeckCardEntry[]>(initialCards)
+  const [sections, setSections] = useState<SectionRow[]>(initialSections)
   const [activeTab, setActiveTab] = useState<BoardTab>('main')
   const [isEditingName, setIsEditingName] = useState(false)
   const [deckName, setDeckName] = useState(deck.name)
@@ -342,6 +348,19 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
     },
     [deck.id]
   )
+
+  const handleSectionChange = useCallback(
+    (deckCardId: string, sectionId: string | null) => {
+      setCards((prev) =>
+        prev.map((c) => (c.id === deckCardId ? { ...c, section_id: sectionId } : c)),
+      )
+    },
+    [],
+  )
+
+  const handleTagsChange = useCallback((deckCardId: string, tags: string[]) => {
+    setCards((prev) => prev.map((c) => (c.id === deckCardId ? { ...c, tags } : c)))
+  }, [])
 
   const handleCardAdded = useCallback((card: CardRow, board: string) => {
     setCards((prev) => {
@@ -642,12 +661,16 @@ export default function DeckEditor({ deck, initialCards }: DeckEditorProps) {
           <DeckContent
             cards={filteredCards}
             commanderCards={commanderCards}
+            sections={sections}
+            deckId={deck.id}
             isCommander={isCommander}
             onCardClick={setSelectedDetailCard}
             onQuantityChange={handleQuantityChange}
             onRemove={handleRemove}
             onToggleCommander={activeTab !== 'tokens' ? handleToggleCommander : undefined}
             onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
+            onSectionChange={handleSectionChange}
+            onTagsChange={handleTagsChange}
           />
         </div>
 

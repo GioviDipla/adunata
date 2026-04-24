@@ -6,6 +6,7 @@ import { CARD_DECK_COLUMNS, DECK_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import DeckEditor from '@/components/deck/DeckEditor'
 import DeckView from '@/components/deck/DeckView'
 import type { Database } from '@/types/supabase'
+import type { SectionRow } from '@/types/deck'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -15,6 +16,9 @@ interface DeckCardFromDB {
   quantity: number
   board: string
   is_foil: boolean
+  section_id: string | null
+  tags: string[] | null
+  position_in_section: number | null
   created_at: string
   card: CardRow
 }
@@ -102,15 +106,31 @@ export default async function DeckDetailPage({
   const user = await getAuthenticatedUser()
   const supabase = await createClient()
 
-  const [{ data: deck, error: deckError }, { data: deckCards }] = await Promise.all([
-    supabase.from('decks').select(DECK_DETAIL_COLUMNS).eq('id', id).single(),
-    supabase
-      .from('deck_cards')
-      .select(`id, card_id, quantity, board, is_foil, created_at, card:cards!card_id(${CARD_DECK_COLUMNS})`)
-      .eq('deck_id', id),
-  ])
+  const [{ data: deck, error: deckError }, { data: deckCards }, { data: deckSections }] =
+    await Promise.all([
+      supabase.from('decks').select(DECK_DETAIL_COLUMNS).eq('id', id).single(),
+      supabase
+        .from('deck_cards')
+        .select(
+          `id, card_id, quantity, board, is_foil, section_id, tags, position_in_section, created_at, card:cards!card_id(${CARD_DECK_COLUMNS})`,
+        )
+        .eq('deck_id', id),
+      supabase
+        .from('deck_sections')
+        .select('id, name, position, color, is_collapsed')
+        .eq('deck_id', id)
+        .order('position', { ascending: true }),
+    ])
 
   if (deckError || !deck) notFound()
+
+  const sections: SectionRow[] = (deckSections ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    position: s.position,
+    color: s.color,
+    is_collapsed: s.is_collapsed ?? false,
+  }))
 
   const isOwner = !!user && deck.user_id === user.id
   const visibility = (deck.visibility as 'private' | 'public') ?? 'private'
@@ -131,10 +151,19 @@ export default async function DeckDetailPage({
       quantity: dc.quantity,
       board: dc.board,
       isFoil: !!dc.is_foil,
+      section_id: dc.section_id ?? null,
+      tags: dc.tags ?? [],
+      position_in_section: dc.position_in_section ?? null,
     }))
 
   if (isOwner) {
-    return <DeckEditor deck={deck} initialCards={formattedCards} />
+    return (
+      <DeckEditor
+        deck={deck}
+        initialCards={formattedCards}
+        initialSections={sections}
+      />
+    )
   }
 
   // Visitor path (anon or non-owner authenticated): fetch the owner's
@@ -151,6 +180,7 @@ export default async function DeckDetailPage({
     <DeckView
       deck={deck}
       cards={formattedCards}
+      sections={sections}
       ownerUsername={ownerProfile.username}
       ownerDisplayName={ownerProfile.display_name}
       viewerId={user?.id ?? null}
