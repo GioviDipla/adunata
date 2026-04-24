@@ -66,5 +66,7 @@ export const GAME_LOG_COLUMNS =
   'id, seq, player_id, action, data, text, type, created_at'
 
 /** deck_cards: full row. Returned from insert/update to the client.
- *  `is_foil` is set at import time from Moxfield-style `*F*` / ` F` / `*E*` markers. */
-export const DECK_CARD_COLUMNS = 'id, deck_id, card_id, quantity, board, is_foil, created_at'
+ *  `is_foil` is set at import time from Moxfield-style `*F*` / ` F` / `*E*` markers.
+ *  `section_id`, `tags`, `position_in_section` added 2026-04-24 for the sections/tags feature. */
+export const DECK_CARD_COLUMNS =
+  'id, deck_id, card_id, quantity, board, is_foil, section_id, tags, position_in_section, created_at'

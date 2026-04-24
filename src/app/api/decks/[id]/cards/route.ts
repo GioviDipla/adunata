@@ -36,6 +36,17 @@ export async function POST(
 
   const body = await request.json()
   const { card_id, quantity = 1, board = 'main' } = body
+  const section_id =
+    typeof body.section_id === 'string' && body.section_id.length > 0
+      ? body.section_id
+      : null
+  const tags: string[] = Array.isArray(body.tags)
+    ? (body.tags as unknown[])
+        .filter((t): t is string => typeof t === 'string')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 40)
+        .slice(0, 20)
+    : []
 
   if (!card_id) {
     return NextResponse.json({ error: 'card_id is required' }, { status: 400 })
@@ -74,9 +85,20 @@ export async function POST(
   }
 
   // Insert new
+  const insertPayload: {
+    deck_id: string
+    card_id: number
+    quantity: number
+    board: string
+    section_id?: string | null
+    tags?: string[]
+  } = { deck_id: deckId, card_id, quantity, board }
+  if (section_id) insertPayload.section_id = section_id
+  if (tags.length > 0) insertPayload.tags = tags
+
   const { data: deckCard, error } = await supabase
     .from('deck_cards')
-    .insert({ deck_id: deckId, card_id, quantity, board })
+    .insert(insertPayload)
     .select(DECK_CARD_COLUMNS)
     .single()
 

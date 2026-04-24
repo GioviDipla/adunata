@@ -28,6 +28,17 @@ export async function POST(
 
   const body = await request.json()
   const { scryfall_id, card_data, board = 'tokens' } = body
+  const section_id =
+    typeof body.section_id === 'string' && body.section_id.length > 0
+      ? body.section_id
+      : null
+  const tags: string[] = Array.isArray(body.tags)
+    ? (body.tags as unknown[])
+        .filter((t): t is string => typeof t === 'string')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0 && t.length <= 40)
+        .slice(0, 20)
+    : []
 
   if (!scryfall_id || !card_data) {
     return NextResponse.json({ error: 'scryfall_id and card_data required' }, { status: 400 })
@@ -99,9 +110,19 @@ export async function POST(
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
   } else {
+    const insertPayload: {
+      deck_id: string
+      card_id: number
+      quantity: number
+      board: string
+      section_id?: string | null
+      tags?: string[]
+    } = { deck_id: deckId, card_id: cardId, quantity: 1, board }
+    if (section_id) insertPayload.section_id = section_id
+    if (tags.length > 0) insertPayload.tags = tags
     const { error: deckInsertError } = await supabase
       .from('deck_cards')
-      .insert({ deck_id: deckId, card_id: cardId, quantity: 1, board })
+      .insert(insertPayload)
     if (deckInsertError) {
       return NextResponse.json({ error: deckInsertError.message }, { status: 500 })
     }
