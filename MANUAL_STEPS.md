@@ -139,6 +139,36 @@ select tablename, policyname, cmd
 
 Dove inserire il risultato: niente — `src/types/supabase.ts` è già stato aggiornato a mano con le nuove Row/Insert/Update.
 
+## [STEP] — Applicare migration `20260424133244_user_cards.sql`
+
+Quando: **prima di usare la feature "Collection" + deck overlay** (P1 dal piano 2026-04-24). Senza migration, le route `/api/collection*` e `/api/decks/:id/overlay` falliscono con "relation public.user_cards does not exist".
+
+Cosa fare: aprire Supabase Dashboard → SQL Editor del progetto di produzione, incollare il contenuto di `supabase/migrations/20260424133244_user_cards.sql`, premere **Run**.
+
+La migration è additive e sicura:
+- Crea `public.user_cards` (FK a `auth.users` e `public.cards`, entrambe on delete cascade).
+- Unique index implicito su (user_id, card_id, foil, language, condition) per abilitare merge via POST.
+- Due index: `user_cards_user_idx`, `user_cards_card_idx`.
+- RLS abilitato con due policy: `user_cards_select_own` (SELECT) e `user_cards_mutate_own` (ALL) — entrambe pinnate su `auth.uid()`.
+
+Verifica a migration applicata:
+```sql
+select column_name, data_type
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'user_cards'
+  order by ordinal_position;
+
+-- Dovrebbero comparire: id, user_id, card_id, quantity, foil, language, condition, acquired_at, acquired_price_eur, notes
+
+select policyname, cmd from pg_policies where tablename = 'user_cards';
+
+-- Devono comparire: user_cards_select_own (SELECT), user_cards_mutate_own (ALL).
+```
+
+Dove inserire il risultato: niente — `src/types/supabase.ts` è già stato aggiornato a mano con Row/Insert/Update di `user_cards`.
+
+---
+
 ## ✅ [STEP] — Applicare migration `20260421180000_lookup_cards_with_collector_number.sql`
 
 Applicata via Supabase MCP il 2026-04-21. L'RPC `lookup_cards_by_name_and_set` ora accetta un `collector_number` opzionale per pair. Con pair tipo `{name, set_code, collector_number: "689"}`, matcha quella riga esatta invece di lasciare a DISTINCT ON la scelta arbitraria tra printings dello stesso (name, set). Risolve: "Arcane Signet (CMR) 689 *F*" → la riga 689 invece della 297.

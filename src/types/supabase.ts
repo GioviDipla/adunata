@@ -625,6 +625,60 @@ export interface Database {
           }
         ]
       }
+      user_cards: {
+        Row: {
+          id: string
+          user_id: string
+          card_id: number
+          quantity: number
+          foil: boolean
+          language: string
+          condition: 'M' | 'NM' | 'LP' | 'MP' | 'HP' | 'D' | null
+          acquired_at: string | null
+          acquired_price_eur: number | null
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          card_id: number
+          quantity?: number
+          foil?: boolean
+          language?: string
+          condition?: 'M' | 'NM' | 'LP' | 'MP' | 'HP' | 'D' | null
+          acquired_at?: string | null
+          acquired_price_eur?: number | null
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          card_id?: number
+          quantity?: number
+          foil?: boolean
+          language?: string
+          condition?: 'M' | 'NM' | 'LP' | 'MP' | 'HP' | 'D' | null
+          acquired_at?: string | null
+          acquired_price_eur?: number | null
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_cards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       sync_metadata: {
         Row: {
           key: string
