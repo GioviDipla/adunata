@@ -3,6 +3,8 @@
 import { useState, useRef } from 'react'
 import { Crown, Minus, Plus, X } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
+import SectionPicker, { type SectionOption } from './SectionPicker'
+import TagEditor from './TagEditor'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
 
@@ -18,6 +20,17 @@ interface DeckCardProps {
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
+
+  // Section / tag editing — only rendered when both `deckId` + `deckCardId`
+  // are provided AND an edit handler (onRemove) is also wired.
+  deckId?: string
+  deckCardId?: string
+  sections?: SectionOption[]
+  sectionId?: string | null
+  tags?: string[]
+  tagSuggestions?: string[]
+  onSectionChange?: (deckCardId: string, sectionId: string | null) => void
+  onTagsChange?: (deckCardId: string, tags: string[]) => void
 }
 
 function ManaCostDisplay({ manaCost }: { manaCost: string | null }) {
@@ -79,7 +92,17 @@ export default function DeckCard({
   onToggleCommander,
   onCardClick,
   onMoveToBoard,
+  deckId,
+  deckCardId,
+  sections,
+  sectionId,
+  tags,
+  tagSuggestions,
+  onSectionChange,
+  onTagsChange,
 }: DeckCardProps) {
+  const editingEnabled =
+    !!onRemove && !!deckId && !!deckCardId && Array.isArray(sections)
   const [showPreview, setShowPreview] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const lastPointerPos = useRef({ x: 0, y: 0 })
@@ -175,6 +198,26 @@ export default function DeckCard({
           ${(Number(card.prices_usd) * quantity).toFixed(2)}
         </span>
       ) : null}
+
+      {/* Section + tags edit affordances — desktop list view only */}
+      {editingEnabled && deckId && deckCardId && sections && (
+        <div className="hidden xl:flex items-center gap-1">
+          <SectionPicker
+            deckId={deckId}
+            deckCardId={deckCardId}
+            currentSectionId={sectionId ?? null}
+            sections={sections}
+            onChange={(sid) => onSectionChange?.(deckCardId, sid)}
+          />
+          <TagEditor
+            deckId={deckId}
+            deckCardId={deckCardId}
+            initialTags={tags ?? []}
+            suggestions={tagSuggestions ?? []}
+            onChange={(next) => onTagsChange?.(deckCardId, next)}
+          />
+        </div>
+      )}
 
       {/* Commander toggle button */}
       {onToggleCommander && (

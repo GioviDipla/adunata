@@ -103,6 +103,27 @@ export default function DeckContent({
     })
   }, [cards, typeFilter])
 
+  // Autocomplete suggestions for the TagEditor — every tag currently used
+  // in the deck, deduped + alphabetical. Cheap to compute, re-runs only
+  // when the cards array identity changes (card add/remove/tag-edit).
+  const tagSuggestions = useMemo(
+    () =>
+      Array.from(new Set(cards.flatMap((c) => c.tags ?? []))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [cards],
+  )
+
+  // Shape expected by <SectionPicker>. Narrowed to the fields it renders.
+  const sectionOptions = useMemo(
+    () =>
+      (sections ?? []).map((s) => ({ id: s.id, name: s.name, color: s.color })),
+    [sections],
+  )
+
+  const editingWired =
+    !!deckId && onSectionChange !== undefined && onTagsChange !== undefined
+
   const groupedCards = useMemo<[string, DeckCardEntry[]][]>(() => {
     if (sortMode === 'section') {
       const byId = new Map<string, DeckCardEntry[]>()
@@ -432,6 +453,14 @@ export default function DeckContent({
                           onToggleCommander={onToggleCommander}
                           onCardClick={onCardClick}
                           onMoveToBoard={onMoveToBoard}
+                          deckId={editingWired ? deckId : undefined}
+                          deckCardId={entry.id}
+                          sections={sectionOptions}
+                          sectionId={entry.section_id ?? null}
+                          tags={entry.tags ?? []}
+                          tagSuggestions={tagSuggestions}
+                          onSectionChange={onSectionChange}
+                          onTagsChange={onTagsChange}
                         />
                       ))}
                     </div>
