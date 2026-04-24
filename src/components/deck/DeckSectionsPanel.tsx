@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, GripVertical, Wand2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Trash2, GripVertical, Wand2, Sparkles } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -36,8 +37,10 @@ interface Props {
  * after create) once the request resolves.
  */
 export default function DeckSectionsPanel({ deckId, sections, onChange }: Props) {
+  const router = useRouter()
   const [draftName, setDraftName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [autoAssignSummary, setAutoAssignSummary] = useState<string | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -99,6 +102,29 @@ export default function DeckSectionsPanel({ deckId, sections, onChange }: Props)
           is_collapsed: s.is_collapsed ?? false,
         })),
       )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function autoAssign(overwrite: boolean) {
+    if (busy || sections.length === 0) return
+    setBusy(true)
+    setAutoAssignSummary(null)
+    try {
+      const res = await fetch(`/api/decks/${deckId}/sections/auto-assign`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ overwrite }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        setAutoAssignSummary(text || 'Auto-assign failed')
+        return
+      }
+      const { assigned, skipped, total } = await res.json()
+      setAutoAssignSummary(`Assigned ${assigned} / ${total} (skipped ${skipped})`)
+      router.refresh()
     } finally {
       setBusy(false)
     }
@@ -181,28 +207,52 @@ export default function DeckSectionsPanel({ deckId, sections, onChange }: Props)
       )}
 
       {sections.length > 0 && (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={sections.map((s) => s.id)}
-            strategy={verticalListSortingStrategy}
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => autoAssign(false)}
+              disabled={busy}
+              className="flex items-center gap-1.5 rounded-md border border-border bg-bg-cell px-2 py-1 text-[11px] text-font-secondary hover:bg-bg-hover disabled:opacity-50"
+              title="Categorize uncategorized cards via local heuristic"
+            >
+              <Sparkles className="h-3 w-3" />
+              Auto-categorize
+            </button>
+            <button
+              onClick={() => autoAssign(true)}
+              disabled={busy}
+              className="flex items-center gap-1.5 rounded-md border border-border bg-bg-cell px-2 py-1 text-[11px] text-font-muted hover:bg-bg-hover disabled:opacity-50"
+              title="Re-categorize every card, overwriting current sections"
+            >
+              Re-categorize all
+            </button>
+          </div>
+          {autoAssignSummary && (
+            <div className="text-[10px] text-font-muted">{autoAssignSummary}</div>
+          )}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            <ul className="flex flex-col gap-1">
-              {sections.map((s) => (
-                <SortableSectionRow
-                  key={s.id}
-                  section={s}
-                  onRemove={() => removeSection(s.id)}
-                  onRename={(n) => renameSection(s.id, n)}
-                  onSetColor={(c) => setColor(s.id, c)}
-                />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
+            <SortableContext
+              items={sections.map((s) => s.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul className="flex flex-col gap-1">
+                {sections.map((s) => (
+                  <SortableSectionRow
+                    key={s.id}
+                    section={s}
+                    onRemove={() => removeSection(s.id)}
+                    onRename={(n) => renameSection(s.id, n)}
+                    onSetColor={(c) => setColor(s.id, c)}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
+        </>
       )}
 
       <div className="flex items-center gap-2">
