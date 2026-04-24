@@ -139,3 +139,5 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 
 2026-04-24 — Deck sections: opted for free-form sections (not fixed columns) + free-form tags (text[]+GIN). Deferred Scryfall Tagger auto_rule to a follow-up — functional_tags ingestion is out of scope.
 2026-04-24 — Section preset only for Commander. Other formats hit "Add section" manually — no multi-format preset until we see usage data.
+2026-04-24 — Collection overlay aggregates owned quantity across foil/language/condition splits. Users asking "do I own this card?" rarely care about matching condition. Data kept for future valuation/tradelist features.
+2026-04-24 — CSV import skips unresolved card names silently (returned as `skipped` count). No fuzzy match — rely on Scryfall canonical names. Surface a remediation UI as a follow-up if user feedback demands it.

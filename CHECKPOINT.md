@@ -38,6 +38,12 @@ Ultimo aggiornamento: 2026-04-21.
 - [x] Commander assignment con RLS-aware public preview
 - [x] Deck analytics v1 (Monte Carlo keep/screw/flood, turn-to-commander, sources, rarity, set, top expensive)
 
+### Collezione
+- [x] Tabella `user_cards` con foil/lingua/condizione/prezzo acquisto
+- [x] Pagina `/collection` con virtualized grid + filtri + search
+- [x] Import CSV (Deckbox, Moxfield, Manabox)
+- [x] Deck overlay owned/missing + export shopping list
+
 ### Goldfish
 - [x] Simulazione prima pescata (7 carte)
 - [x] London Mulligan completo
