@@ -34,7 +34,7 @@ export interface DeckCardEntry {
 }
 
 type ViewMode = 'list' | 'grid' | 'text'
-type SortMode = 'type' | 'name' | 'cmc' | 'price' | 'released'
+type SortMode = 'type' | 'name' | 'cmc' | 'price' | 'released' | 'section'
 
 const SORT_LABELS: Record<SortMode, string> = {
   type: 'Type',
@@ -42,6 +42,7 @@ const SORT_LABELS: Record<SortMode, string> = {
   cmc: 'Mana Cost',
   price: 'Price',
   released: 'Newest',
+  section: 'Section',
 }
 
 const VIEW_MODE_OPTIONS: { mode: ViewMode; icon: typeof List; label: string }[] = [
@@ -103,6 +104,43 @@ export default function DeckContent({
   }, [cards, typeFilter])
 
   const groupedCards = useMemo<[string, DeckCardEntry[]][]>(() => {
+    if (sortMode === 'section') {
+      const byId = new Map<string, DeckCardEntry[]>()
+      const uncategorized: DeckCardEntry[] = []
+      for (const entry of visibleCards) {
+        if (!entry.card) continue
+        const sid = entry.section_id ?? null
+        if (!sid) uncategorized.push(entry)
+        else {
+          if (!byId.has(sid)) byId.set(sid, [])
+          byId.get(sid)!.push(entry)
+        }
+      }
+      const out: [string, DeckCardEntry[]][] = []
+      const sortWithin = (entries: DeckCardEntry[]) => {
+        const hasManual = entries.some((e) => e.position_in_section != null)
+        if (hasManual) {
+          entries.sort((a, b) => {
+            const pa = a.position_in_section ?? Number.POSITIVE_INFINITY
+            const pb = b.position_in_section ?? Number.POSITIVE_INFINITY
+            return pa - pb || a.card.name.localeCompare(b.card.name)
+          })
+        } else {
+          entries.sort((a, b) => a.card.name.localeCompare(b.card.name))
+        }
+      }
+      for (const s of sections ?? []) {
+        const entries = byId.get(s.id) ?? []
+        sortWithin(entries)
+        out.push([s.id, entries])
+      }
+      if (uncategorized.length > 0) {
+        sortWithin(uncategorized)
+        out.push(['', uncategorized])
+      }
+      return out
+    }
+
     if (sortMode === 'type') {
       const groups: Record<string, DeckCardEntry[]> = {}
       visibleCards.forEach((entry) => {
@@ -332,32 +370,74 @@ export default function DeckContent({
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {groupedCards.map(([type, entries]) => (
-                <div key={type}>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
-                    {type}
-                    <span className="text-xs text-font-muted">
-                      ({entries.reduce((s, e) => s + e.quantity, 0)})
-                    </span>
-                  </h3>
-                  <div className="flex flex-col gap-1">
-                    {entries.map((entry) => (
-                      <DeckCard
-                        key={`${entry.card.id}-${entry.board}`}
-                        card={entry.card}
-                        quantity={entry.quantity}
-                        board={entry.board}
-                        isCommander={isCommander?.(entry.card.id) ?? false}
-                        onQuantityChange={onQuantityChange}
-                        onRemove={onRemove}
-                        onToggleCommander={onToggleCommander}
-                        onCardClick={onCardClick}
-                        onMoveToBoard={onMoveToBoard}
-                      />
-                    ))}
+              {groupedCards.map(([key, entries]) => {
+                const count = entries.reduce((s, e) => s + e.quantity, 0)
+                let headerLabel: string = key
+                let headerDot: string | null = null
+                let headerExtras: string | null = null
+
+                if (sortMode === 'section') {
+                  const section = sections?.find((x) => x.id === key)
+                  headerLabel = section?.name ?? 'Uncategorized'
+                  headerDot = section?.color ?? (section ? '#475569' : null)
+                  const totalEur = entries.reduce((sum, e) => {
+                    const price =
+                      (e.card.prices_eur as unknown as number | null) ??
+                      (e.card.prices_usd as unknown as number | null) ??
+                      0
+                    return sum + Number(price) * e.quantity
+                  }, 0)
+                  const nonLand = entries.filter(
+                    (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
+                  )
+                  const totalCmc = nonLand.reduce(
+                    (sum, e) => sum + Number(e.card.cmc ?? 0) * e.quantity,
+                    0,
+                  )
+                  const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
+                  const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
+                  const parts: string[] = []
+                  if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
+                  if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
+                  headerExtras = parts.length > 0 ? parts.join(' · ') : null
+                }
+
+                return (
+                  <div key={key || '__uncategorized__'}>
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
+                      {headerDot && (
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full"
+                          style={{ background: headerDot }}
+                        />
+                      )}
+                      {headerLabel}
+                      <span className="text-xs text-font-muted">({count})</span>
+                      {headerExtras && (
+                        <span className="text-[10px] text-font-muted">
+                          {headerExtras}
+                        </span>
+                      )}
+                    </h3>
+                    <div className="flex flex-col gap-1">
+                      {entries.map((entry) => (
+                        <DeckCard
+                          key={`${entry.card.id}-${entry.board}`}
+                          card={entry.card}
+                          quantity={entry.quantity}
+                          board={entry.board}
+                          isCommander={isCommander?.(entry.card.id) ?? false}
+                          onQuantityChange={onQuantityChange}
+                          onRemove={onRemove}
+                          onToggleCommander={onToggleCommander}
+                          onCardClick={onCardClick}
+                          onMoveToBoard={onMoveToBoard}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </>
