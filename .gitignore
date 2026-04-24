@@ -47,3 +47,4 @@ next-env.d.ts
 
 # bulk sync temp files
 .tmp-bulk-*
+supabase/.temp/
