@@ -820,6 +820,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
       {/* Export modal */}
       {showExport && (
         <DeckExport
+          deckId={deck.id}
           deckName={deckName}
           cards={statsCards}
           onClose={() => setShowExport(false)}

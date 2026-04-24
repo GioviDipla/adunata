@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Copy, Download, Check } from 'lucide-react'
+import { X, Copy, Download, Check, Library, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { Database } from '@/types/supabase'
 
@@ -15,18 +15,45 @@ interface DeckCardEntry {
 }
 
 interface DeckExportProps {
+  deckId: string
   deckName: string
   cards: DeckCardEntry[]
   onClose: () => void
 }
 
-type ExportFormat = 'mtgo' | 'moxfield' | 'simple'
+type ExportFormat = 'mtgo' | 'moxfield' | 'simple' | 'csv'
+
+function csvEscape(v: string | number | boolean): string {
+  const s = String(v)
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  return s
+}
 
 function generateExport(
   cards: DeckCardEntry[],
   deckName: string,
   format: ExportFormat
 ): string {
+  if (format === 'csv') {
+    const headers = [
+      'Quantity', 'Name', 'Set Code', 'Collector Number', 'Foil', 'Board', 'Price EUR', 'Price USD',
+    ]
+    const lines = [headers.join(',')]
+    for (const e of cards) {
+      lines.push([
+        e.quantity,
+        csvEscape(e.card.name),
+        (e.card.set_code ?? '').toUpperCase(),
+        csvEscape(e.card.collector_number ?? ''),
+        e.isFoil ? 'foil' : '',
+        e.board,
+        e.card.prices_eur ?? '',
+        e.card.prices_usd ?? '',
+      ].join(','))
+    }
+    return lines.join('\n')
+  }
+
   const mainCards = cards.filter((c) => c.board === 'main')
   const sideboardCards = cards.filter((c) => c.board === 'sideboard')
 
@@ -49,6 +76,8 @@ function generateExport(
         return `${quantity} ${card.name} (${card.set_code.toUpperCase()}) ${card.collector_number}${foilSuffix}`
       case 'simple':
         return `${quantity}x ${card.name}${foilSuffix}`
+      default:
+        return `${quantity} ${card.name}${foilSuffix}`
     }
   }
 
@@ -67,11 +96,40 @@ function generateExport(
   return lines.join('\n')
 }
 
-export default function DeckExport({ deckName, cards, onClose }: DeckExportProps) {
+export default function DeckExport({ deckId, deckName, cards, onClose }: DeckExportProps) {
   const [format, setFormat] = useState<ExportFormat>('mtgo')
   const [copied, setCopied] = useState(false)
+  const [collectionStatus, setCollectionStatus] = useState<
+    | { state: 'idle' }
+    | { state: 'busy' }
+    | { state: 'done'; inserted: number; skipped: number }
+    | { state: 'error'; message: string }
+  >({ state: 'idle' })
 
   const exportText = generateExport(cards, deckName, format)
+
+  async function addToCollection() {
+    if (collectionStatus.state === 'busy') return
+    setCollectionStatus({ state: 'busy' })
+    try {
+      const res = await fetch(`/api/decks/${deckId}/add-to-collection`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        setCollectionStatus({ state: 'error', message: text || 'failed' })
+        return
+      }
+      const { inserted, skipped } = await res.json()
+      setCollectionStatus({ state: 'done', inserted, skipped })
+    } catch (e) {
+      setCollectionStatus({
+        state: 'error',
+        message: e instanceof Error ? e.message : 'network error',
+      })
+    }
+  }
 
   async function copyToClipboard() {
     await navigator.clipboard.writeText(exportText)
@@ -79,12 +137,14 @@ export default function DeckExport({ deckName, cards, onClose }: DeckExportProps
     setTimeout(() => setCopied(false), 2000)
   }
 
-  function downloadAsTxt() {
-    const blob = new Blob([exportText], { type: 'text/plain' })
+  function downloadAsFile() {
+    const ext = format === 'csv' ? 'csv' : 'txt'
+    const mime = format === 'csv' ? 'text/csv' : 'text/plain'
+    const blob = new Blob([exportText], { type: mime })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${deckName.replace(/[^a-zA-Z0-9]/g, '_')}.txt`
+    a.download = `${deckName.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -106,11 +166,12 @@ export default function DeckExport({ deckName, cards, onClose }: DeckExportProps
         </div>
 
         {/* Format selector */}
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           {([
             ['mtgo', 'MTGO'],
             ['moxfield', 'Moxfield'],
             ['simple', 'Simple List'],
+            ['csv', 'CSV'],
           ] as [ExportFormat, string][]).map(([f, label]) => (
             <button
               key={f}
@@ -148,10 +209,50 @@ export default function DeckExport({ deckName, cards, onClose }: DeckExportProps
               </>
             )}
           </Button>
-          <Button variant="secondary" onClick={downloadAsTxt} className="flex-1">
+          <Button variant="secondary" onClick={downloadAsFile} className="flex-1">
             <Download className="h-4 w-4" />
-            Download .txt
+            Download .{format === 'csv' ? 'csv' : 'txt'}
           </Button>
+        </div>
+
+        {/* Add deck cards to collection */}
+        <div className="mt-4 rounded-lg border border-border bg-bg-card p-3">
+          <div className="mb-2 flex items-start gap-2">
+            <Library className="mt-0.5 h-4 w-4 shrink-0 text-font-secondary" />
+            <div className="flex-1 text-xs text-font-secondary">
+              Add every card in this deck to your collection. Foil markers carry over;
+              quantities merge with what you already own.
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={addToCollection}
+            disabled={collectionStatus.state === 'busy'}
+            className="w-full"
+          >
+            {collectionStatus.state === 'busy' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Adding…
+              </>
+            ) : collectionStatus.state === 'done' ? (
+              <>
+                <Check className="h-4 w-4" />
+                Added {collectionStatus.inserted}
+                {collectionStatus.skipped > 0 ? ` (skipped ${collectionStatus.skipped})` : ''}
+              </>
+            ) : (
+              <>
+                <Library className="h-4 w-4" />
+                Add deck to collection
+              </>
+            )}
+          </Button>
+          {collectionStatus.state === 'error' && (
+            <div className="mt-2 text-[11px] text-font-danger">
+              {collectionStatus.message}
+            </div>
+          )}
         </div>
       </div>
     </div>

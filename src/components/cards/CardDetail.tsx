@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
-import { X, Plus, ChevronDown, Loader2, Check, ExternalLink, Heart, Share2 } from 'lucide-react'
+import { X, Plus, ChevronDown, Loader2, Check, ExternalLink, Heart, Share2, Library } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CARD_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
@@ -89,6 +89,10 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   const [liked, setLiked] = useState(false)
   const [likeBusy, setLikeBusy] = useState(false)
   const [shareFeedback, setShareFeedback] = useState<null | 'copied'>(null)
+
+  // Add to collection state
+  const [addingToCollection, setAddingToCollection] = useState(false)
+  const [addedToCollection, setAddedToCollection] = useState(false)
 
   // Scroll container ref — used by the swipe-down-to-close gesture so we only
   // trigger the dismiss when the sheet is already scrolled to the top (i.e.
@@ -303,6 +307,23 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
       }
     } catch { /* ignore */ }
     setAddingToDeck(null)
+  }
+
+  async function addToCollection() {
+    if (addingToCollection) return
+    setAddingToCollection(true)
+    try {
+      const res = await fetch('/api/collection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ card_id: displayCard.id, quantity: 1 }),
+      })
+      if (res.ok) {
+        setAddedToCollection(true)
+        setTimeout(() => setAddedToCollection(false), 1800)
+      }
+    } catch { /* ignore */ }
+    setAddingToCollection(false)
   }
 
   if (typeof document === 'undefined') return null
@@ -583,6 +604,27 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                     <Loader2 size={18} className="animate-spin" />
                   ) : (
                     <Heart size={18} className={liked ? 'fill-current' : ''} />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={addToCollection}
+                  disabled={addingToCollection}
+                  aria-label="Add to collection"
+                  title={addedToCollection ? 'Added' : 'Add to collection'}
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg ring-1 transition-colors disabled:opacity-60 ${
+                    addedToCollection
+                      ? 'bg-emerald-500/15 ring-emerald-500/40 text-emerald-400'
+                      : 'bg-bg-cell ring-border text-font-muted hover:bg-bg-hover hover:text-font-primary'
+                  }`}
+                >
+                  {addingToCollection ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : addedToCollection ? (
+                    <Check size={18} />
+                  ) : (
+                    <Library size={18} />
                   )}
                 </button>
 
