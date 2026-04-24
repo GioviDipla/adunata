@@ -136,3 +136,6 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 - **Fix minimale**: query inline su ogni request. 40 righe + GROUP BY su 34k con indice → costi trascurabili rispetto al valore di avere sempre dati corretti. Gli errori Supabase ora loggano invece di essere swallowati in un empty array.
 - **`revalidateTag(...)` rimossi** da entrambi i cron (`daily-sync`, `update-prices`) visto che non c'è più un bundle cached da invalidare. Se in futuro si riaggiunge la cache, usare `'use cache'` con profilo esplicito o wrappare la cache SOLO sul ramo success (non cachare mai risultati vuoti).
 - **Lezione generica**: ogni `unstable_cache(fn)` dove `fn` fa fallback silenzioso su `[]/null` in caso di errore è una trappola — il primo errore transitorio avvelena la cache. Pattern corretto: (a) propagare l'errore e non cacheare, oppure (b) avere una guardia `if (data == null) throw new Error(...)` dentro la funzione cachata, così Next non memorizza il risultato.
+
+2026-04-24 — Deck sections: opted for free-form sections (not fixed columns) + free-form tags (text[]+GIN). Deferred Scryfall Tagger auto_rule to a follow-up — functional_tags ingestion is out of scope.
+2026-04-24 — Section preset only for Commander. Other formats hit "Add section" manually — no multi-format preset until we see usage data.
