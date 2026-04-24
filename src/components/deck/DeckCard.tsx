@@ -5,6 +5,7 @@ import { Crown, Minus, Plus, X } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
+import DeckCardActionSheet from './DeckCardActionSheet'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
 
@@ -105,11 +106,24 @@ export default function DeckCard({
     !!onRemove && !!deckId && !!deckCardId && Array.isArray(sections)
   const [showPreview, setShowPreview] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [showActionSheet, setShowActionSheet] = useState(false)
   const lastPointerPos = useRef({ x: 0, y: 0 })
+  const pointerIsTouch = useRef(false)
 
+  // On touch devices (no hover) we fire the bottom-sheet; on desktop we
+  // keep the existing context-menu popover anchored at the pointer. The
+  // sheet is richer (section radio + tag editor + move-to-board) because
+  // touch UIs have no hover affordances to surface those inline.
   const longPress = useLongPress({
     onLongPress: () => {
-      setContextMenu({ x: lastPointerPos.current.x, y: lastPointerPos.current.y })
+      if (pointerIsTouch.current && editingEnabled) {
+        setShowActionSheet(true)
+      } else {
+        setContextMenu({
+          x: lastPointerPos.current.x,
+          y: lastPointerPos.current.y,
+        })
+      }
     },
     delay: 500,
   })
@@ -122,20 +136,23 @@ export default function DeckCard({
           : 'border-border bg-bg-card'
       }`}
       onContextMenu={(e) => {
-        if (onMoveToBoard) {
+        if (onMoveToBoard || editingEnabled) {
           e.preventDefault()
           setContextMenu({ x: e.clientX, y: e.clientY })
         }
       }}
       onPointerDown={(e) => {
         lastPointerPos.current = { x: e.clientX, y: e.clientY }
-        if (onMoveToBoard) longPress.onPointerDown()
+        pointerIsTouch.current = e.pointerType === 'touch'
+        if (onMoveToBoard || editingEnabled) longPress.onPointerDown()
       }}
-      onPointerUp={onMoveToBoard ? longPress.onPointerUp : undefined}
+      onPointerUp={onMoveToBoard || editingEnabled ? longPress.onPointerUp : undefined}
       onPointerLeave={() => {
-        if (onMoveToBoard) longPress.onPointerLeave()
+        if (onMoveToBoard || editingEnabled) longPress.onPointerLeave()
       }}
-      onPointerCancel={onMoveToBoard ? longPress.onPointerCancel : undefined}
+      onPointerCancel={
+        onMoveToBoard || editingEnabled ? longPress.onPointerCancel : undefined
+      }
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
       style={{ touchAction: 'manipulation' }}
@@ -286,6 +303,28 @@ export default function DeckCard({
           onMoveToBoard={(toBoard) => onMoveToBoard(card.id, board, toBoard)}
           onRemove={onRemove ? () => onRemove(card.id, board) : undefined}
           onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {/* Mobile long-press action sheet — section / tag / move / remove */}
+      {editingEnabled && deckId && deckCardId && sections && (
+        <DeckCardActionSheet
+          open={showActionSheet}
+          onClose={() => setShowActionSheet(false)}
+          deckId={deckId}
+          deckCardId={deckCardId}
+          cardName={card.name}
+          currentBoard={board}
+          currentSectionId={sectionId ?? null}
+          currentTags={tags ?? []}
+          tagSuggestions={tagSuggestions ?? []}
+          sections={sections}
+          onSectionChange={onSectionChange}
+          onTagsChange={onTagsChange}
+          onMoveToBoard={
+            onMoveToBoard ? (toBoard) => onMoveToBoard(card.id, board, toBoard) : undefined
+          }
+          onRemove={onRemove ? () => onRemove(card.id, board) : undefined}
         />
       )}
     </div>
