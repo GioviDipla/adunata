@@ -20,6 +20,10 @@ export interface SimResult {
   turnToCommanderP50: number | null
   turnToCommanderP90: number | null
   samples: number
+  /** % of non-land non-rock cards castable on or before their CMC turn. */
+  castableOnCurve: number
+  /** Average mana available (lands + rocks) at end of turn 5. */
+  avgManaSpentByT5: number
 }
 
 function shuffle<T>(arr: T[], rng: () => number): T[] {
@@ -46,12 +50,22 @@ function londonMulligan(
   return null
 }
 
-function runOnce(
-  input: SimInput,
-  rng: () => number,
-): { keep: boolean; tt: number | null } {
+interface RunOnceResult {
+  keep: boolean
+  tt: number | null
+  /** Number of non-land non-rock cards drawn-by-cmc-turn that were castable. */
+  castableHits: number
+  /** Number of non-land non-rock cards considered (drawn by their cmc turn). */
+  castableConsidered: number
+  /** Total mana available (lands + rocks) at end of turn 5. */
+  manaAtT5: number
+}
+
+function runOnce(input: SimInput, rng: () => number): RunOnceResult {
   const res = londonMulligan(input.mainDeck, rng)
-  if (!res) return { keep: false, tt: null }
+  if (!res) {
+    return { keep: false, tt: null, castableHits: 0, castableConsidered: 0, manaAtT5: 0 }
+  }
   const { hand, library, mull } = res
   const keep = mull === 0
   let landsInPlay = 0
@@ -59,6 +73,12 @@ function runOnce(
   const currentHand = hand.slice()
   const currentLib = library.slice()
   let castCommanderTurn: number | null = null
+  let castableHits = 0
+  let castableConsidered = 0
+  let manaAtT5 = 0
+  // Track non-land non-rock cards seen this game so we don't double-count.
+  // Each card object is unique (flat-mapped from quantity), reference dedupe.
+  const checked = new Set<SimCard>()
   for (let turn = 1; turn <= 10; turn++) {
     if (turn > 1) {
       const drawn = currentLib.shift()
@@ -83,16 +103,30 @@ function runOnce(
         played = true
       }
     }
+    const manaPool = landsInPlay + rocksInPlay
+    // Castability check: any non-land non-rock spell whose cmc == turn
+    // (drawn already by virtue of being in hand) — could it be cast this turn?
+    for (const c of currentHand) {
+      if (c.is_land || c.is_rock) continue
+      if (checked.has(c)) continue
+      if (c.cmc <= turn) {
+        // Card was castable on its CMC turn (already past).
+        checked.add(c)
+        castableConsidered++
+        if (c.cmc <= manaPool) castableHits++
+      }
+    }
+    if (turn === 5) manaAtT5 = manaPool
     // Commander castable?
     if (
       castCommanderTurn === null &&
       input.commanderCmc != null &&
-      landsInPlay + rocksInPlay >= input.commanderCmc
+      manaPool >= input.commanderCmc
     ) {
       castCommanderTurn = turn
     }
   }
-  return { keep, tt: castCommanderTurn }
+  return { keep, tt: castCommanderTurn, castableHits, castableConsidered, manaAtT5 }
 }
 
 ;(self as unknown as DedicatedWorkerGlobalScope).onmessage = (
@@ -110,6 +144,9 @@ function runOnce(
   let screwCount = 0
   let floodCount = 0
   const castTurns: number[] = []
+  let castableHitsSum = 0
+  let castableConsideredSum = 0
+  let manaAtT5Sum = 0
 
   for (let i = 0; i < input.iterations; i++) {
     // Starting hand probe
@@ -121,6 +158,9 @@ function runOnce(
     // Full sim for cast turn
     const r = runOnce(input, rng)
     if (r.tt != null) castTurns.push(r.tt)
+    castableHitsSum += r.castableHits
+    castableConsideredSum += r.castableConsidered
+    manaAtT5Sum += r.manaAtT5
 
     // Screw: after T3 draws, still <2 lands in play.
     // Flood: after T7 draws, >7 lands (in play + hand).
@@ -165,6 +205,9 @@ function runOnce(
     turnToCommanderP50: p(0.5),
     turnToCommanderP90: p(0.9),
     samples: input.iterations,
+    castableOnCurve:
+      castableConsideredSum > 0 ? castableHitsSum / castableConsideredSum : 0,
+    avgManaSpentByT5: input.iterations > 0 ? manaAtT5Sum / input.iterations : 0,
   }
   ;(self as unknown as DedicatedWorkerGlobalScope).postMessage(result)
 }
