@@ -1,4 +1,5 @@
 import { getCardTypeCategory } from '@/lib/utils/card'
+import { categorize, type CategoryName } from '@/lib/deck/categorize'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -55,6 +56,49 @@ export interface DeckStatsResult {
     priceUsd: number
     quantity: number
   }>
+  /** Composite mana base health score 0-100 with breakdown of contributors. */
+  manaBaseHealth: {
+    score: number
+    breakdown: Array<{ label: string; value: number; max: number }>
+  }
+  /** Per-color pip demand vs source share gap (Karsten-ish). */
+  colorGap: Record<WubrgColor, { pipDemand: number; sourceShare: number; gap: number }>
+  /** Card counts per heuristic function category (qty-weighted). */
+  functions: Record<
+    'Commander' | 'Lands' | 'Ramp' | 'Tutors' | 'Card Draw' | 'Removal' | 'Protection' | 'Utility',
+    number
+  >
+  /** Quantity-weighted CMC distribution by speed bucket (non-land). */
+  speedTier: {
+    early: number
+    mid: number
+    late: number
+    total: number
+    label: string
+  }
+  /** Tribal detection: top creature subtype + breakdown. */
+  tribal: {
+    topType: string | null
+    topCount: number
+    isTribal: boolean
+    topByType: Array<{ type: string; count: number }>
+  }
+  /** Top keyword counts (qty-weighted, sorted desc). */
+  keywords: Array<{ keyword: string; count: number }>
+  /** Cards whose color_identity exceeds the commander's (Commander format only). */
+  identityViolations: Array<{ name: string; offending: string[] }>
+  /** Deterministic power-level estimate 1-10 + bracket label. */
+  powerLevel: {
+    score: number
+    bracket: 'Casual' | 'Focused' | 'Optimized' | 'cEDH'
+  }
+}
+
+export interface DeckStatsOptions {
+  /** decks.format value, e.g. "commander", "standard". Lowercased internally. */
+  format?: string
+  /** Commander color identity — only set for Commander decks. */
+  commanderIdentity?: string[]
 }
 
 /** Count mana pips in a mana_cost string like "{2}{W}{U}{U}" */
@@ -82,7 +126,12 @@ function isRockOrDork(card: CardRow): boolean {
   return (tl.includes('artifact') || tl.includes('creature')) && !tl.includes('land')
 }
 
-export function computeDeckStats(cards: DeckCardEntry[]): DeckStatsResult {
+export function computeDeckStats(
+  cards: DeckCardEntry[],
+  opts: DeckStatsOptions = {},
+): DeckStatsResult {
+  const format = (opts.format ?? '').toLowerCase()
+  const isCommanderFormat = format === 'commander' || format === 'edh'
   const mainCards = cards.filter((c) => c.board === 'main' || c.board === 'commander')
   const sideboardCards = cards.filter((c) => c.board === 'sideboard')
   const allDeckCards = [...mainCards, ...sideboardCards]
@@ -254,6 +303,224 @@ export function computeDeckStats(cards: DeckCardEntry[]): DeckStatsResult {
       quantity,
     }))
 
+  // --- Mana Base Health Score (0-100) ---
+  // Composite of:
+  //   1. land delta vs format target,
+  //   2. color source coverage vs pip demand (Karsten-ish),
+  //   3. avg CMC penalty if curve too tall.
+  const landTarget = isCommanderFormat ? 36 : format === 'standard' ? 24 : 24
+  const landDeltaPenalty = Math.min(Math.abs(landCount - landTarget) * 4, 50)
+  const landScore = Math.max(0, 100 - landDeltaPenalty)
+
+  let coverageScore = 100
+  const wubrg: WubrgColor[] = ['W', 'U', 'B', 'R', 'G']
+  const totalColoredSources =
+    colorSourceCount.W + colorSourceCount.U + colorSourceCount.B + colorSourceCount.R + colorSourceCount.G
+  for (const c of wubrg) {
+    const pips = costPips[c] ?? 0
+    if (pips <= 0) continue
+    const pipShare = totalCostPips > 0 ? pips / totalCostPips : 0
+    const srcShare = totalColoredSources > 0 ? colorSourceCount[c] / totalColoredSources : 0
+    // Penalize undersupply: shortfall in source share vs pip share.
+    const shortfall = Math.max(0, pipShare - srcShare)
+    coverageScore -= shortfall * 200
+  }
+  coverageScore = Math.max(0, Math.min(100, coverageScore))
+
+  let curveScore = 100
+  if (avgCMC > 3.5) curveScore -= (avgCMC - 3.5) * 25
+  curveScore = Math.max(0, Math.min(100, curveScore))
+
+  // Weighted: lands 0.4, coverage 0.4, curve 0.2.
+  const manaBaseHealthScore = Math.round(
+    landScore * 0.4 + coverageScore * 0.4 + curveScore * 0.2,
+  )
+  const manaBaseHealth = {
+    score: manaBaseHealthScore,
+    breakdown: [
+      { label: `Lands vs target (${landTarget})`, value: Math.round(landScore), max: 100 },
+      { label: 'Color source coverage', value: Math.round(coverageScore), max: 100 },
+      { label: 'Curve fit', value: Math.round(curveScore), max: 100 },
+    ],
+  }
+
+  // --- Color Gap (per-color pip demand vs source share) ---
+  const colorGap: Record<WubrgColor, { pipDemand: number; sourceShare: number; gap: number }> = {
+    W: { pipDemand: 0, sourceShare: 0, gap: 0 },
+    U: { pipDemand: 0, sourceShare: 0, gap: 0 },
+    B: { pipDemand: 0, sourceShare: 0, gap: 0 },
+    R: { pipDemand: 0, sourceShare: 0, gap: 0 },
+    G: { pipDemand: 0, sourceShare: 0, gap: 0 },
+  }
+  for (const c of wubrg) {
+    const pipDemand = totalCostPips > 0 ? (costPips[c] ?? 0) / totalCostPips : 0
+    const sourceShare = totalColoredSources > 0 ? colorSourceCount[c] / totalColoredSources : 0
+    colorGap[c] = { pipDemand, sourceShare, gap: sourceShare - pipDemand }
+  }
+
+  // --- Function density ---
+  const functions: DeckStatsResult['functions'] = {
+    Commander: 0,
+    Lands: 0,
+    Ramp: 0,
+    Tutors: 0,
+    'Card Draw': 0,
+    Removal: 0,
+    Protection: 0,
+    Utility: 0,
+  }
+  mainCards.forEach(({ card, quantity, board }) => {
+    const cat: CategoryName | null = categorize(
+      {
+        type_line: card.type_line,
+        oracle_text: card.oracle_text,
+        produced_mana: card.produced_mana as string[] | null,
+        keywords: card.keywords as string[] | null,
+      },
+      board,
+    )
+    if (cat) functions[cat] += quantity
+  })
+
+  // --- Speed tier (early / mid / late) ---
+  let early = 0
+  let mid = 0
+  let late = 0
+  nonLandCards.forEach(({ card, quantity }) => {
+    if (card.cmc <= 2) early += quantity
+    else if (card.cmc <= 4) mid += quantity
+    else late += quantity
+  })
+  const speedTotal = early + mid + late
+  let speedLabel = 'Mid-range'
+  if (speedTotal > 0) {
+    const ratios = { early: early / speedTotal, mid: mid / speedTotal, late: late / speedTotal }
+    if (ratios.early >= ratios.mid && ratios.early >= ratios.late) speedLabel = 'Aggro tilt'
+    else if (ratios.late >= ratios.mid && ratios.late >= ratios.early) speedLabel = 'Big mana'
+    else speedLabel = 'Mid-range'
+  }
+  const speedTier = { early, mid, late, total: speedTotal, label: speedLabel }
+
+  // --- Tribal & keyword concentration ---
+  const subtypeCounts = new Map<string, number>()
+  let creatureTotal = 0
+  mainCards.forEach(({ card, quantity }) => {
+    const tl = card.type_line ?? ''
+    if (!tl.toLowerCase().includes('creature')) return
+    creatureTotal += quantity
+    const dashIdx = tl.indexOf('—')
+    if (dashIdx < 0) return
+    const subtypes = tl
+      .slice(dashIdx + 1)
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    for (const sub of subtypes) {
+      subtypeCounts.set(sub, (subtypeCounts.get(sub) ?? 0) + quantity)
+    }
+  })
+  const topByType = Array.from(subtypeCounts.entries())
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+  const topEntry = topByType[0] ?? null
+  const tribalThresholdAbs = 8
+  const tribalThresholdRatio = creatureTotal > 0 ? topEntry && topEntry.count / creatureTotal >= 0.25 : false
+  const isTribal =
+    !!topEntry &&
+    (topEntry.count >= tribalThresholdAbs || tribalThresholdRatio)
+  const tribal = {
+    topType: topEntry ? topEntry.type : null,
+    topCount: topEntry ? topEntry.count : 0,
+    isTribal: !!isTribal,
+    topByType,
+  }
+
+  const keywordMap = new Map<string, number>()
+  mainCards.forEach(({ card, quantity }) => {
+    const kws = (card.keywords as string[] | null) ?? []
+    for (const k of kws) {
+      keywordMap.set(k, (keywordMap.get(k) ?? 0) + quantity)
+    }
+  })
+  const keywords = Array.from(keywordMap.entries())
+    .map(([keyword, count]) => ({ keyword, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+
+  // --- Color identity violations (Commander format only) ---
+  const identityViolations: Array<{ name: string; offending: string[] }> = []
+  if (isCommanderFormat && opts.commanderIdentity && opts.commanderIdentity.length >= 0) {
+    const allowed = new Set(opts.commanderIdentity)
+    const seen = new Set<string>()
+    mainCards.forEach(({ card, board }) => {
+      if (board === 'commander') return
+      const ci = (card.color_identity as string[] | null) ?? []
+      const offending = ci.filter((c) => !allowed.has(c))
+      if (offending.length > 0 && !seen.has(card.name)) {
+        seen.add(card.name)
+        identityViolations.push({ name: card.name, offending })
+      }
+    })
+  }
+
+  // --- Power level estimate (1-10) ---
+  // Source: IMPLEMENTATIONS.md "P1 — Power level estimator deterministico".
+  // Spec calls for 5 weighted dimensions (combo / speed / tutor / interaction
+  // / consistency). We do NOT have a combo DB yet, so combo is dropped from
+  // the weighted sum and remaining weights are renormalized.
+  // Weights (renormalized): speed 0.286, tutor 0.286, interaction 0.214, consistency 0.214.
+  const totalMainQty = totalMain || 1
+  const tutorCount = functions.Tutors
+  const rampCount = functions.Ramp
+  const drawCount = functions['Card Draw']
+  const removalCount = functions.Removal
+  const protectionCount = functions.Protection
+  const interactionCount = removalCount + protectionCount
+
+  // Fast mana ≈ ramp at CMC <= 2.
+  let fastManaCount = 0
+  mainCards.forEach(({ card, quantity, board }) => {
+    if (board === 'commander') return
+    const tl = (card.type_line ?? '').toLowerCase()
+    if (tl.includes('land')) return
+    if (card.cmc > 2) return
+    const cat = categorize(
+      {
+        type_line: card.type_line,
+        oracle_text: card.oracle_text,
+        produced_mana: card.produced_mana as string[] | null,
+        keywords: card.keywords as string[] | null,
+      },
+      board,
+    )
+    if (cat === 'Ramp') fastManaCount += quantity
+  })
+
+  // 0-10 sub-scores.
+  const speedScore = Math.min(10, fastManaCount * 1.2 + (avgCMC <= 2.8 ? 2 : avgCMC <= 3.2 ? 1 : 0))
+  const tutorScore = Math.min(10, tutorCount * 1.5)
+  // Interaction normalized vs deck size; ~10% interaction = mid-tier.
+  const interactionScore = Math.min(10, (interactionCount / totalMainQty) * 60)
+  // Consistency: card draw + ramp density.
+  const consistencyScore = Math.min(10, ((drawCount + rampCount) / totalMainQty) * 50)
+  const comboScore = 0 // No combo DB
+
+  const weightedRaw =
+    speedScore * 0.286 +
+    tutorScore * 0.286 +
+    interactionScore * 0.214 +
+    consistencyScore * 0.214 +
+    comboScore * 0
+  // Spec scale 0-10 — clamp 1-10 for UX.
+  const powerScore = Math.max(1, Math.min(10, Math.round(weightedRaw * 10) / 10))
+  let bracket: 'Casual' | 'Focused' | 'Optimized' | 'cEDH'
+  if (powerScore < 4) bracket = 'Casual'
+  else if (powerScore < 7) bracket = 'Focused'
+  else if (powerScore < 9) bracket = 'Optimized'
+  else bracket = 'cEDH'
+  const powerLevel = { score: powerScore, bracket }
+
   return {
     totalMain,
     totalSideboard,
@@ -278,5 +545,13 @@ export function computeDeckStats(cards: DeckCardEntry[]): DeckStatsResult {
     rarityBreakdown,
     setBreakdown,
     topExpensive,
+    manaBaseHealth,
+    colorGap,
+    functions,
+    speedTier,
+    tribal,
+    keywords,
+    identityViolations,
+    powerLevel,
   }
 }
