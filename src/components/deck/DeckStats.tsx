@@ -1,10 +1,37 @@
 'use client'
 
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts'
 import { TYPE_ICONS } from '@/lib/utils/typeIcons'
 import { useDeckStats, type DeckCardEntry } from '@/lib/hooks/useDeckStats'
 
 interface DeckStatsProps {
   cards: DeckCardEntry[]
+}
+
+/** MTG rarity colors for the pie chart. */
+const RARITY_COLOR: Record<string, string> = {
+  common: '#6b7280',
+  uncommon: '#94a3b8',
+  rare: '#ca8a04',
+  mythic: '#ea580c',
+  special: '#8b5cf6',
+  bonus: '#14b8a6',
+  unknown: '#475569',
+}
+
+function rarityColor(rarity: string): string {
+  return RARITY_COLOR[rarity.toLowerCase()] ?? RARITY_COLOR.unknown
+}
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1)
 }
 
 const COLORS = ['W', 'U', 'B', 'R', 'G', 'C'] as const
@@ -251,6 +278,180 @@ export default function DeckStats({ cards }: DeckStatsProps) {
             })}
         </div>
       </div>
+
+      {/* Mana Sources */}
+      {stats.manaSourceCount > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-font-secondary">
+            Mana Sources
+            <span className="ml-2 text-xs font-normal text-font-muted">
+              {stats.manaSourceCount} total
+            </span>
+          </h3>
+          {(() => {
+            const wubrgSum = (['W', 'U', 'B', 'R', 'G'] as const).reduce(
+              (s, c) => s + stats.colorSourceCount[c],
+              0,
+            )
+            // Fallback bucket: sources that don't produce WUBRG (colorless lands, etc.)
+            const fallback = Math.max(stats.manaSourceCount - wubrgSum, 0)
+            const denom = wubrgSum + fallback || 1
+            return (
+              <>
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-bg-cell">
+                  {(['W', 'U', 'B', 'R', 'G'] as const).map((color) => {
+                    const count = stats.colorSourceCount[color]
+                    if (count === 0) return null
+                    const pct = (count / denom) * 100
+                    return (
+                      <div
+                        key={color}
+                        className={`${COLOR_BG[color]} opacity-80`}
+                        style={{ width: `${pct}%` }}
+                        title={`${COLOR_NAMES[color]}: ${count} sources`}
+                      />
+                    )
+                  })}
+                  {fallback > 0 && (
+                    <div
+                      className="bg-bg-accent opacity-50"
+                      style={{ width: `${(fallback / denom) * 100}%` }}
+                      title={`Other/colorless: ${fallback} sources`}
+                    />
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-font-muted">
+                  {(['W', 'U', 'B', 'R', 'G'] as const).map((color) => {
+                    const count = stats.colorSourceCount[color]
+                    if (count === 0) return null
+                    return (
+                      <span key={color} className="inline-flex items-center gap-1">
+                        <span
+                          className={`inline-block h-2 w-2 rounded-full ${COLOR_BG[color]} opacity-80`}
+                        />
+                        <span className="text-font-secondary">{count}</span>
+                      </span>
+                    )
+                  })}
+                  {fallback > 0 && (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-block h-2 w-2 rounded-full bg-bg-accent opacity-50" />
+                      <span className="text-font-secondary">{fallback} other</span>
+                    </span>
+                  )}
+                </div>
+              </>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* Rarity */}
+      {stats.rarityBreakdown.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-font-secondary">Rarity</h3>
+          <div style={{ width: '100%', height: 160 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={stats.rarityBreakdown}
+                  dataKey="count"
+                  nameKey="rarity"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={60}
+                  label={false}
+                  labelLine={false}
+                >
+                  {stats.rarityBreakdown.map((entry) => (
+                    <Cell key={entry.rarity} fill={rarityColor(entry.rarity)} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    background: '#1f2937',
+                    border: '1px solid #334155',
+                    borderRadius: 6,
+                    fontSize: 11,
+                  }}
+                  formatter={(value, name) => [
+                    String(value),
+                    capitalize(String(name)),
+                  ]}
+                />
+                <Legend
+                  iconSize={8}
+                  wrapperStyle={{ fontSize: 10 }}
+                  formatter={(value: string) => capitalize(value)}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Top Sets */}
+      {stats.setBreakdown.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-font-secondary">Top Sets</h3>
+          <div className="flex flex-col gap-1.5">
+            {(() => {
+              const max = Math.max(...stats.setBreakdown.map((s) => s.count), 1)
+              return stats.setBreakdown.map((s) => (
+                <div key={s.code} className="flex items-center gap-2 text-xs">
+                  <span className="w-10 shrink-0 font-mono text-[10px] uppercase text-font-muted">
+                    {s.code}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-font-secondary">
+                    {s.name ?? s.code}
+                  </span>
+                  <div className="h-1.5 w-16 shrink-0 rounded-full bg-bg-cell">
+                    <div
+                      className="h-1.5 rounded-full bg-bg-accent opacity-70"
+                      style={{ width: `${(s.count / max) * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-6 shrink-0 text-right font-medium text-font-primary">
+                    {s.count}
+                  </span>
+                </div>
+              ))
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Top 10 Expensive */}
+      {stats.topExpensive.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-font-secondary">Top 10 Expensive</h3>
+          <div className="flex flex-col gap-1">
+            {stats.topExpensive.map((c) => {
+              const useEur = c.priceEur > 0
+              const unit = useEur ? c.priceEur : c.priceUsd
+              const total = unit * c.quantity
+              const symbol = useEur ? '€' : '$'
+              return (
+                <div
+                  key={`${c.cardId}-${c.name}`}
+                  className="flex items-center gap-2 text-xs"
+                >
+                  <span className="min-w-0 flex-1 truncate text-font-secondary">
+                    {c.name}
+                    {c.quantity > 1 && (
+                      <span className="ml-1 text-font-muted">×{c.quantity}</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 font-medium text-font-accent">
+                    {symbol}
+                    {total.toFixed(2)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
