@@ -52,7 +52,7 @@ interface DeckEditorProps {
   initialSections?: SectionRow[]
 }
 
-type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens'
+type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens' | 'stats'
 
 export default function DeckEditor({ deck, initialCards, initialSections = [] }: DeckEditorProps) {
   const router = useRouter()
@@ -177,7 +177,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
     [cards, activeTab]
   )
 
-  const tabCounts = useMemo(
+  const tabCounts = useMemo<Record<BoardTab, number | null>>(
     () => ({
       main: cards
         .filter((c) => c.board === 'main')
@@ -191,6 +191,8 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
       tokens: cards
         .filter((c) => c.board === 'tokens')
         .reduce((s, c) => s + c.quantity, 0),
+      // The Stats tab has no row count — rendered without a badge.
+      stats: null,
     }),
     [cards]
   )
@@ -610,29 +612,36 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             )}
           </div>
 
-          {/* Board tabs */}
+          {/* Board tabs — 'stats' tab is mobile-only; desktop has the sidebar. */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
-            {(['main', 'sideboard', 'maybeboard', 'tokens'] as BoardTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === tab
-                    ? 'bg-bg-surface text-font-primary shadow-sm'
-                    : 'text-font-secondary hover:text-font-primary'
-                }`}
-              >
-                <span className="sm:hidden">
-                  {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : 'Tkns'}
-                </span>
-                <span className="hidden sm:inline">
-                  {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : 'Tokens'}
-                </span>
-                <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                  ({tabCounts[tab]})
-                </span>
-              </button>
-            ))}
+            {(['main', 'sideboard', 'maybeboard', 'tokens', 'stats'] as BoardTab[]).map((tab) => {
+              const isStats = tab === 'stats'
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                    isStats ? 'lg:hidden' : ''
+                  } ${
+                    activeTab === tab
+                      ? 'bg-bg-surface text-font-primary shadow-sm'
+                      : 'text-font-secondary hover:text-font-primary'
+                  }`}
+                >
+                  <span className="sm:hidden">
+                    {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : tab === 'tokens' ? 'Tkns' : 'Stats'}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : tab === 'tokens' ? 'Tokens' : 'Stats'}
+                  </span>
+                  {tabCounts[tab] != null && (
+                    <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                      ({tabCounts[tab]})
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           {activeTab === 'tokens' && (
@@ -680,20 +689,26 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             </div>
           )}
 
-          <DeckContent
-            cards={filteredCards}
-            commanderCards={commanderCards}
-            sections={sections}
-            deckId={deck.id}
-            isCommander={isCommander}
-            onCardClick={setSelectedDetailCard}
-            onQuantityChange={handleQuantityChange}
-            onRemove={handleRemove}
-            onToggleCommander={activeTab !== 'tokens' ? handleToggleCommander : undefined}
-            onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
-            onSectionChange={handleSectionChange}
-            onTagsChange={handleTagsChange}
-          />
+          {activeTab === 'stats' ? (
+            <div className="rounded-xl border border-border bg-bg-surface p-4">
+              <DeckStats cards={statsCards} />
+            </div>
+          ) : (
+            <DeckContent
+              cards={filteredCards}
+              commanderCards={commanderCards}
+              sections={sections}
+              deckId={deck.id}
+              isCommander={isCommander}
+              onCardClick={setSelectedDetailCard}
+              onQuantityChange={handleQuantityChange}
+              onRemove={handleRemove}
+              onToggleCommander={activeTab !== 'tokens' ? handleToggleCommander : undefined}
+              onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
+              onSectionChange={handleSectionChange}
+              onTagsChange={handleTagsChange}
+            />
+          )}
         </div>
 
         {/* Right panel: sections + stats — only on lg+ */}

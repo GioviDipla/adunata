@@ -16,7 +16,7 @@ import type { SectionRow } from '@/types/deck'
 type CardRow = Database['public']['Tables']['cards']['Row']
 type DeckRow = Database['public']['Tables']['decks']['Row']
 
-type BoardTab = 'main' | 'sideboard' | 'maybeboard'
+type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'stats'
 
 interface DeckViewProps {
   deck: DeckRow
@@ -62,11 +62,12 @@ export default function DeckView({
     [cards],
   )
 
-  const tabCounts = useMemo(
+  const tabCounts = useMemo<Record<BoardTab, number | null>>(
     () => ({
       main: cards.filter((c) => c.board === 'main').reduce((s, c) => s + c.quantity, 0),
       sideboard: cards.filter((c) => c.board === 'sideboard').reduce((s, c) => s + c.quantity, 0),
       maybeboard: cards.filter((c) => c.board === 'maybeboard').reduce((s, c) => s + c.quantity, 0),
+      stats: null,
     }),
     [cards],
   )
@@ -168,38 +169,51 @@ export default function DeckView({
             </div>
           )}
 
-          {/* Board tabs */}
+          {/* Board tabs — 'stats' tab is mobile-only; desktop has the sidebar. */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
-            {(['main', 'sideboard', 'maybeboard'] as BoardTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                  activeTab === tab
-                    ? 'bg-bg-surface text-font-primary shadow-sm'
-                    : 'text-font-secondary hover:text-font-primary'
-                }`}
-              >
-                <span className="sm:hidden">
-                  {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : 'Maybe'}
-                </span>
-                <span className="hidden sm:inline">
-                  {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : 'Maybeboard'}
-                </span>
-                <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                  ({tabCounts[tab]})
-                </span>
-              </button>
-            ))}
+            {(['main', 'sideboard', 'maybeboard', 'stats'] as BoardTab[]).map((tab) => {
+              const isStats = tab === 'stats'
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                    isStats ? 'lg:hidden' : ''
+                  } ${
+                    activeTab === tab
+                      ? 'bg-bg-surface text-font-primary shadow-sm'
+                      : 'text-font-secondary hover:text-font-primary'
+                  }`}
+                >
+                  <span className="sm:hidden">
+                    {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : 'Stats'}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : 'Stats'}
+                  </span>
+                  {tabCounts[tab] != null && (
+                    <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
+                      ({tabCounts[tab]})
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
-          <DeckContent
-            cards={filteredCards}
-            commanderCards={commanderCards}
-            sections={sections}
-            isCommander={isCommander}
-            onCardClick={setSelectedDetailCard}
-          />
+          {activeTab === 'stats' ? (
+            <div className="rounded-xl border border-border bg-bg-surface p-4">
+              <DeckStats cards={statsCards} />
+            </div>
+          ) : (
+            <DeckContent
+              cards={filteredCards}
+              commanderCards={commanderCards}
+              sections={sections}
+              isCommander={isCommander}
+              onCardClick={setSelectedDetailCard}
+            />
+          )}
 
           <DeckEngagement
             deckId={deck.id}

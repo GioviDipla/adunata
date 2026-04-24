@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import {
   PieChart,
   Pie,
@@ -10,9 +11,20 @@ import {
 } from 'recharts'
 import { TYPE_ICONS } from '@/lib/utils/typeIcons'
 import { useDeckStats, type DeckCardEntry } from '@/lib/hooks/useDeckStats'
+import { useDeckSimulator } from '@/lib/hooks/useDeckSimulator'
+import type { SimInput } from '@/lib/hooks/deckSimulatorWorker'
 
 interface DeckStatsProps {
   cards: DeckCardEntry[]
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 rounded-md bg-bg-dark/40 px-2 py-1.5">
+      <dt className="text-[10px] text-font-muted">{label}</dt>
+      <dd className="text-xs font-semibold text-font-primary">{value}</dd>
+    </div>
+  )
 }
 
 /** MTG rarity colors for the pie chart. */
@@ -45,6 +57,32 @@ const CMC_BUCKETS = ['0', '1', '2', '3', '4', '5', '6', '7+'] as const
 
 export default function DeckStats({ cards }: DeckStatsProps) {
   const stats = useDeckStats(cards)
+
+  // Build simulator input — flatten main+commander boards into one copy per
+  // quantity, tag lands / rocks. Memoized on `cards` identity.
+  const simInput = useMemo<SimInput | null>(() => {
+    const main = cards.filter((c) => c.board === 'main' || c.board === 'commander')
+    if (main.length === 0) return null
+    const mainDeck = main.flatMap(({ card, quantity }) => {
+      const tl = (card.type_line ?? '').toLowerCase()
+      const is_land = tl.includes('land')
+      const producedLen = ((card.produced_mana as string[] | null) ?? []).length
+      const is_rock = !is_land && producedLen > 0
+      return Array.from({ length: quantity }, () => ({
+        cmc: card.cmc ?? 0,
+        is_land,
+        is_rock,
+      }))
+    })
+    const cmd = cards.find((c) => c.board === 'commander')
+    return {
+      mainDeck,
+      commanderCmc: cmd ? cmd.card.cmc : null,
+      iterations: 5000,
+    }
+  }, [cards])
+
+  const { result: sim, running: simRunning } = useDeckSimulator(simInput)
 
   function getDominantColorClass(bucket: string): string {
     const colors = stats.cmcByColor[bucket]
@@ -232,6 +270,43 @@ export default function DeckStats({ cards }: DeckStatsProps) {
           })}
         </div>
       </div>
+
+      {/* Goldfish Stats (Monte Carlo) */}
+      {simInput && (
+        <div className="rounded-lg border border-border bg-bg-cell p-3">
+          <h3 className="mb-2 text-sm font-semibold text-font-secondary">
+            Goldfish Stats
+            <span className="ml-2 text-[10px] font-normal text-font-muted">
+              (5k sims)
+            </span>
+          </h3>
+          {simRunning && (
+            <div className="text-xs text-font-muted">Simulating…</div>
+          )}
+          {sim && (
+            <dl className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              <StatRow
+                label="Keep rate (2-5 lands)"
+                value={`${(sim.keepRate * 100).toFixed(0)}%`}
+              />
+              <StatRow
+                label="Mana screw @ T3"
+                value={`${(sim.screwRate * 100).toFixed(0)}%`}
+              />
+              <StatRow
+                label="Mana flood @ T7"
+                value={`${(sim.floodRate * 100).toFixed(0)}%`}
+              />
+              {simInput.commanderCmc != null && sim.turnToCommanderP50 != null && (
+                <StatRow
+                  label="Turn to commander (P50 / P90)"
+                  value={`T${sim.turnToCommanderP50} / T${sim.turnToCommanderP90 ?? '?'}`}
+                />
+              )}
+            </dl>
+          )}
+        </div>
+      )}
 
       {/* Color Distribution */}
       <div>
