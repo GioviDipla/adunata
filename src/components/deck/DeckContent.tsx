@@ -476,6 +476,8 @@ export default function DeckContent({
               onCardClick={onCardClick}
               readOnly={readOnly}
               onMoveToBoard={onMoveToBoard}
+              sections={editingWired ? sectionOptions : undefined}
+              onSectionChange={onSectionChange}
             />
           ) : viewMode === 'text' ? (
             <DeckTextView
@@ -486,6 +488,8 @@ export default function DeckContent({
               onMoveToBoard={onMoveToBoard}
               onQuantityChange={onQuantityChange}
               onRemove={onRemove}
+              sections={editingWired ? sectionOptions : undefined}
+              onSectionChange={onSectionChange}
             />
           ) : (
             <div className="flex flex-col gap-1">
@@ -610,6 +614,8 @@ export default function DeckContent({
           onCardClick={onCardClick}
           readOnly={readOnly}
           onMoveToBoard={onMoveToBoard}
+          sections={editingWired ? sectionOptions : undefined}
+          onSectionChange={onSectionChange}
         />
       )}
 
@@ -623,6 +629,8 @@ export default function DeckContent({
           onMoveToBoard={onMoveToBoard}
           onQuantityChange={onQuantityChange}
           onRemove={onRemove}
+          sections={editingWired ? sectionOptions : undefined}
+          onSectionChange={onSectionChange}
         />
       )}
     </div>

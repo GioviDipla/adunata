@@ -85,6 +85,7 @@ export async function POST(
 
   let assigned = 0
   let skipped = 0
+  const updates: Array<{ id: string; section_id: string }> = []
   for (const dc of filtered) {
     if (!overwrite && dc.section_id != null) {
       skipped++
@@ -113,6 +114,7 @@ export async function POST(
     if (error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     assigned++
+    updates.push({ id: dc.id, section_id: targetSectionId })
   }
 
   revalidatePath(`/decks/${deckId}`)
@@ -120,5 +122,6 @@ export async function POST(
     assigned,
     skipped,
     total: filtered.length,
+    updates,
   })
 }

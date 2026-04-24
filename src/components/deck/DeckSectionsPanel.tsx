@@ -26,6 +26,8 @@ interface Props {
   deckId: string
   sections: SectionRow[]
   onChange: (next: SectionRow[]) => void
+  /** Optional: parent applies section_id updates to its local card state. */
+  onAutoAssignUpdates?: (updates: Array<{ id: string; section_id: string }>) => void
 }
 
 /**
@@ -36,7 +38,7 @@ interface Props {
  * truth — we re-call it with the server echo (to pick up real row ids
  * after create) once the request resolves.
  */
-export default function DeckSectionsPanel({ deckId, sections, onChange }: Props) {
+export default function DeckSectionsPanel({ deckId, sections, onChange, onAutoAssignUpdates }: Props) {
   const router = useRouter()
   const [draftName, setDraftName] = useState('')
   const [busy, setBusy] = useState(false)
@@ -122,8 +124,11 @@ export default function DeckSectionsPanel({ deckId, sections, onChange }: Props)
         setAutoAssignSummary(text || 'Auto-assign failed')
         return
       }
-      const { assigned, skipped, total } = await res.json()
+      const { assigned, skipped, total, updates } = await res.json()
       setAutoAssignSummary(`Assigned ${assigned} / ${total} (skipped ${skipped})`)
+      if (Array.isArray(updates) && updates.length > 0) {
+        onAutoAssignUpdates?.(updates)
+      }
       router.refresh()
     } finally {
       setBusy(false)

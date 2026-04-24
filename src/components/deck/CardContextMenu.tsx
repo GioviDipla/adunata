@@ -2,7 +2,13 @@
 
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowRight, Trash2, Crown, Minus, Plus } from 'lucide-react'
+import { ArrowRight, Trash2, Crown, Minus, Plus, Layers, Check } from 'lucide-react'
+
+interface SectionOption {
+  id: string
+  name: string
+  color: string | null
+}
 
 interface CardContextMenuProps {
   x: number
@@ -16,6 +22,10 @@ interface CardContextMenuProps {
   onToggleCommander?: () => void
   onMoveToBoard: (board: string) => void
   onRemove?: () => void
+  /** Sections — when supplied, render a "Move to section" group. */
+  sections?: SectionOption[]
+  currentSectionId?: string | null
+  onMoveToSection?: (sectionId: string | null) => void
   onClose: () => void
 }
 
@@ -35,6 +45,9 @@ export default function CardContextMenu({
   onToggleCommander,
   onMoveToBoard,
   onRemove,
+  sections,
+  currentSectionId,
+  onMoveToSection,
   onClose,
 }: CardContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
@@ -70,11 +83,14 @@ export default function CardContextMenu({
   // Panel dimensions vary with which optional rows are present.
   const hasQuantity = onQuantityChange != null && quantity != null
   const hasCommander = onToggleCommander != null
-  const menuWidth = 200
+  const hasSections = onMoveToSection != null && Array.isArray(sections)
+  const sectionRows = hasSections ? sections!.length + 1 : 0 // +1 for "Uncategorized"
+  const menuWidth = 220
   let menuHeight = 60 // move-to header + gap
   if (hasQuantity) menuHeight += 52
   if (hasCommander) menuHeight += 44
   menuHeight += BOARDS.filter((b) => b.key !== currentBoard).length * 36
+  if (hasSections) menuHeight += 28 + Math.min(sectionRows, 6) * 32
   if (onRemove) menuHeight += 40
 
   const pad = 8
@@ -94,7 +110,7 @@ export default function CardContextMenu({
   return createPortal(
     <div
       ref={ref}
-      className="fixed z-[100] w-[200px] rounded-xl border border-border bg-bg-surface py-1.5 shadow-2xl"
+      className="fixed z-[100] w-[220px] rounded-xl border border-border bg-bg-surface py-1.5 shadow-2xl"
       style={{ left, top }}
       onTouchStart={(e) => e.stopPropagation()}
       onTouchMove={(e) => e.stopPropagation()}
@@ -159,6 +175,41 @@ export default function CardContextMenu({
           {board.label}
         </button>
       ))}
+
+      {hasSections && (
+        <>
+          <div className="mx-2 my-1 border-t border-border" />
+          <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-font-muted">
+            Move to section
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => { onMoveToSection!(null); onClose() }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-font-primary transition-colors hover:bg-bg-hover"
+            >
+              <Layers className="h-3.5 w-3.5 text-font-muted" />
+              <span className="flex-1 truncate">Uncategorized</span>
+              {currentSectionId == null && <Check className="h-3.5 w-3.5 text-font-accent" />}
+            </button>
+            {sections!.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => { onMoveToSection!(s.id); onClose() }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-font-primary transition-colors hover:bg-bg-hover"
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: s.color ?? '#475569' }}
+                />
+                <span className="flex-1 truncate">{s.name}</span>
+                {currentSectionId === s.id && <Check className="h-3.5 w-3.5 text-font-accent" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {onRemove && (
         <>

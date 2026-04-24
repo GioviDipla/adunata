@@ -105,6 +105,19 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
     return m
   }, [overlayData])
 
+  const applySectionUpdates = useCallback(
+    (updates: Array<{ id: string; section_id: string }>) => {
+      if (!updates.length) return
+      const map = new Map(updates.map((u) => [u.id, u.section_id]))
+      setCards((prev) =>
+        prev.map((c) =>
+          map.has(c.id) ? { ...c, section_id: map.get(c.id) ?? null } : c,
+        ),
+      )
+    },
+    [],
+  )
+
   async function exportShoppingList() {
     if (!overlayData) return
     const missing = overlayData.overlay.filter((r) => r.missing > 0)
@@ -678,6 +691,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
                   deckId={deck.id}
                   sections={sections}
                   onChange={setSections}
+                  onAutoAssignUpdates={applySectionUpdates}
                 />
               </div>
             )}
@@ -818,6 +832,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
               deckId={deck.id}
               sections={sections}
               onChange={setSections}
+              onAutoAssignUpdates={applySectionUpdates}
             />
             <div className="rounded-xl border border-border bg-bg-surface p-4">
               <h2 className="mb-4 text-sm font-semibold text-font-secondary">

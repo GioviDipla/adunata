@@ -13,6 +13,13 @@ interface DeckCardEntry {
   card: CardRow
   quantity: number
   board: string
+  section_id?: string | null
+}
+
+interface SectionOption {
+  id: string
+  name: string
+  color: string | null
 }
 
 interface DeckTextViewProps {
@@ -25,6 +32,8 @@ interface DeckTextViewProps {
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
   onQuantityChange?: (cardId: number, quantity: number, board: string) => void
   onRemove?: (cardId: number, board: string) => void
+  sections?: SectionOption[]
+  onSectionChange?: (deckCardId: string, sectionId: string | null) => void
 }
 
 export default function DeckTextView({
@@ -36,6 +45,8 @@ export default function DeckTextView({
   onMoveToBoard,
   onQuantityChange,
   onRemove,
+  sections,
+  onSectionChange,
 }: DeckTextViewProps) {
   const [hoverCard, setHoverCard] = useState<{ card: CardRow; x: number; y: number } | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
@@ -180,6 +191,13 @@ export default function DeckTextView({
             }
             onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}
             onRemove={onRemove ? () => onRemove(contextMenu.cardId, contextMenu.board) : undefined}
+            sections={sections && entry?.id ? sections : undefined}
+            currentSectionId={entry?.section_id ?? null}
+            onMoveToSection={
+              sections && entry?.id && onSectionChange
+                ? (sid) => onSectionChange(entry.id, sid)
+                : undefined
+            }
             onClose={() => setContextMenu(null)}
           />
         )

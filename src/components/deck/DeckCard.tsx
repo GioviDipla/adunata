@@ -324,6 +324,13 @@ export default function DeckCard({
           }
           onMoveToBoard={(toBoard) => onMoveToBoard(card.id, board, toBoard)}
           onRemove={onRemove ? () => onRemove(card.id, board) : undefined}
+          sections={sections && deckCardId ? sections : undefined}
+          currentSectionId={sectionId ?? null}
+          onMoveToSection={
+            sections && deckCardId && onSectionChange
+              ? (sid) => onSectionChange(deckCardId, sid)
+              : undefined
+          }
           onClose={() => setContextMenu(null)}
         />
       )}

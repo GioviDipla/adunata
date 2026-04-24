@@ -12,6 +12,13 @@ interface DeckCardEntry {
   card: CardRow
   quantity: number
   board: string
+  section_id?: string | null
+}
+
+interface SectionOption {
+  id: string
+  name: string
+  color: string | null
 }
 
 interface DeckGridViewProps {
@@ -23,6 +30,8 @@ interface DeckGridViewProps {
   onCardClick?: (card: CardRow) => void
   readOnly?: boolean
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
+  sections?: SectionOption[]
+  onSectionChange?: (deckCardId: string, sectionId: string | null) => void
 }
 
 function useGridLongPress(delay = 500) {
@@ -58,6 +67,8 @@ export default function DeckGridView({
   onCardClick,
   readOnly = false,
   onMoveToBoard,
+  sections,
+  onSectionChange,
 }: DeckGridViewProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
   const longPress = useGridLongPress(500)
@@ -215,6 +226,13 @@ export default function DeckGridView({
             }
             onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}
             onRemove={onRemove ? () => onRemove(contextMenu.cardId, contextMenu.board) : undefined}
+            sections={sections && entry?.id ? sections : undefined}
+            currentSectionId={entry?.section_id ?? null}
+            onMoveToSection={
+              sections && entry?.id && onSectionChange
+                ? (sid) => onSectionChange(entry.id, sid)
+                : undefined
+            }
             onClose={() => setContextMenu(null)}
           />
         )
