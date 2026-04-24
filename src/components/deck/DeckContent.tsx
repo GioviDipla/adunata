@@ -93,15 +93,35 @@ export default function DeckContent({
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [sortMode, setSortMode] = useState<SortMode>('type')
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set())
+  // Section filter: we store `''` to mean "Uncategorized" so the Set can
+  // still hold a string sentinel for the null branch.
+  const [sectionFilter, setSectionFilter] = useState<Set<string>>(new Set())
+  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set())
   const [showFilterPanel, setShowFilterPanel] = useState(false)
 
   const visibleCards = useMemo(() => {
-    if (typeFilter.size === 0) return cards
+    const noType = typeFilter.size === 0
+    const noSection = sectionFilter.size === 0
+    const noTag = tagFilter.size === 0
+    if (noType && noSection && noTag) return cards
     return cards.filter((c) => {
       if (!c.card) return false
-      return typeFilter.has(getCardTypeCategory(c.card.type_line))
+      if (!noType && !typeFilter.has(getCardTypeCategory(c.card.type_line)))
+        return false
+      if (!noSection) {
+        const key = c.section_id ?? ''
+        if (!sectionFilter.has(key)) return false
+      }
+      if (!noTag) {
+        const cardTags = c.tags ?? []
+        // AND semantics: every active tag must be present on the card.
+        for (const t of tagFilter) {
+          if (!cardTags.includes(t)) return false
+        }
+      }
+      return true
     })
-  }, [cards, typeFilter])
+  }, [cards, typeFilter, sectionFilter, tagFilter])
 
   // Autocomplete suggestions for the TagEditor — every tag currently used
   // in the deck, deduped + alphabetical. Cheap to compute, re-runs only
@@ -227,7 +247,31 @@ export default function DeckContent({
     })
   }, [])
 
-  const clearTypeFilter = useCallback(() => setTypeFilter(new Set()), [])
+  const toggleSectionFilter = useCallback((key: string) => {
+    setSectionFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  const toggleTagFilter = useCallback((tag: string) => {
+    setTagFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(tag)) next.delete(tag)
+      else next.add(tag)
+      return next
+    })
+  }, [])
+
+  const clearAllFilters = useCallback(() => {
+    setTypeFilter(new Set())
+    setSectionFilter(new Set())
+    setTagFilter(new Set())
+  }, [])
+
+  const totalFilterCount = typeFilter.size + sectionFilter.size + tagFilter.size
 
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -286,49 +330,125 @@ export default function DeckContent({
         <button
           onClick={() => setShowFilterPanel((prev) => !prev)}
           className={`flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors ${
-            typeFilter.size > 0 || showFilterPanel
+            totalFilterCount > 0 || showFilterPanel
               ? 'bg-bg-accent/20 text-font-accent'
               : 'bg-bg-cell text-font-secondary hover:text-font-primary'
           }`}
-          aria-label="Filter by type"
+          aria-label="Filter cards"
         >
           <Filter className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Filter</span>
-          {typeFilter.size > 0 && (
+          {totalFilterCount > 0 && (
             <span className="rounded-full bg-bg-accent px-1.5 py-0.5 text-[9px] font-bold text-font-white">
-              {typeFilter.size}
+              {totalFilterCount}
             </span>
           )}
         </button>
       </div>
 
       {showFilterPanel && (
-        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-2">
-          {TYPE_ORDER.map((type) => {
-            const count = typeCounts[type] ?? 0
-            if (count === 0) return null
-            const active = typeFilter.has(type)
-            return (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2">
+          {/* Type group */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+              Type
+            </span>
+            {TYPE_ORDER.map((type) => {
+              const count = typeCounts[type] ?? 0
+              if (count === 0) return null
+              const active = typeFilter.has(type)
+              return (
+                <button
+                  key={type}
+                  onClick={() => toggleTypeFilter(type)}
+                  className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    active
+                      ? 'bg-bg-accent text-font-white'
+                      : 'bg-bg-cell text-font-secondary hover:text-font-primary'
+                  }`}
+                >
+                  {type} ({count})
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Section group — only if the deck has sections or uncategorized cards */}
+          {(sections?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+                Section
+              </span>
+              {sections!.map((s) => {
+                const active = sectionFilter.has(s.id)
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => toggleSectionFilter(s.id)}
+                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                      active
+                        ? 'bg-bg-accent text-font-white'
+                        : 'bg-bg-cell text-font-secondary hover:text-font-primary'
+                    }`}
+                  >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: s.color ?? '#475569' }}
+                    />
+                    {s.name}
+                  </button>
+                )
+              })}
+              {/* Uncategorized — only show if any card has no section_id */}
+              {cards.some((c) => !c.section_id) && (
+                <button
+                  onClick={() => toggleSectionFilter('')}
+                  className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    sectionFilter.has('')
+                      ? 'bg-bg-accent text-font-white'
+                      : 'bg-bg-cell text-font-secondary hover:text-font-primary'
+                  }`}
+                >
+                  Uncategorized
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Tag group */}
+          {tagSuggestions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+                Tag
+              </span>
+              {tagSuggestions.map((t) => {
+                const active = tagFilter.has(t)
+                return (
+                  <button
+                    key={t}
+                    onClick={() => toggleTagFilter(t)}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                      active
+                        ? 'bg-bg-accent text-font-white'
+                        : 'bg-bg-cell text-font-secondary hover:text-font-primary'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {totalFilterCount > 0 && (
+            <div className="pt-1">
               <button
-                key={type}
-                onClick={() => toggleTypeFilter(type)}
-                className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                  active
-                    ? 'bg-bg-accent text-font-white'
-                    : 'bg-bg-cell text-font-secondary hover:text-font-primary'
-                }`}
+                onClick={clearAllFilters}
+                className="rounded-md px-2 py-1 text-[11px] font-medium text-font-muted hover:text-font-primary"
               >
-                {type} ({count})
+                Clear filters
               </button>
-            )
-          })}
-          {typeFilter.size > 0 && (
-            <button
-              onClick={clearTypeFilter}
-              className="rounded-md px-2 py-1 text-[11px] font-medium text-font-muted hover:text-font-primary"
-            >
-              Clear
-            </button>
+            </div>
           )}
         </div>
       )}
