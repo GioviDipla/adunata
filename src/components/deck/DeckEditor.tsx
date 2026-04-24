@@ -25,6 +25,7 @@ import AddCardSearch from './AddCardSearch'
 import CardDetail from '@/components/cards/CardDetail'
 import ImportCardsModal from './ImportCardsModal'
 import DeckContent from './DeckContent'
+import DeckSectionsPanel from './DeckSectionsPanel'
 import VisibilityToggle from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
 import type { Database } from '@/types/supabase'
@@ -79,6 +80,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
   // in sessionStorage so the user can retry them without re-typing.
   const [importPrefill, setImportPrefill] = useState<string>('')
   const [showExpandedStats, setShowExpandedStats] = useState(false)
+  const [showSectionsPanel, setShowSectionsPanel] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -588,6 +590,26 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             />
           </div>
 
+          {/* Sections panel — mobile only (desktop shows it in the right sidebar) */}
+          <div className="mb-3 sm:mb-4 lg:hidden">
+            <button
+              onClick={() => setShowSectionsPanel((p) => !p)}
+              className="flex w-full items-center justify-between rounded-lg bg-bg-cell px-3 py-2 text-xs text-font-secondary hover:text-font-primary"
+            >
+              <span className="font-semibold">Sections ({sections.length})</span>
+              <span>{showSectionsPanel ? '−' : '+'}</span>
+            </button>
+            {showSectionsPanel && (
+              <div className="mt-2">
+                <DeckSectionsPanel
+                  deckId={deck.id}
+                  sections={sections}
+                  onChange={setSections}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
             {(['main', 'sideboard', 'maybeboard', 'tokens'] as BoardTab[]).map((tab) => (
@@ -674,13 +696,20 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
           />
         </div>
 
-        {/* Right panel: Full stats — only on lg+ */}
+        {/* Right panel: sections + stats — only on lg+ */}
         <div className="hidden lg:block w-80 shrink-0">
-          <div className="sticky top-6 rounded-xl border border-border bg-bg-surface p-4">
-            <h2 className="mb-4 text-sm font-semibold text-font-secondary">
-              Deck Statistics
-            </h2>
-            <DeckStats cards={statsCards} />
+          <div className="sticky top-6 flex flex-col gap-4">
+            <DeckSectionsPanel
+              deckId={deck.id}
+              sections={sections}
+              onChange={setSections}
+            />
+            <div className="rounded-xl border border-border bg-bg-surface p-4">
+              <h2 className="mb-4 text-sm font-semibold text-font-secondary">
+                Deck Statistics
+              </h2>
+              <DeckStats cards={statsCards} />
+            </div>
           </div>
         </div>
       </div>
