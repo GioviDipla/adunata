@@ -36,6 +36,7 @@ Ultimo aggiornamento: 2026-04-21.
 - [x] Visibility toggle (private / public)
 - [x] Switch tra stampe diverse della stessa carta
 - [x] Commander assignment con RLS-aware public preview
+- [x] Deck analytics v1 (Monte Carlo keep/screw/flood, turn-to-commander, sources, rarity, set, top expensive)
 
 ### Goldfish
 - [x] Simulazione prima pescata (7 carte)
