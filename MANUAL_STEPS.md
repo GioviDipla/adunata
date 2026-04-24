@@ -109,7 +109,9 @@ Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `p
 
 Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
-## [STEP] — Applicare migration `20260424130448_deck_sections.sql`
+## ✅ [STEP] — Applicare migration `20260424130448_deck_sections.sql`
+
+Applicata 2026-04-25 via `supabase db query --linked --file`. Schema verificato: 7 colonne `deck_sections`, 3 nuove su `deck_cards` (`section_id`, `tags`, `position_in_section`), 2 policy RLS (`deck_sections_select_visible`, `deck_sections_mutate_owner`).
 
 Quando: **prima di usare la feature "Sezioni e tag nei deck"** (P0 dal piano 2026-04-24). Senza migration, la pagina deck fallisce perché `DECK_CARD_COLUMNS` include `section_id`, `tags`, `position_in_section`.
 
@@ -139,7 +141,9 @@ select tablename, policyname, cmd
 
 Dove inserire il risultato: niente — `src/types/supabase.ts` è già stato aggiornato a mano con le nuove Row/Insert/Update.
 
-## [STEP] — Applicare migration `20260424133244_user_cards.sql`
+## ✅ [STEP] — Applicare migration `20260424133244_user_cards.sql`
+
+Applicata 2026-04-25 via `supabase db query --linked --file`. Fix in flight: `card_id` cambiato da `text` a `uuid` per matchare `cards.id` reale. Schema verificato: 10 colonne, 2 policy RLS (`user_cards_select_own`, `user_cards_mutate_own`).
 
 Quando: **prima di usare la feature "Collection" + deck overlay** (P1 dal piano 2026-04-24). Senza migration, le route `/api/collection*` e `/api/decks/:id/overlay` falliscono con "relation public.user_cards does not exist".
 

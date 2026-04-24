@@ -12,7 +12,7 @@
 create table if not exists public.user_cards (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  card_id text not null references public.cards(id) on delete cascade,
+  card_id uuid not null references public.cards(id) on delete cascade,
   quantity integer not null default 1 check (quantity >= 0),
   foil boolean not null default false,
   language text not null default 'en',
