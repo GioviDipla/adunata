@@ -112,6 +112,17 @@ export default function DeckView({
     [cards],
   )
 
+  // Commander color identity union for the stats panel (identity violations).
+  const commanderIdentity = useMemo<string[] | undefined>(() => {
+    if (commanderCards.length === 0) return undefined
+    const set = new Set<string>()
+    for (const cc of commanderCards) {
+      const ci = (cc.card.color_identity as string[] | null) ?? []
+      for (const c of ci) set.add(c)
+    }
+    return Array.from(set)
+  }, [commanderCards])
+
   const tabCounts = useMemo<Record<BoardTab, number | null>>(
     () => ({
       main: cards.filter((c) => c.board === 'main').reduce((s, c) => s + c.quantity, 0),
@@ -228,7 +239,7 @@ export default function DeckView({
           {/* Expanded stats on mobile */}
           {showExpandedStats && (
             <div className="mb-3 sm:mb-4 lg:hidden rounded-xl border border-border bg-bg-surface p-4">
-              <DeckStats cards={statsCards} />
+              <DeckStats cards={statsCards} format={deck.format} commanderIdentity={commanderIdentity} />
             </div>
           )}
 
@@ -295,7 +306,7 @@ export default function DeckView({
 
           {activeTab === 'stats' ? (
             <div className="rounded-xl border border-border bg-bg-surface p-4">
-              <DeckStats cards={statsCards} />
+              <DeckStats cards={statsCards} format={deck.format} commanderIdentity={commanderIdentity} />
             </div>
           ) : (
             <DeckContent
@@ -321,7 +332,7 @@ export default function DeckView({
             <h2 className="mb-4 text-sm font-semibold text-font-secondary">
               Deck Statistics
             </h2>
-            <DeckStats cards={statsCards} />
+            <DeckStats cards={statsCards} format={deck.format} commanderIdentity={commanderIdentity} />
           </div>
         </div>
       </div>
