@@ -25,7 +25,8 @@ async function getPublicCardsData(): Promise<{ initialCards: Card[]; sets: SetIn
       .from('cards')
       .select(CARD_GRID_COLUMNS)
       .not('released_at', 'is', null)
-      .order('released_at', { ascending: false })
+      .order('released_at', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: false })
       .limit(40),
     admin.rpc('get_distinct_sets'),
   ])
