@@ -32,6 +32,11 @@ interface DeckCardProps {
   tagSuggestions?: string[]
   onSectionChange?: (deckCardId: string, sectionId: string | null) => void
   onTagsChange?: (deckCardId: string, tags: string[]) => void
+
+  /** Collection overlay badge — rendered when the deck view is in
+   *  "show collection overlay" mode. `missing == 0` renders a green
+   *  "Owned" chip; otherwise amber/red "Need N". */
+  overlay?: { owned: number; needed: number; missing: number }
 }
 
 function ManaCostDisplay({ manaCost }: { manaCost: string | null }) {
@@ -101,6 +106,7 @@ export default function DeckCard({
   tagSuggestions,
   onSectionChange,
   onTagsChange,
+  overlay,
 }: DeckCardProps) {
   const editingEnabled =
     !!onRemove && !!deckId && !!deckCardId && Array.isArray(sections)
@@ -199,6 +205,22 @@ export default function DeckCard({
       <span className="shrink-0 text-[10px] text-font-muted sm:hidden">
         {card.mana_cost?.replace(/[{}]/g, '') || ''}
       </span>
+
+      {/* Collection overlay badge — owned vs missing */}
+      {overlay && (
+        <span
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+            overlay.missing === 0
+              ? 'bg-bg-green/20 text-bg-green'
+              : overlay.missing === 1
+                ? 'bg-bg-yellow/20 text-bg-yellow'
+                : 'bg-bg-red/20 text-bg-red'
+          }`}
+          title={`Owned ${overlay.owned} / Needed ${overlay.needed}`}
+        >
+          {overlay.missing === 0 ? 'Owned' : `Need ${overlay.missing}`}
+        </span>
+      )}
 
       {/* Type line */}
       <span className="hidden text-xs text-font-muted lg:inline">

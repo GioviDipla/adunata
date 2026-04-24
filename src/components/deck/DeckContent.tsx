@@ -74,6 +74,11 @@ interface DeckContentProps {
   onSectionChange?: (deckCardId: string, sectionId: string | null) => void
   /** Called after tag changes are persisted (owner edit only). */
   onTagsChange?: (deckCardId: string, tags: string[]) => void
+
+  /** Per-card owned/missing map keyed by `cards.id`. When present the
+   *  DeckCard list-view tiles render an owned/missing chip. Grid/text
+   *  views intentionally skip the badge to keep visual density low. */
+  overlayByCardId?: Map<number, { owned: number; needed: number; missing: number }>
 }
 
 export default function DeckContent({
@@ -89,6 +94,7 @@ export default function DeckContent({
   onMoveToBoard,
   onSectionChange,
   onTagsChange,
+  overlayByCardId,
 }: DeckContentProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [sortMode, setSortMode] = useState<SortMode>('type')
@@ -495,6 +501,7 @@ export default function DeckContent({
                   onToggleCommander={onToggleCommander}
                   onCardClick={onCardClick}
                   onMoveToBoard={onMoveToBoard}
+                  overlay={overlayByCardId?.get(entry.card.id)}
                 />
               ))}
             </div>
@@ -581,6 +588,7 @@ export default function DeckContent({
                           tagSuggestions={tagSuggestions}
                           onSectionChange={onSectionChange}
                           onTagsChange={onTagsChange}
+                          overlay={overlayByCardId?.get(entry.card.id)}
                         />
                       ))}
                     </div>

@@ -12,6 +12,8 @@ import {
   FileText,
   Plus,
   Printer,
+  Library,
+  ClipboardCopy,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +27,7 @@ import AddCardSearch from './AddCardSearch'
 import CardDetail from '@/components/cards/CardDetail'
 import ImportCardsModal from './ImportCardsModal'
 import DeckContent from './DeckContent'
+import { useDeckOverlay } from '@/lib/hooks/useDeckOverlay'
 import DeckSectionsPanel from './DeckSectionsPanel'
 import VisibilityToggle from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
@@ -68,6 +71,52 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
   const [deleting, setDeleting] = useState(false)
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [showImport, setShowImport] = useState(false)
+  const [overlayOn, setOverlayOn] = useState(false)
+  const [overlayToast, setOverlayToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = `adunata:deck-overlay:${deck.id}`
+    const raw = window.localStorage.getItem(key)
+    if (raw === '1') setOverlayOn(true)
+  }, [deck.id])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = `adunata:deck-overlay:${deck.id}`
+    window.localStorage.setItem(key, overlayOn ? '1' : '0')
+  }, [deck.id, overlayOn])
+
+  const overlayData = useDeckOverlay(deck.id, overlayOn)
+
+  const overlayByCardId = useMemo(() => {
+    if (!overlayData) return undefined
+    const m = new Map<
+      number,
+      { owned: number; needed: number; missing: number }
+    >()
+    for (const row of overlayData.overlay) {
+      m.set(row.card_id, {
+        owned: row.owned,
+        needed: row.needed,
+        missing: row.missing,
+      })
+    }
+    return m
+  }, [overlayData])
+
+  async function exportShoppingList() {
+    if (!overlayData) return
+    const missing = overlayData.overlay.filter((r) => r.missing > 0)
+    const lines = missing.map((r) => `${r.missing} ${r.name}`).join('\n')
+    try {
+      await navigator.clipboard.writeText(lines)
+      setOverlayToast(`Copied ${missing.length} cards to clipboard`)
+    } catch {
+      setOverlayToast('Clipboard blocked')
+    }
+    setTimeout(() => setOverlayToast(null), 2500)
+  }
   // Lifted so the ShareDeckButton sees the current value even after the
   // user flips the VisibilityToggle pills — it skips the "make public
   // first?" confirm if the deck is already public.
@@ -551,6 +600,16 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             Proxy
           </Button>
           <Button
+            variant={overlayOn ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => setOverlayOn((p) => !p)}
+            title="Show owned/missing badges based on your collection"
+          >
+            <Library className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Overlay</span>
+            <span className="sm:hidden">Ovrl</span>
+          </Button>
+          <Button
             variant="danger"
             size="sm"
             onClick={() => setShowDeleteConfirm(true)}
@@ -689,6 +748,34 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             </div>
           )}
 
+          {overlayOn && overlayData && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs">
+              <span className="font-semibold text-font-primary">
+                {overlayData.owned} / {overlayData.needed}
+              </span>
+              <span className="text-font-muted">owned</span>
+              {overlayData.missingEur > 0 && (
+                <span className="text-font-secondary">
+                  · €{overlayData.missingEur.toFixed(2)}{' '}
+                  <span className="text-font-muted">missing (Cardmarket)</span>
+                </span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                {overlayToast && (
+                  <span className="text-[11px] text-bg-green">{overlayToast}</span>
+                )}
+                <button
+                  onClick={exportShoppingList}
+                  disabled={overlayData.overlay.every((r) => r.missing === 0)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-bg-accent px-2 py-1 text-[11px] font-semibold text-font-white transition-opacity disabled:opacity-40"
+                >
+                  <ClipboardCopy className="h-3 w-3" />
+                  Export shopping list
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'stats' ? (
             <div className="rounded-xl border border-border bg-bg-surface p-4">
               <DeckStats cards={statsCards} />
@@ -707,6 +794,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
               onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
               onSectionChange={handleSectionChange}
               onTagsChange={handleTagsChange}
+              overlayByCardId={overlayByCardId}
             />
           )}
         </div>

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import Link from 'next/link'
-import { Copy, Check, Globe, Printer } from 'lucide-react'
+import { Copy, Check, Globe, Printer, Library, ClipboardCopy } from 'lucide-react'
 import DeckContent, { type DeckCardEntry } from './DeckContent'
 import ProxyPrintModal from './ProxyPrintModal'
 import ShareDeckButton from './ShareDeckButton'
@@ -10,6 +10,7 @@ import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
 import DeckEngagement from './DeckEngagement'
 import CardDetail from '@/components/cards/CardDetail'
+import { useDeckOverlay } from '@/lib/hooks/useDeckOverlay'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
 
@@ -41,6 +42,55 @@ export default function DeckView({
   const [activeTab, setActiveTab] = useState<BoardTab>('main')
   const [showExpandedStats, setShowExpandedStats] = useState(false)
   const [showProxyPrint, setShowProxyPrint] = useState(false)
+  const [overlayOn, setOverlayOn] = useState(false)
+  const [overlayToast, setOverlayToast] = useState<string | null>(null)
+
+  // Persist the overlay toggle per-deck so refreshing the page doesn't
+  // drop the user's preference. Key scheme matches other client
+  // localStorage keys — `adunata:<feature>:<id>`.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = `adunata:deck-overlay:${deck.id}`
+    const raw = window.localStorage.getItem(key)
+    if (raw === '1') setOverlayOn(true)
+  }, [deck.id])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = `adunata:deck-overlay:${deck.id}`
+    window.localStorage.setItem(key, overlayOn ? '1' : '0')
+  }, [deck.id, overlayOn])
+
+  const overlayData = useDeckOverlay(deck.id, overlayOn)
+
+  const overlayByCardId = useMemo(() => {
+    if (!overlayData) return undefined
+    const m = new Map<
+      number,
+      { owned: number; needed: number; missing: number }
+    >()
+    for (const row of overlayData.overlay) {
+      m.set(row.card_id, {
+        owned: row.owned,
+        needed: row.needed,
+        missing: row.missing,
+      })
+    }
+    return m
+  }, [overlayData])
+
+  async function exportShoppingList() {
+    if (!overlayData) return
+    const missing = overlayData.overlay.filter((r) => r.missing > 0)
+    const lines = missing.map((r) => `${r.missing} ${r.name}`).join('\n')
+    try {
+      await navigator.clipboard.writeText(lines)
+      setOverlayToast(`Copied ${missing.length} cards to clipboard`)
+    } catch {
+      setOverlayToast('Clipboard blocked')
+    }
+    setTimeout(() => setOverlayToast(null), 2500)
+  }
 
   const commanderCards = useMemo(
     () => cards.filter((c) => c.board === 'commander'),
@@ -142,6 +192,19 @@ export default function DeckView({
             visibility="public"
             isOwner={false}
           />
+          <button
+            onClick={() => setOverlayOn((p) => !p)}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+              overlayOn
+                ? 'border-bg-accent bg-bg-accent/20 text-font-accent'
+                : 'border-border bg-bg-surface text-font-secondary hover:bg-bg-hover'
+            }`}
+            title="Show owned/missing badges based on your collection"
+          >
+            <Library className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Collection overlay</span>
+            <span className="sm:hidden">Overlay</span>
+          </button>
           {copyError && (
             <span className="text-[11px] text-bg-red">{copyError}</span>
           )}
@@ -201,6 +264,35 @@ export default function DeckView({
             })}
           </div>
 
+          {/* Overlay summary strip — shown above the tab content when overlay is on. */}
+          {overlayOn && overlayData && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs">
+              <span className="font-semibold text-font-primary">
+                {overlayData.owned} / {overlayData.needed}
+              </span>
+              <span className="text-font-muted">owned</span>
+              {overlayData.missingEur > 0 && (
+                <span className="text-font-secondary">
+                  · €{overlayData.missingEur.toFixed(2)}{' '}
+                  <span className="text-font-muted">missing (Cardmarket)</span>
+                </span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                {overlayToast && (
+                  <span className="text-[11px] text-bg-green">{overlayToast}</span>
+                )}
+                <button
+                  onClick={exportShoppingList}
+                  disabled={overlayData.overlay.every((r) => r.missing === 0)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-bg-accent px-2 py-1 text-[11px] font-semibold text-font-white transition-opacity disabled:opacity-40"
+                >
+                  <ClipboardCopy className="h-3 w-3" />
+                  Export shopping list
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'stats' ? (
             <div className="rounded-xl border border-border bg-bg-surface p-4">
               <DeckStats cards={statsCards} />
@@ -212,6 +304,7 @@ export default function DeckView({
               sections={sections}
               isCommander={isCommander}
               onCardClick={setSelectedDetailCard}
+              overlayByCardId={overlayByCardId}
             />
           )}
 
