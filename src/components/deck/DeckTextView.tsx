@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Crown } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
@@ -50,6 +50,27 @@ export default function DeckTextView({
 }: DeckTextViewProps) {
   const [hoverCard, setHoverCard] = useState<{ card: CardRow; x: number; y: number } | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
+  // Editing mode = onMoveToBoard wired. In editing mode tap = open
+  // context menu, long-press / right-click = open card detail. View
+  // mode keeps tap = open detail.
+  const editingMode = !!onMoveToBoard
+  // Per-row long-press timer state. Tracks whether the long-press fired
+  // so the click handler can suppress its action.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFired = useRef(false)
+  const startLongPress = (cb: () => void) => {
+    longPressFired.current = false
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      cb()
+    }, 500)
+  }
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
 
   if (cards.length === 0 && (!groupsProp || groupsProp.length === 0)) {
     return (
@@ -99,17 +120,33 @@ export default function DeckTextView({
                         commander ? 'bg-bg-yellow/10' : ''
                       }`}
                       onContextMenu={(e) => {
-                        if (onMoveToBoard) {
+                        if (editingMode) {
+                          // Right-click opens card detail in editing mode.
                           e.preventDefault()
-                          setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
+                          onCardClick?.(entry.card)
                         }
                       }}
+                      onPointerDown={(e) => {
+                        if (editingMode && e.pointerType === 'touch') {
+                          startLongPress(() => onCardClick?.(entry.card))
+                        }
+                      }}
+                      onPointerUp={cancelLongPress}
+                      onPointerLeave={cancelLongPress}
+                      onPointerCancel={cancelLongPress}
                     >
                       <span className="w-6 text-right font-mono text-xs text-font-muted">
                         {entry.quantity}x
                       </span>
                       <button
-                        onClick={() => onCardClick?.(entry.card)}
+                        onClick={(e) => {
+                          if (longPressFired.current) return
+                          if (editingMode) {
+                            setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
+                          } else {
+                            onCardClick?.(entry.card)
+                          }
+                        }}
                         onMouseEnter={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect()
                           setHoverCard({ card: entry.card, x: rect.left, y: rect.top })

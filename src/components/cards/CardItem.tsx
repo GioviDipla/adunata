@@ -20,11 +20,13 @@ export default function CardItem({ card, liked, onSelect, onContextAction }: Car
   const [showPreview, setShowPreview] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
+  // When `onContextAction` is wired, swap the gestures: tap opens the
+  // context menu (Add to deck / Like / Share), long-press / right-click
+  // opens the card detail modal. Without `onContextAction`, click keeps
+  // the legacy behaviour (open detail).
   const longPress = useLongPress({
     onLongPress: () => {
-      if (!onContextAction) return
-      const rect = rootRef.current?.getBoundingClientRect()
-      if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
+      if (onContextAction) onSelect(card)
     },
   })
 
@@ -32,14 +34,27 @@ export default function CardItem({ card, liked, onSelect, onContextAction }: Car
     <div
       ref={rootRef}
       className="group relative cursor-pointer"
-      onClick={() => {
+      onClick={(e) => {
         if (longPress.wasLongPress()) return
-        onSelect(card)
+        if (onContextAction) {
+          // Anchor the menu at the click position when present, otherwise
+          // fall back to the centre of the tile (touch/synthetic events).
+          if (e.clientX || e.clientY) {
+            onContextAction(card, e.clientX, e.clientY)
+          } else {
+            const rect = rootRef.current?.getBoundingClientRect()
+            if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
+            else onContextAction(card, 0, 0)
+          }
+        } else {
+          onSelect(card)
+        }
       }}
       onContextMenu={(e) => {
         if (!onContextAction) return
         e.preventDefault()
-        onContextAction(card, e.clientX, e.clientY)
+        // Right-click in cards-browser mode opens detail (was: context).
+        onSelect(card)
       }}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}

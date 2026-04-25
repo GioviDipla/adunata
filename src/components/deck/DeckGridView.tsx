@@ -94,10 +94,17 @@ export default function DeckGridView({
     ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
     : undefined
 
+  // Editing mode = onMoveToBoard wired. In editing mode tap opens the
+  // context menu and long-press / right-click opens the card detail
+  // modal. View mode (no onMoveToBoard) keeps tap = open detail.
+  const editingMode = !!onMoveToBoard
+
   return (
     <div className={gridClass} style={gridStyle}>
       {cards.map((entry) => {
         const commander = isCommander?.(entry.card.id) ?? false
+        const openContext = (x: number, y: number) =>
+          setContextMenu({ x, y, cardId: entry.card.id, board: entry.board })
         return (
           <div
             key={`${entry.card.id}-${entry.board}`}
@@ -107,16 +114,16 @@ export default function DeckGridView({
                 : 'ring-1 ring-border hover:ring-border-light'
             }`}
             onContextMenu={(e) => {
-              if (onMoveToBoard) {
-                e.preventDefault()
-                setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
-              }
+              if (!editingMode) return
+              e.preventDefault()
+              // Right-click in editing mode opens card detail (was: context).
+              onCardClick?.(entry.card)
             }}
             onPointerDown={(e) => {
-              if (onMoveToBoard && e.pointerType === 'touch') {
+              if (editingMode && e.pointerType === 'touch') {
                 longPress.start(() => {
-                  const rect = (e.target as HTMLElement).getBoundingClientRect()
-                  setContextMenu({ x: rect.left + rect.width / 2, y: rect.top, cardId: entry.card.id, board: entry.board })
+                  // Long-press opens card detail in editing mode.
+                  onCardClick?.(entry.card)
                 })
               }
             }}
@@ -133,15 +140,25 @@ export default function DeckGridView({
                 className="w-full h-auto cursor-pointer select-none"
                 loading="lazy"
                 draggable={false}
-                onClick={() => {
-                  if (!longPress.wasLongPress()) onCardClick?.(entry.card)
+                onClick={(e) => {
+                  if (longPress.wasLongPress()) return
+                  if (editingMode) {
+                    openContext(e.clientX, e.clientY)
+                  } else {
+                    onCardClick?.(entry.card)
+                  }
                 }}
               />
             ) : (
               <div
                 className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2 cursor-pointer select-none"
-                onClick={() => {
-                  if (!longPress.wasLongPress()) onCardClick?.(entry.card)
+                onClick={(e) => {
+                  if (longPress.wasLongPress()) return
+                  if (editingMode) {
+                    openContext(e.clientX, e.clientY)
+                  } else {
+                    onCardClick?.(entry.card)
+                  }
                 }}
               >
                 <span className="text-center text-xs text-font-muted">

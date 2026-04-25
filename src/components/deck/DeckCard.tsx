@@ -116,23 +116,37 @@ export default function DeckCard({
   const lastPointerPos = useRef({ x: 0, y: 0 })
   const pointerIsTouch = useRef(false)
 
-  // On touch devices (no hover) we fire the bottom-sheet; on desktop we
-  // keep the existing context-menu popover anchored at the pointer. The
-  // sheet is richer (section radio + tag editor + move-to-board) because
-  // touch UIs have no hover affordances to surface those inline.
+  // Editing mode = onMoveToBoard or full edit wiring is present.
+  // In editing mode tap opens the context menu / action sheet, while
+  // long-press / right-click opens the card detail modal. View mode
+  // (no edit handlers) keeps tap = open detail.
+  const editingMode = !!onMoveToBoard || editingEnabled
+
+  // On touch devices (no hover) the long-press in editing mode opens
+  // card detail (was: action sheet). Desktop right-click also opens
+  // detail. Tap or click is the "edit" affordance.
   const longPress = useLongPress({
     onLongPress: () => {
-      if (pointerIsTouch.current && editingEnabled) {
-        setShowActionSheet(true)
-      } else {
-        setContextMenu({
-          x: lastPointerPos.current.x,
-          y: lastPointerPos.current.y,
-        })
+      if (editingMode) {
+        onCardClick?.(card)
       }
     },
     delay: 500,
   })
+
+  // Helper: opens the appropriate "edit" surface for the current device.
+  // Touch + full edit wiring → action sheet. Anything else → desktop
+  // context-menu popover anchored at the last pointer.
+  const openEditSurface = () => {
+    if (pointerIsTouch.current && editingEnabled) {
+      setShowActionSheet(true)
+    } else {
+      setContextMenu({
+        x: lastPointerPos.current.x,
+        y: lastPointerPos.current.y,
+      })
+    }
+  }
 
   return (
     <div
@@ -142,23 +156,22 @@ export default function DeckCard({
           : 'border-border bg-bg-card'
       }`}
       onContextMenu={(e) => {
-        if (onMoveToBoard || editingEnabled) {
+        if (editingMode) {
+          // Right-click opens card detail in editing mode.
           e.preventDefault()
-          setContextMenu({ x: e.clientX, y: e.clientY })
+          onCardClick?.(card)
         }
       }}
       onPointerDown={(e) => {
         lastPointerPos.current = { x: e.clientX, y: e.clientY }
         pointerIsTouch.current = e.pointerType === 'touch'
-        if (onMoveToBoard || editingEnabled) longPress.onPointerDown()
+        if (editingMode) longPress.onPointerDown()
       }}
-      onPointerUp={onMoveToBoard || editingEnabled ? longPress.onPointerUp : undefined}
+      onPointerUp={editingMode ? longPress.onPointerUp : undefined}
       onPointerLeave={() => {
-        if (onMoveToBoard || editingEnabled) longPress.onPointerLeave()
+        if (editingMode) longPress.onPointerLeave()
       }}
-      onPointerCancel={
-        onMoveToBoard || editingEnabled ? longPress.onPointerCancel : undefined
-      }
+      onPointerCancel={editingMode ? longPress.onPointerCancel : undefined}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
       style={{ touchAction: 'manipulation' }}
@@ -191,7 +204,14 @@ export default function DeckCard({
       {/* Card info */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <button
-          onClick={() => { if (longPress.wasLongPress()) return; onCardClick?.(card) }}
+          onClick={() => {
+            if (longPress.wasLongPress()) return
+            if (editingMode) {
+              openEditSurface()
+            } else {
+              onCardClick?.(card)
+            }
+          }}
           className="truncate text-xs sm:text-sm font-medium text-font-primary hover:text-font-accent transition-colors text-left"
         >
           {card.name}
