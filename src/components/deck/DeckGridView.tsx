@@ -32,6 +32,9 @@ interface DeckGridViewProps {
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
   sections?: SectionOption[]
   onSectionChange?: (deckCardId: string, sectionId: string | null) => void
+  /** Override the responsive grid with a fixed column count (2-6). When omitted,
+   *  the grid uses the default Tailwind breakpoints. */
+  cols?: number
 }
 
 function useGridLongPress(delay = 500) {
@@ -69,6 +72,7 @@ export default function DeckGridView({
   onMoveToBoard,
   sections,
   onSectionChange,
+  cols,
 }: DeckGridViewProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
   const longPress = useGridLongPress(500)
@@ -80,8 +84,18 @@ export default function DeckGridView({
     )
   }
 
+  // When `cols` is provided, replace the responsive Tailwind classes with
+  // an inline `gridTemplateColumns`. Otherwise keep the current responsive
+  // default (2 / 3 / 4 / 5).
+  const gridClass = cols
+    ? 'grid gap-3'
+    : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3'
+  const gridStyle = cols
+    ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
+    : undefined
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+    <div className={gridClass} style={gridStyle}>
       {cards.map((entry) => {
         const commander = isCommander?.(entry.card.id) ?? false
         return (

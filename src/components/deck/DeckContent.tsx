@@ -106,19 +106,32 @@ export default function DeckContent({
   const initialGroupMode: GroupMode = (sections?.length ?? 0) > 0 ? 'section' : 'type'
   const [groupMode, setGroupMode] = useState<GroupMode>(initialGroupMode)
   const [sortMode, setSortMode] = useState<SortMode>('cmc')
+  // Grid column override (2-6). null = pick a sensible default at first
+  // render based on viewport width (5 desktop / 3 mobile). Persisted as a
+  // single integer once the user touches the segmented control.
+  const [gridCols, setGridCols] = useState<number | null>(null)
 
   // Persist user preference per-deck. Hydration guard prevents flash.
   useEffect(() => {
     if (typeof window === 'undefined' || !deckId) return
     const k = `adunata:deck-view:${deckId}`
     const raw = window.localStorage.getItem(k)
-    if (!raw) return
-    try {
-      const v = JSON.parse(raw) as { view?: ViewMode; group?: GroupMode; sort?: SortMode }
-      if (v.view) setViewMode(v.view)
-      if (v.group) setGroupMode(v.group)
-      if (v.sort) setSortMode(v.sort)
-    } catch { /* ignore */ }
+    let stored: { view?: ViewMode; group?: GroupMode; sort?: SortMode; cols?: number } | null = null
+    if (raw) {
+      try {
+        stored = JSON.parse(raw)
+      } catch { /* ignore */ }
+    }
+    if (stored?.view) setViewMode(stored.view)
+    if (stored?.group) setGroupMode(stored.group)
+    if (stored?.sort) setSortMode(stored.sort)
+    if (typeof stored?.cols === 'number') {
+      setGridCols(stored.cols)
+    } else {
+      // Pick the responsive default once. ≥sm (640px) → 5, else 3.
+      const isWide = window.matchMedia('(min-width: 640px)').matches
+      setGridCols(isWide ? 5 : 3)
+    }
   }, [deckId])
 
   useEffect(() => {
@@ -126,9 +139,9 @@ export default function DeckContent({
     const k = `adunata:deck-view:${deckId}`
     window.localStorage.setItem(
       k,
-      JSON.stringify({ view: viewMode, group: groupMode, sort: sortMode }),
+      JSON.stringify({ view: viewMode, group: groupMode, sort: sortMode, cols: gridCols ?? undefined }),
     )
-  }, [deckId, viewMode, groupMode, sortMode])
+  }, [deckId, viewMode, groupMode, sortMode, gridCols])
 
   // If sections appear/disappear, fix orphan group selection.
   useEffect(() => {
@@ -335,6 +348,34 @@ export default function DeckContent({
           ))}
         </div>
 
+        {viewMode === 'grid' && (
+          <div
+            className="flex h-10 items-center gap-0.5 rounded-lg bg-bg-cell p-1"
+            role="group"
+            aria-label="Grid columns"
+          >
+            <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+              Cols
+            </span>
+            {[2, 3, 4, 5, 6].map((n) => (
+              <button
+                key={n}
+                onClick={() => setGridCols(n)}
+                className={`flex h-8 w-7 items-center justify-center rounded-md text-xs font-medium transition-colors ${
+                  gridCols === n
+                    ? 'bg-bg-surface text-font-primary shadow-sm'
+                    : 'text-font-muted hover:text-font-primary'
+                }`}
+                title={`${n} columns`}
+                aria-label={`${n} columns`}
+                aria-pressed={gridCols === n}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+
         <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-3 text-xs text-font-secondary">
           <Layers className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Group:</span>
@@ -517,6 +558,7 @@ export default function DeckContent({
               onMoveToBoard={onMoveToBoard}
               sections={editingWired ? sectionOptions : undefined}
               onSectionChange={onSectionChange}
+              cols={gridCols ?? undefined}
             />
           ) : viewMode === 'text' ? (
             <DeckTextView
@@ -704,6 +746,7 @@ export default function DeckContent({
                     onMoveToBoard={onMoveToBoard}
                     sections={editingWired ? sectionOptions : undefined}
                     onSectionChange={onSectionChange}
+                    cols={gridCols ?? undefined}
                   />
                 </div>
               )
@@ -721,6 +764,7 @@ export default function DeckContent({
             onMoveToBoard={onMoveToBoard}
             sections={editingWired ? sectionOptions : undefined}
             onSectionChange={onSectionChange}
+            cols={gridCols ?? undefined}
           />
         )
       )}

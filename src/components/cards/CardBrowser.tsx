@@ -108,6 +108,28 @@ export default function CardBrowser({
   const [setDropdownOpen, setSetDropdownOpen] = useState(false)
   const setBoxRef = useRef<HTMLDivElement | null>(null)
 
+  // Persisted grid columns (2-6). null until hydrated from localStorage —
+  // first paint picks 5 desktop / 3 mobile.
+  const [gridCols, setGridCols] = useState<number | null>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = window.localStorage.getItem('adunata:cards-view')
+    let stored: { cols?: number } | null = null
+    if (raw) {
+      try { stored = JSON.parse(raw) } catch { /* ignore */ }
+    }
+    if (typeof stored?.cols === 'number') {
+      setGridCols(stored.cols)
+    } else {
+      const isWide = window.matchMedia('(min-width: 640px)').matches
+      setGridCols(isWide ? 5 : 3)
+    }
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined' || gridCols == null) return
+    window.localStorage.setItem('adunata:cards-view', JSON.stringify({ cols: gridCols }))
+  }, [gridCols])
+
   const debouncedSearch = useDebounce(searchText, 300)
   const debouncedCreatureType = useDebounce(creatureType, 300)
   const debouncedKeyword = useDebounce(selectedKeyword, 300)
@@ -507,6 +529,32 @@ export default function CardBrowser({
           </select>
         </label>
 
+        <div
+          className="flex items-center gap-0.5 rounded-lg bg-bg-card border border-border p-1"
+          role="group"
+          aria-label="Grid columns"
+        >
+          <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+            Cols
+          </span>
+          {[2, 3, 4, 5, 6].map((n) => (
+            <button
+              key={n}
+              onClick={() => setGridCols(n)}
+              className={`flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium transition-colors ${
+                gridCols === n
+                  ? 'bg-bg-surface text-font-primary shadow-sm'
+                  : 'text-font-muted hover:text-font-primary'
+              }`}
+              title={`${n} columns`}
+              aria-label={`${n} columns`}
+              aria-pressed={gridCols === n}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+
         {activeFilterCount > 0 && (
           <button onClick={clearFilters} className="text-xs text-font-accent hover:text-font-primary transition-colors">
             Clear all
@@ -786,7 +834,16 @@ export default function CardBrowser({
 
       {/* Card grid */}
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div
+          className={
+            gridCols
+              ? 'grid gap-4'
+              : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4'
+          }
+          style={
+            gridCols ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined
+          }
+        >
           {Array.from({ length: 20 }).map((_, i) => (
             <div key={i} className="animate-pulse">
               <div className="w-full aspect-[5/7] rounded-lg bg-bg-card" />
@@ -803,6 +860,7 @@ export default function CardBrowser({
           likedIds={likedIds}
           onSelectCard={setSelectedCard}
           onContextAction={handleContextAction}
+          cols={gridCols ?? undefined}
         />
       )}
 
