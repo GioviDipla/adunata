@@ -605,18 +605,80 @@ export default function DeckContent({
       )}
 
       {viewMode === 'grid' && (
-        <DeckGridView
-          cards={flatSortedCards}
-          onQuantityChange={onQuantityChange}
-          onRemove={onRemove}
-          isCommander={isCommander}
-          onToggleCommander={onToggleCommander}
-          onCardClick={onCardClick}
-          readOnly={readOnly}
-          onMoveToBoard={onMoveToBoard}
-          sections={editingWired ? sectionOptions : undefined}
-          onSectionChange={onSectionChange}
-        />
+        sortMode === 'section' && groupedCards.length > 0 ? (
+          <div className="flex flex-col gap-4">
+            {groupedCards.map(([key, entries]) => {
+              const section = sections?.find((x) => x.id === key)
+              const headerLabel = section?.name ?? 'Uncategorized'
+              const headerDot = section?.color ?? (section ? '#475569' : null)
+              const count = entries.reduce((s, e) => s + e.quantity, 0)
+              const totalEur = entries.reduce((sum, e) => {
+                const price =
+                  (e.card.prices_eur as unknown as number | null) ??
+                  (e.card.prices_usd as unknown as number | null) ??
+                  0
+                return sum + Number(price) * e.quantity
+              }, 0)
+              const nonLand = entries.filter(
+                (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
+              )
+              const totalCmc = nonLand.reduce(
+                (sum, e) => sum + Number(e.card.cmc ?? 0) * e.quantity,
+                0,
+              )
+              const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
+              const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
+              const parts: string[] = []
+              if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
+              if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
+              const headerExtras = parts.length > 0 ? parts.join(' · ') : null
+              return (
+                <div key={key || '__uncategorized__'}>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
+                    {headerDot && (
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ background: headerDot }}
+                      />
+                    )}
+                    {headerLabel}
+                    <span className="text-xs text-font-muted">({count})</span>
+                    {headerExtras && (
+                      <span className="text-[10px] text-font-muted">
+                        {headerExtras}
+                      </span>
+                    )}
+                  </h3>
+                  <DeckGridView
+                    cards={entries}
+                    onQuantityChange={onQuantityChange}
+                    onRemove={onRemove}
+                    isCommander={isCommander}
+                    onToggleCommander={onToggleCommander}
+                    onCardClick={onCardClick}
+                    readOnly={readOnly}
+                    onMoveToBoard={onMoveToBoard}
+                    sections={editingWired ? sectionOptions : undefined}
+                    onSectionChange={onSectionChange}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <DeckGridView
+            cards={flatSortedCards}
+            onQuantityChange={onQuantityChange}
+            onRemove={onRemove}
+            isCommander={isCommander}
+            onToggleCommander={onToggleCommander}
+            onCardClick={onCardClick}
+            readOnly={readOnly}
+            onMoveToBoard={onMoveToBoard}
+            sections={editingWired ? sectionOptions : undefined}
+            onSectionChange={onSectionChange}
+          />
+        )
       )}
 
       {viewMode === 'text' && (
