@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   Crown,
   List,
@@ -8,6 +8,7 @@ import {
   AlignLeft,
   ArrowUpDown,
   Filter,
+  Layers,
 } from 'lucide-react'
 import DeckCard from './DeckCard'
 import DeckGridView from './DeckGridView'
@@ -34,15 +35,20 @@ export interface DeckCardEntry {
 }
 
 type ViewMode = 'list' | 'grid' | 'text'
-type SortMode = 'type' | 'name' | 'cmc' | 'price' | 'released' | 'section'
+type GroupMode = 'section' | 'type' | 'none'
+type SortMode = 'cmc' | 'name' | 'price' | 'released'
 
 const SORT_LABELS: Record<SortMode, string> = {
-  type: 'Type',
-  name: 'Name',
   cmc: 'Mana Cost',
+  name: 'Name',
   price: 'Price',
   released: 'Newest',
+}
+
+const GROUP_LABELS: Record<GroupMode, string> = {
   section: 'Section',
+  type: 'Type',
+  none: 'No groups',
 }
 
 const VIEW_MODE_OPTIONS: { mode: ViewMode; icon: typeof List; label: string }[] = [
@@ -97,7 +103,40 @@ export default function DeckContent({
   overlayByCardId,
 }: DeckContentProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
-  const [sortMode, setSortMode] = useState<SortMode>('type')
+  const initialGroupMode: GroupMode = (sections?.length ?? 0) > 0 ? 'section' : 'type'
+  const [groupMode, setGroupMode] = useState<GroupMode>(initialGroupMode)
+  const [sortMode, setSortMode] = useState<SortMode>('cmc')
+
+  // Persist user preference per-deck. Hydration guard prevents flash.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !deckId) return
+    const k = `adunata:deck-view:${deckId}`
+    const raw = window.localStorage.getItem(k)
+    if (!raw) return
+    try {
+      const v = JSON.parse(raw) as { view?: ViewMode; group?: GroupMode; sort?: SortMode }
+      if (v.view) setViewMode(v.view)
+      if (v.group) setGroupMode(v.group)
+      if (v.sort) setSortMode(v.sort)
+    } catch { /* ignore */ }
+  }, [deckId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !deckId) return
+    const k = `adunata:deck-view:${deckId}`
+    window.localStorage.setItem(
+      k,
+      JSON.stringify({ view: viewMode, group: groupMode, sort: sortMode }),
+    )
+  }, [deckId, viewMode, groupMode, sortMode])
+
+  // If sections appear/disappear, fix orphan group selection.
+  useEffect(() => {
+    if (groupMode === 'section' && (sections?.length ?? 0) === 0) {
+      setGroupMode('type')
+    }
+  }, [groupMode, sections])
+
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set())
   // Section filter: we store `''` to mean "Uncategorized" so the Set can
   // still hold a string sentinel for the null branch.
@@ -150,8 +189,29 @@ export default function DeckContent({
   const editingWired =
     !!deckId && onSectionChange !== undefined && onTagsChange !== undefined
 
+  const sortFn = useMemo<(a: DeckCardEntry, b: DeckCardEntry) => number>(() => {
+    switch (sortMode) {
+      case 'name':
+        return (a, b) => a.card.name.localeCompare(b.card.name)
+      case 'price':
+        return (a, b) =>
+          ((b.card.prices_eur ?? b.card.prices_usd ?? 0) as number) -
+          ((a.card.prices_eur ?? a.card.prices_usd ?? 0) as number) ||
+          a.card.name.localeCompare(b.card.name)
+      case 'released':
+        return (a, b) =>
+          (b.card.released_at ?? '').localeCompare(a.card.released_at ?? '') ||
+          a.card.name.localeCompare(b.card.name)
+      case 'cmc':
+      default:
+        return (a, b) =>
+          (a.card.cmc ?? 0) - (b.card.cmc ?? 0) ||
+          a.card.name.localeCompare(b.card.name)
+    }
+  }, [sortMode])
+
   const groupedCards = useMemo<[string, DeckCardEntry[]][]>(() => {
-    if (sortMode === 'section') {
+    if (groupMode === 'section') {
       const byId = new Map<string, DeckCardEntry[]>()
       const uncategorized: DeckCardEntry[] = []
       for (const entry of visibleCards) {
@@ -164,31 +224,19 @@ export default function DeckContent({
         }
       }
       const out: [string, DeckCardEntry[]][] = []
-      const sortWithin = (entries: DeckCardEntry[]) => {
-        const hasManual = entries.some((e) => e.position_in_section != null)
-        if (hasManual) {
-          entries.sort((a, b) => {
-            const pa = a.position_in_section ?? Number.POSITIVE_INFINITY
-            const pb = b.position_in_section ?? Number.POSITIVE_INFINITY
-            return pa - pb || a.card.name.localeCompare(b.card.name)
-          })
-        } else {
-          entries.sort((a, b) => a.card.name.localeCompare(b.card.name))
-        }
-      }
       for (const s of sections ?? []) {
         const entries = byId.get(s.id) ?? []
-        sortWithin(entries)
+        entries.sort(sortFn)
         out.push([s.id, entries])
       }
       if (uncategorized.length > 0) {
-        sortWithin(uncategorized)
+        uncategorized.sort(sortFn)
         out.push(['', uncategorized])
       }
       return out
     }
 
-    if (sortMode === 'type') {
+    if (groupMode === 'type') {
       const groups: Record<string, DeckCardEntry[]> = {}
       visibleCards.forEach((entry) => {
         if (!entry.card) return
@@ -199,45 +247,16 @@ export default function DeckContent({
       const sorted: [string, DeckCardEntry[]][] = []
       TYPE_ORDER.forEach((type) => {
         if (groups[type]) {
-          sorted.push([
-            type,
-            groups[type].sort(
-              (a, b) =>
-                a.card.cmc - b.card.cmc ||
-                a.card.name.localeCompare(b.card.name),
-            ),
-          ])
+          sorted.push([type, groups[type].sort(sortFn)])
         }
       })
       return sorted
     }
 
-    let sortFn: (a: DeckCardEntry, b: DeckCardEntry) => number
-    switch (sortMode) {
-      case 'name':
-        sortFn = (a, b) => a.card.name.localeCompare(b.card.name)
-        break
-      case 'price':
-        sortFn = (a, b) =>
-          ((b.card.prices_eur ?? b.card.prices_usd ?? 0) as number) -
-          ((a.card.prices_eur ?? a.card.prices_usd ?? 0) as number) ||
-          a.card.name.localeCompare(b.card.name)
-        break
-      case 'released':
-        sortFn = (a, b) =>
-          (b.card.released_at ?? '').localeCompare(a.card.released_at ?? '') ||
-          a.card.name.localeCompare(b.card.name)
-        break
-      case 'cmc':
-      default:
-        sortFn = (a, b) =>
-          a.card.cmc - b.card.cmc ||
-          a.card.name.localeCompare(b.card.name)
-    }
-
+    // groupMode === 'none' — single bucket
     const flat = [...visibleCards].sort(sortFn)
     return flat.length > 0 ? [['All Cards', flat]] : []
-  }, [visibleCards, sortMode])
+  }, [visibleCards, groupMode, sortMode, sections, sortFn])
 
   const flatSortedCards = useMemo(
     () => groupedCards.flatMap(([, entries]) => entries),
@@ -315,6 +334,26 @@ export default function DeckContent({
             </button>
           ))}
         </div>
+
+        <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-2.5 text-xs text-font-secondary">
+          <Layers className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Group:</span>
+          <select
+            value={groupMode}
+            onChange={(e) => setGroupMode(e.target.value as GroupMode)}
+            className="bg-transparent text-font-primary focus:outline-none"
+            aria-label="Group cards by"
+          >
+            {(Object.keys(GROUP_LABELS) as GroupMode[]).map((mode) => {
+              if (mode === 'section' && (sections?.length ?? 0) === 0) return null
+              return (
+                <option key={mode} value={mode} className="bg-bg-surface">
+                  {GROUP_LABELS[mode]}
+                </option>
+              )
+            })}
+          </select>
+        </label>
 
         <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-2.5 text-xs text-font-secondary">
           <ArrowUpDown className="h-3.5 w-3.5" />
@@ -528,7 +567,7 @@ export default function DeckContent({
                 let headerDot: string | null = null
                 let headerExtras: string | null = null
 
-                if (sortMode === 'section') {
+                if (groupMode === 'section') {
                   const section = sections?.find((x) => x.id === key)
                   headerLabel = section?.name ?? 'Uncategorized'
                   headerDot = section?.color ?? (section ? '#475569' : null)
@@ -605,33 +644,38 @@ export default function DeckContent({
       )}
 
       {viewMode === 'grid' && (
-        sortMode === 'section' && groupedCards.length > 0 ? (
+        groupMode !== 'none' && groupedCards.length > 0 ? (
           <div className="flex flex-col gap-4">
             {groupedCards.map(([key, entries]) => {
-              const section = sections?.find((x) => x.id === key)
-              const headerLabel = section?.name ?? 'Uncategorized'
-              const headerDot = section?.color ?? (section ? '#475569' : null)
               const count = entries.reduce((s, e) => s + e.quantity, 0)
-              const totalEur = entries.reduce((sum, e) => {
-                const price =
-                  (e.card.prices_eur as unknown as number | null) ??
-                  (e.card.prices_usd as unknown as number | null) ??
-                  0
-                return sum + Number(price) * e.quantity
-              }, 0)
-              const nonLand = entries.filter(
-                (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
-              )
-              const totalCmc = nonLand.reduce(
-                (sum, e) => sum + Number(e.card.cmc ?? 0) * e.quantity,
-                0,
-              )
-              const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
-              const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
-              const parts: string[] = []
-              if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
-              if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
-              const headerExtras = parts.length > 0 ? parts.join(' · ') : null
+              let headerLabel: string = key
+              let headerDot: string | null = null
+              let headerExtras: string | null = null
+              if (groupMode === 'section') {
+                const section = sections?.find((x) => x.id === key)
+                headerLabel = section?.name ?? 'Uncategorized'
+                headerDot = section?.color ?? (section ? '#475569' : null)
+                const totalEur = entries.reduce((sum, e) => {
+                  const price =
+                    (e.card.prices_eur as unknown as number | null) ??
+                    (e.card.prices_usd as unknown as number | null) ??
+                    0
+                  return sum + Number(price) * e.quantity
+                }, 0)
+                const nonLand = entries.filter(
+                  (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
+                )
+                const totalCmc = nonLand.reduce(
+                  (sum, e) => sum + Number(e.card.cmc ?? 0) * e.quantity,
+                  0,
+                )
+                const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
+                const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
+                const parts: string[] = []
+                if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
+                if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
+                headerExtras = parts.length > 0 ? parts.join(' · ') : null
+              }
               return (
                 <div key={key || '__uncategorized__'}>
                   <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
