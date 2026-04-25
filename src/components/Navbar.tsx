@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Search,
   Layers,
-  Library,
   Swords,
   User,
   Users,
@@ -24,9 +23,10 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  // Collection is now a tab inside /cards (?tab=collection); the old
+  // standalone /collection route still redirects here.
   { href: "/cards", label: "Cards", icon: Search },
   { href: "/decks", label: "Decks", icon: Layers },
-  { href: "/collection", label: "Collection", icon: Library },
   { href: "/play", label: "Play", icon: Swords },
   { href: "/users", label: "Community", icon: Users },
   { href: "/profile", label: "Profile", icon: User },

@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import { CARD_GRID_COLUMNS, DECK_PICKER_COLUMNS } from '@/lib/supabase/columns'
-import CardBrowser from '@/components/cards/CardBrowser'
+import CardsPageTabs from '@/components/cards/CardsPageTabs'
+import type { CollectionItem } from '@/components/collection/CollectionView'
 import type { Database } from '@/types/supabase'
 
 type Card = Database['public']['Tables']['cards']['Row']
@@ -45,7 +46,7 @@ export default async function CardsPage() {
   const supabase = await createClient()
   const user = await getAuthenticatedUser()
 
-  const [publicData, { data: userDecks }, { data: likedRows }] = await Promise.all([
+  const [publicData, { data: userDecks }, { data: likedRows }, collectionRes] = await Promise.all([
     getPublicCardsData(),
     user
       ? supabase
@@ -60,19 +61,42 @@ export default async function CardsPage() {
           .select('card_id')
           .eq('user_id', user.id)
       : Promise.resolve({ data: [] as { card_id: string }[] }),
+    user
+      ? supabase
+          .from('user_cards')
+          .select(
+            `id, quantity, foil, language, condition, acquired_price_eur,
+             card:cards!card_id(id, name, name_it, mana_cost, type_line, image_small, image_normal, cmc, rarity, set_code, color_identity, prices_eur, prices_usd)`,
+            { count: 'exact' },
+          )
+          .eq('user_id', user.id)
+          .order('acquired_at', { ascending: false })
+          .range(0, 49)
+      : Promise.resolve({ data: null, count: 0 }),
   ])
 
   const likedIds = (likedRows || []).map((r) => r.card_id)
+
+  const collection = user
+    ? {
+        initialItems: ((collectionRes.data ?? []) as unknown as CollectionItem[]).filter(
+          (r) => r.card != null,
+        ),
+        total: collectionRes.count ?? 0,
+      }
+    : undefined
 
   return (
     <div className="min-h-screen bg-bg-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-bold text-font-primary mb-6">Card Database</h1>
-        <CardBrowser
+        <CardsPageTabs
           initialCards={publicData.initialCards}
           sets={publicData.sets}
           userDecks={userDecks || []}
           initialLikedIds={likedIds}
+          authed={!!user}
+          collection={collection}
         />
       </div>
     </div>
