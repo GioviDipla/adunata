@@ -70,25 +70,11 @@ export default function DeckCardActionSheet({
 
   if (!open) return null
 
-  async function pickSection(id: string | null) {
+  function pickSection(id: string | null) {
     if (id === sectionId) return
-    const prev = sectionId
     setSectionId(id)
+    // Parent handler owns persistence + rollback.
     onSectionChange?.(deckCardId, id)
-    try {
-      const res = await fetch(`/api/decks/${deckId}/cards/${deckCardId}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ section_id: id }),
-      })
-      if (!res.ok) {
-        setSectionId(prev)
-        onSectionChange?.(deckCardId, prev)
-      }
-    } catch {
-      setSectionId(prev)
-      onSectionChange?.(deckCardId, prev)
-    }
   }
 
   const otherBoards = (['main', 'sideboard', 'maybeboard', 'tokens'] as const).filter(

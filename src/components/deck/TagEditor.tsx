@@ -17,13 +17,11 @@ interface Props {
 
 /**
  * Pill-style tag editor for a single deck_card row. Enter adds a tag,
- * backspace-on-empty removes the last one. Persists via
- * `PATCH /api/decks/:id/cards/:cardId { tags }`. Caps the list at 20
- * (matches the CHECK constraint on `deck_cards.tags`).
+ * backspace-on-empty removes the last one. Persistence is owned by the
+ * parent: this component just emits `onChange(next)` and the editor
+ * PATCHes + rolls back on failure.
  */
 export default function TagEditor({
-  deckId,
-  deckCardId,
   initialTags,
   suggestions,
   onChange,
@@ -45,35 +43,20 @@ export default function TagEditor({
     )
     .slice(0, 6)
 
-  async function persist(next: string[]) {
-    const prev = tags
+  function commit(next: string[]) {
     setTags(next)
     onChange?.(next)
-    try {
-      const res = await fetch(`/api/decks/${deckId}/cards/${deckCardId}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ tags: next }),
-      })
-      if (!res.ok) {
-        setTags(prev)
-        onChange?.(prev)
-      }
-    } catch {
-      setTags(prev)
-      onChange?.(prev)
-    }
   }
 
   function add(t: string) {
     const val = t.trim()
     if (!val || tags.includes(val) || tags.length >= 20) return
-    void persist([...tags, val])
+    commit([...tags, val])
     setDraft('')
   }
 
   function remove(t: string) {
-    void persist(tags.filter((x) => x !== t))
+    commit(tags.filter((x) => x !== t))
   }
 
   return (

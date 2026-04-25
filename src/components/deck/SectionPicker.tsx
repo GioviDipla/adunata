@@ -20,12 +20,10 @@ interface Props {
 
 /**
  * Inline section pill + dropdown picker for a single deck_card row.
- * Persists via `PATCH /api/decks/:id/cards/:cardId` with `{ section_id }`.
- * Rolls back local optimistic state on non-ok response.
+ * Persistence is the parent's job — the picker only emits `onChange`
+ * with the new section id and lets the editor PATCH + roll back.
  */
 export default function SectionPicker({
-  deckId,
-  deckCardId,
   currentSectionId,
   sections,
   onChange,
@@ -47,26 +45,13 @@ export default function SectionPicker({
     return () => document.removeEventListener('click', onDoc)
   }, [open])
 
-  async function pick(id: string | null) {
+  function pick(id: string | null) {
     setOpen(false)
     if (id === value) return
-    const prev = value
     setValue(id)
+    // Parent handler owns persistence + rollback. We only mirror the
+    // optimistic value locally so the dropdown closes with the new label.
     onChange?.(id)
-    try {
-      const res = await fetch(`/api/decks/${deckId}/cards/${deckCardId}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ section_id: id }),
-      })
-      if (!res.ok) {
-        setValue(prev)
-        onChange?.(prev)
-      }
-    } catch {
-      setValue(prev)
-      onChange?.(prev)
-    }
   }
 
   const current = sections.find((s) => s.id === value)

@@ -416,17 +416,58 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
   )
 
   const handleSectionChange = useCallback(
-    (deckCardId: string, sectionId: string | null) => {
+    async (deckCardId: string, sectionId: string | null) => {
+      let prevSectionId: string | null | undefined
       setCards((prev) =>
-        prev.map((c) => (c.id === deckCardId ? { ...c, section_id: sectionId } : c)),
+        prev.map((c) => {
+          if (c.id !== deckCardId) return c
+          prevSectionId = c.section_id ?? null
+          return { ...c, section_id: sectionId }
+        }),
       )
+      try {
+        const res = await fetch(`/api/decks/${deck.id}/cards/${deckCardId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ section_id: sectionId }),
+        })
+        if (!res.ok) throw new Error('failed')
+      } catch {
+        const fallback = prevSectionId ?? null
+        setCards((prev) =>
+          prev.map((c) => (c.id === deckCardId ? { ...c, section_id: fallback } : c)),
+        )
+      }
     },
-    [],
+    [deck.id],
   )
 
-  const handleTagsChange = useCallback((deckCardId: string, tags: string[]) => {
-    setCards((prev) => prev.map((c) => (c.id === deckCardId ? { ...c, tags } : c)))
-  }, [])
+  const handleTagsChange = useCallback(
+    async (deckCardId: string, tags: string[]) => {
+      let prevTags: string[] | undefined
+      setCards((prev) =>
+        prev.map((c) => {
+          if (c.id !== deckCardId) return c
+          prevTags = c.tags ?? []
+          return { ...c, tags }
+        }),
+      )
+      try {
+        const res = await fetch(`/api/decks/${deck.id}/cards/${deckCardId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tags }),
+        })
+        if (!res.ok) throw new Error('failed')
+      } catch {
+        const fallback = prevTags ?? []
+        setCards((prev) =>
+          prev.map((c) => (c.id === deckCardId ? { ...c, tags: fallback } : c)),
+        )
+      }
+    },
+    [deck.id],
+  )
 
   const handleCardAdded = useCallback((card: CardRow, board: string) => {
     setCards((prev) => {
