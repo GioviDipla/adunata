@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Crown } from 'lucide-react'
+import { Crown, RotateCcw } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import type { Database } from '@/types/supabase'
 
@@ -178,6 +178,23 @@ export default function DeckGridView({
               <div className="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-bg-yellow/90 text-bg-dark backdrop-blur-sm">
                 <Crown className="h-3.5 w-3.5" />
               </div>
+            )}
+
+            {/* Restore pill — pinned bottom-right on the Removed board so
+                the action is reachable without opening the context menu. */}
+            {entry.board === 'removed' && onMoveToBoard && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onMoveToBoard(entry.card.id, 'removed', 'main')
+                }}
+                className="absolute bottom-1.5 right-1.5 flex h-6 items-center gap-1 rounded-full bg-bg-green/90 px-2 text-[10px] font-semibold text-bg-dark backdrop-blur-sm hover:bg-bg-green"
+                aria-label="Restore card to main deck"
+                title="Restore to main deck"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Restore
+              </button>
             )}
 
             {/* Hover overlay with actions */}

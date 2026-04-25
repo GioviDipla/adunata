@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Crown, Minus, Plus, X } from 'lucide-react'
+import { Crown, Minus, Plus, RotateCcw, X } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
@@ -291,6 +291,19 @@ export default function DeckCard({
           title={isCommander ? 'Remove Commander' : 'Set as Commander'}
         >
           <Crown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+        </button>
+      )}
+
+      {/* Restore button — only on the Removed board, when editing is wired */}
+      {board === 'removed' && onMoveToBoard && (
+        <button
+          onClick={() => onMoveToBoard(card.id, 'removed', 'main')}
+          className="flex h-5 sm:h-6 shrink-0 items-center gap-1 rounded-full bg-bg-green/20 px-2 text-[10px] sm:text-xs font-medium text-bg-green hover:bg-bg-green/30"
+          aria-label="Restore card to main deck"
+          title="Restore to main deck"
+        >
+          <RotateCcw className="h-3 w-3" />
+          <span className="hidden sm:inline">Restore</span>
         </button>
       )}
 

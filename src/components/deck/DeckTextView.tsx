@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Crown } from 'lucide-react'
+import { Crown, RotateCcw } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
@@ -162,6 +162,20 @@ export default function DeckTextView({
                       </button>
                       {commander && (
                         <Crown className="h-3 w-3 text-bg-yellow" />
+                      )}
+                      {entry.board === 'removed' && onMoveToBoard && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onMoveToBoard(entry.card.id, 'removed', 'main')
+                          }}
+                          className="flex h-5 items-center gap-1 rounded-full bg-bg-green/20 px-1.5 text-[10px] font-medium text-bg-green hover:bg-bg-green/30"
+                          aria-label="Restore card to main deck"
+                          title="Restore to main deck"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Restore
+                        </button>
                       )}
                       {onToggleCommander && (
                         <button
