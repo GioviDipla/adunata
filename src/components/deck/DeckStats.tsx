@@ -1,18 +1,23 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts'
+import dynamic from 'next/dynamic'
 import { TYPE_ICONS } from '@/lib/utils/typeIcons'
 import { useDeckStats, type DeckCardEntry } from '@/lib/hooks/useDeckStats'
 import { useDeckSimulator } from '@/lib/hooks/useDeckSimulator'
 import type { SimInput } from '@/lib/hooks/deckSimulatorWorker'
+
+// Recharts is ~940KB before tree-shaking; the rarity pie is the only
+// place we use it. Defer it so the Stats panel proper paints first and
+// the chart loads when its tab actually has data.
+const RarityPie = dynamic(() => import('./RarityPie'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-40 w-full items-center justify-center text-xs text-font-muted">
+      Loading chart…
+    </div>
+  ),
+})
 
 interface DeckStatsProps {
   cards: DeckCardEntry[]
@@ -37,25 +42,6 @@ function StatRow({ label, value }: { label: string; value: string }) {
       <dd className="text-xs font-semibold text-font-primary">{value}</dd>
     </div>
   )
-}
-
-/** MTG rarity colors for the pie chart. */
-const RARITY_COLOR: Record<string, string> = {
-  common: '#6b7280',
-  uncommon: '#94a3b8',
-  rare: '#ca8a04',
-  mythic: '#ea580c',
-  special: '#8b5cf6',
-  bonus: '#14b8a6',
-  unknown: '#475569',
-}
-
-function rarityColor(rarity: string): string {
-  return RARITY_COLOR[rarity.toLowerCase()] ?? RARITY_COLOR.unknown
-}
-
-function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1)
 }
 
 const COLORS = ['W', 'U', 'B', 'R', 'G', 'C'] as const
@@ -113,8 +99,10 @@ export default function DeckStats({ cards, format, commanderIdentity }: DeckStat
   const isCommanderFormat = (format ?? '').toLowerCase() === 'commander' || (format ?? '').toLowerCase() === 'edh'
 
   // Build simulator input — flatten main+commander boards into one copy per
-  // quantity, tag lands / rocks. Memoized on `cards` identity.
+  // quantity, tag lands / rocks. Only built once the user opens the Power
+  // tab; before that the heavy flatMap + worker spawn are skipped entirely.
   const simInput = useMemo<SimInput | null>(() => {
+    if (activeTab !== 'power') return null
     const main = cards.filter((c) => c.board === 'main' || c.board === 'commander')
     if (main.length === 0) return null
     const mainDeck = main.flatMap(({ card, quantity }) => {
@@ -134,7 +122,7 @@ export default function DeckStats({ cards, format, commanderIdentity }: DeckStat
       commanderCmc: cmd ? cmd.card.cmc : null,
       iterations: 5000,
     }
-  }, [cards])
+  }, [cards, activeTab])
 
   const { result: sim, running: simRunning } = useDeckSimulator(simInput)
 
@@ -594,43 +582,7 @@ export default function DeckStats({ cards, format, commanderIdentity }: DeckStat
           {stats.rarityBreakdown.length > 0 && (
             <div>
               <h3 className="mb-2 text-sm font-semibold text-font-secondary">Rarity</h3>
-              <div style={{ width: '100%', height: 160 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={stats.rarityBreakdown}
-                      dataKey="count"
-                      nameKey="rarity"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={60}
-                      label={false}
-                      labelLine={false}
-                    >
-                      {stats.rarityBreakdown.map((entry) => (
-                        <Cell key={entry.rarity} fill={rarityColor(entry.rarity)} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        background: '#1f2937',
-                        border: '1px solid #334155',
-                        borderRadius: 6,
-                        fontSize: 11,
-                      }}
-                      formatter={(value, name) => [
-                        String(value),
-                        capitalize(String(name)),
-                      ]}
-                    />
-                    <Legend
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: 10 }}
-                      formatter={(value: string) => capitalize(value)}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+              <RarityPie data={stats.rarityBreakdown} />
             </div>
           )}
 
