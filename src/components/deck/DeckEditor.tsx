@@ -55,7 +55,7 @@ interface DeckEditorProps {
   initialSections?: SectionRow[]
 }
 
-type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens' | 'stats'
+type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens' | 'removed'
 
 export default function DeckEditor({ deck, initialCards, initialSections = [] }: DeckEditorProps) {
   const router = useRouter()
@@ -253,8 +253,9 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
       tokens: cards
         .filter((c) => c.board === 'tokens')
         .reduce((s, c) => s + c.quantity, 0),
-      // The Stats tab has no row count — rendered without a badge.
-      stats: null,
+      removed: cards
+        .filter((c) => c.board === 'removed')
+        .reduce((s, c) => s + c.quantity, 0),
     }),
     [cards]
   )
@@ -292,13 +293,34 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
 
   const handleRemove = useCallback(
     async (cardId: number, board: string) => {
+      // Soft-delete: shift the card to a 'removed' board so the user
+      // can restore it later. From the Removed tab itself we hard-delete.
+      if (board === 'removed') {
+        setCards((prev) =>
+          prev.filter((c) => !(c.card.id === cardId && c.board === board))
+        )
+        await fetch(`/api/decks/${deck.id}/cards`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card_id: cardId, board }),
+        })
+        return
+      }
       setCards((prev) =>
-        prev.filter((c) => !(c.card.id === cardId && c.board === board))
+        prev.map((c) =>
+          c.card.id === cardId && c.board === board
+            ? { ...c, board: 'removed' }
+            : c,
+        ),
       )
       await fetch(`/api/decks/${deck.id}/cards`, {
-        method: 'DELETE',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ card_id: cardId, board }),
+        body: JSON.stringify({
+          card_id: cardId,
+          board: 'removed',
+          current_board: board,
+        }),
       })
     },
     [deck.id]
@@ -552,11 +574,13 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
 
   const statsCards = useMemo(
     () =>
-      cards.map((c) => ({
-        card: c.card,
-        quantity: c.quantity,
-        board: c.board,
-      })),
+      cards
+        .filter((c) => c.board !== 'removed')
+        .map((c) => ({
+          card: c.card,
+          quantity: c.quantity,
+          board: c.board,
+        })),
     [cards]
   )
 
@@ -738,27 +762,29 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             )}
           </div>
 
-          {/* Board tabs — 'stats' tab is mobile-only; desktop has the sidebar. */}
+          {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
-            {(['main', 'sideboard', 'maybeboard', 'tokens', 'stats'] as BoardTab[]).map((tab) => {
-              const isStats = tab === 'stats'
+            {(['main', 'sideboard', 'maybeboard', 'tokens', 'removed'] as BoardTab[]).map((tab) => {
+              const isRemoved = tab === 'removed'
+              const removedCount = tabCounts.removed ?? 0
+              // Hide the Removed tab when there are no removed cards yet — keeps
+              // the bar clean for first-time users.
+              if (isRemoved && removedCount === 0) return null
               return (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                    isStats ? 'lg:hidden' : ''
-                  } ${
                     activeTab === tab
                       ? 'bg-bg-surface text-font-primary shadow-sm'
                       : 'text-font-secondary hover:text-font-primary'
                   }`}
                 >
                   <span className="sm:hidden">
-                    {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : tab === 'tokens' ? 'Tkns' : 'Stats'}
+                    {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : tab === 'tokens' ? 'Tkns' : 'Rmvd'}
                   </span>
                   <span className="hidden sm:inline">
-                    {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : tab === 'tokens' ? 'Tokens' : 'Stats'}
+                    {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : tab === 'tokens' ? 'Tokens' : 'Removed'}
                   </span>
                   {tabCounts[tab] != null && (
                     <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
@@ -843,26 +869,34 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             </div>
           )}
 
-          {activeTab === 'stats' ? (
-            <div className="rounded-xl border border-border bg-bg-surface p-4">
-              <DeckStats cards={statsCards} format={deck.format} commanderIdentity={commanderIdentity} />
-            </div>
-          ) : (
-            <DeckContent
-              cards={filteredCards}
-              commanderCards={commanderCards}
-              sections={sections}
-              deckId={deck.id}
-              isCommander={isCommander}
-              onCardClick={setSelectedDetailCard}
-              onQuantityChange={handleQuantityChange}
-              onRemove={handleRemove}
-              onToggleCommander={activeTab !== 'tokens' ? handleToggleCommander : undefined}
-              onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
-              onSectionChange={handleSectionChange}
-              onTagsChange={handleTagsChange}
-              overlayByCardId={overlayByCardId}
-            />
+          <DeckContent
+            cards={filteredCards}
+            commanderCards={activeTab === 'removed' ? [] : commanderCards}
+            sections={activeTab === 'removed' ? [] : sections}
+            deckId={deck.id}
+            isCommander={isCommander}
+            onCardClick={setSelectedDetailCard}
+            onQuantityChange={handleQuantityChange}
+            onRemove={handleRemove}
+            onToggleCommander={
+              activeTab !== 'tokens' && activeTab !== 'removed'
+                ? handleToggleCommander
+                : undefined
+            }
+            onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
+            onSectionChange={
+              activeTab === 'removed' ? undefined : handleSectionChange
+            }
+            onTagsChange={
+              activeTab === 'removed' ? undefined : handleTagsChange
+            }
+            overlayByCardId={overlayByCardId}
+          />
+          {activeTab === 'removed' && (
+            <p className="mt-3 text-[11px] text-font-muted">
+              Cards removed from this deck. Use the context menu to restore them
+              to Main Deck, Sideboard or Maybeboard.
+            </p>
           )}
         </div>
 
@@ -876,8 +910,12 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
               onAutoAssignUpdates={applySectionUpdates}
             />
             <div className="rounded-xl border border-border bg-bg-surface p-4">
-              <h2 className="mb-4 text-sm font-semibold text-font-secondary">
-                Deck Statistics
+              <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-font-primary">
+                <span className="inline-block h-2 w-2 rounded-full bg-font-accent" />
+                Stats
+                <span className="text-xs font-normal text-font-muted">
+                  · {deck.format}
+                </span>
               </h2>
               <DeckStats cards={statsCards} format={deck.format} commanderIdentity={commanderIdentity} />
             </div>

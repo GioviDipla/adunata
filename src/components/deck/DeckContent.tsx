@@ -315,9 +315,9 @@ export default function DeckContent({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Toolbar: view mode + sort + filter */}
+      {/* Toolbar: view mode + group + sort + filter — single row of h-10 chips */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-0.5 rounded-lg bg-bg-cell p-1">
+        <div className="flex h-10 items-center gap-0.5 rounded-lg bg-bg-cell p-1">
           {VIEW_MODE_OPTIONS.map(({ mode, icon: Icon, label }) => (
             <button
               key={mode}
@@ -335,7 +335,7 @@ export default function DeckContent({
           ))}
         </div>
 
-        <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-2.5 text-xs text-font-secondary">
+        <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-3 text-xs text-font-secondary">
           <Layers className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Group:</span>
           <select
@@ -355,7 +355,7 @@ export default function DeckContent({
           </select>
         </label>
 
-        <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-2.5 text-xs text-font-secondary">
+        <label className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-3 text-xs text-font-secondary">
           <ArrowUpDown className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Sort:</span>
           <select
@@ -374,7 +374,7 @@ export default function DeckContent({
 
         <button
           onClick={() => setShowFilterPanel((prev) => !prev)}
-          className={`flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors ${
+          className={`flex h-10 items-center gap-1.5 rounded-lg px-3 text-xs transition-colors ${
             totalFilterCount > 0 || showFilterPanel
               ? 'bg-bg-accent/20 text-font-accent'
               : 'bg-bg-cell text-font-secondary hover:text-font-primary'

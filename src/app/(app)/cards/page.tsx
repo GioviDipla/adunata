@@ -21,11 +21,14 @@ export const metadata = {
 async function getPublicCardsData(): Promise<{ initialCards: Card[]; sets: SetInfo[] }> {
   const admin = createAdminClient()
   const [cardsRes, setsRes] = await Promise.all([
+    // Fastest possible initial paint: no released_at filter, no
+    // composite sort. The pkey index on `id` (uuid) is sub-100ms and the
+    // user lands on the page; they pick a sort/filter to refine. The
+    // previous keyset query took 200-6000ms cold and timed out on warm
+    // caches when paired with the slow sets RPC.
     admin
       .from('cards')
       .select(CARD_GRID_COLUMNS)
-      .not('released_at', 'is', null)
-      .order('released_at', { ascending: false, nullsFirst: false })
       .order('id', { ascending: false })
       .limit(40),
     admin.rpc('get_distinct_sets'),

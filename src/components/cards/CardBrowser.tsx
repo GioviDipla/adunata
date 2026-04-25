@@ -744,14 +744,14 @@ export default function CardBrowser({
             </div>
           </div>
 
-          {/* Creature subtype + Keyword */}
+          {/* Creature subtype + Rules text */}
           <div className="flex flex-wrap gap-3">
-            <div className="flex-1 min-w-[200px]">
+            <div className="w-full sm:w-56 sm:shrink-0">
               <label className="mb-1 block text-xs font-medium text-font-muted">
-                Creature Subtype <span className="text-font-muted">(e.g. Zombie, God, Dinosaur)</span>
+                Creature Subtype
               </label>
               <div className="relative">
-                <input type="text" placeholder="Elf, Dragon, Wizard..." value={creatureType} onChange={(e) => setCreatureType(e.target.value)}
+                <input type="text" placeholder="Elf, Dragon..." value={creatureType} onChange={(e) => setCreatureType(e.target.value)}
                   className="w-full bg-bg-card border border-border text-font-primary rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-bg-accent placeholder:text-font-muted" />
                 {creatureType && (
                   <button onClick={() => setCreatureType('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-font-muted hover:text-font-primary">
@@ -761,12 +761,12 @@ export default function CardBrowser({
               </div>
             </div>
 
-            <div className="min-w-[200px]">
+            <div className="flex-1 min-w-[260px]">
               <label className="mb-1 block text-xs font-medium text-font-muted">
-                Rules Text <span className="text-font-muted">(search in oracle text)</span>
+                Rules Text <span className="text-font-muted">(searches oracle text)</span>
               </label>
               <div className="relative">
-                <input type="text" placeholder="flying, draw a card, deals damage..." value={selectedKeyword} onChange={(e) => setSelectedKeyword(e.target.value)}
+                <input type="text" placeholder='e.g. "draw a card", "deals damage", "create a token"' value={selectedKeyword} onChange={(e) => setSelectedKeyword(e.target.value)}
                   className="w-full bg-bg-card border border-border text-font-primary rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-bg-accent placeholder:text-font-muted" />
                 {selectedKeyword && (
                   <button onClick={() => setSelectedKeyword('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-font-muted hover:text-font-primary">

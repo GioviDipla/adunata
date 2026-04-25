@@ -107,6 +107,10 @@ export async function GET(request: NextRequest) {
       { key: 'daily_bulk_sync', value: entry.updated_at },
       { onConflict: 'key' },
     )
+
+    // 7. Refresh the distinct-sets materialized view so the cards page
+    // dropdown picks up new sets without a full GROUP BY at request time.
+    await admin.rpc('refresh_mv_cards_sets' as never)
   }
 
   return NextResponse.json({
