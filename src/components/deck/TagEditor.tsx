@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
 interface Props {
-  deckId: string
-  deckCardId: string
   initialTags: string[]
   /** Existing tags already used in the deck (for autocomplete). */
   suggestions: string[]

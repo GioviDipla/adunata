@@ -1,13 +1,20 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { memo, useState, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { Crown, Minus, Plus, RotateCcw, X } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
-import DeckCardActionSheet from './DeckCardActionSheet'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
+
+// Mobile action sheet only mounts after a long-press / tap-in-edit-mode
+// — defer the chunk so the long list-view doesn't pre-mount one sheet
+// per card.
+const DeckCardActionSheet = dynamic(() => import('./DeckCardActionSheet'), {
+  ssr: false,
+})
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -88,7 +95,7 @@ function ManaCostDisplay({ manaCost }: { manaCost: string | null }) {
 
 export { ManaCostDisplay }
 
-export default function DeckCard({
+function DeckCardImpl({
   card,
   quantity,
   board,
@@ -262,15 +269,11 @@ export default function DeckCard({
       {editingEnabled && deckId && deckCardId && sections && (
         <div className="hidden xl:flex items-center gap-1">
           <SectionPicker
-            deckId={deckId}
-            deckCardId={deckCardId}
             currentSectionId={sectionId ?? null}
             sections={sections}
             onChange={(sid) => onSectionChange?.(deckCardId, sid)}
           />
           <TagEditor
-            deckId={deckId}
-            deckCardId={deckCardId}
             initialTags={tags ?? []}
             suggestions={tagSuggestions ?? []}
             onChange={(next) => onTagsChange?.(deckCardId, next)}
@@ -368,10 +371,12 @@ export default function DeckCard({
         />
       )}
 
-      {/* Mobile long-press action sheet — section / tag / move / remove */}
-      {editingEnabled && deckId && deckCardId && sections && (
+      {/* Mobile long-press action sheet — section / tag / move / remove.
+          Only mounted when actually open so the dynamic chunk + state
+          don't load per row on a 60-card deck. */}
+      {showActionSheet && editingEnabled && deckId && deckCardId && sections && (
         <DeckCardActionSheet
-          open={showActionSheet}
+          open
           onClose={() => setShowActionSheet(false)}
           deckId={deckId}
           deckCardId={deckCardId}
@@ -392,3 +397,10 @@ export default function DeckCard({
     </div>
   )
 }
+
+// Memo: lists of 60-100 rows would otherwise re-render every row on
+// any state change in the editor (active tab, overlay toggle, etc).
+// The card object itself is stable across renders (held in DeckEditor
+// state), and our handlers are wrapped in useCallback at the parent.
+const DeckCard = memo(DeckCardImpl)
+export default DeckCard

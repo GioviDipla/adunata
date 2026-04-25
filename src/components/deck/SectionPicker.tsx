@@ -10,8 +10,6 @@ export interface SectionOption {
 }
 
 interface Props {
-  deckId: string
-  deckCardId: string
   currentSectionId: string | null
   sections: SectionOption[]
   /** Notified after the server accepts the change (or rolled back). */

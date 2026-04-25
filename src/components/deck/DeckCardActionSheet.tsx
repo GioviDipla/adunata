@@ -158,8 +158,6 @@ export default function DeckCardActionSheet({
             </h4>
             <div className="rounded-lg border border-border bg-bg-cell p-2">
               <TagEditor
-                deckId={deckId}
-                deckCardId={deckCardId}
                 initialTags={currentTags}
                 suggestions={tagSuggestions}
                 onChange={(next) => onTagsChange?.(deckCardId, next)}
