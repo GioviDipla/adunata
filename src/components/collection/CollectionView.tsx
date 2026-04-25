@@ -1,11 +1,17 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { VirtuosoGrid } from 'react-virtuoso'
 import { Upload } from 'lucide-react'
-import CollectionImportModal from './CollectionImportModal'
 import CollectionTile from './CollectionTile'
 import { useDebounce } from '@/lib/hooks/useDebounce'
+
+// Import modal only mounts after the user clicks the Import button —
+// keeps file-parser + bulk-upload code off the initial chunk.
+const CollectionImportModal = dynamic(() => import('./CollectionImportModal'), {
+  ssr: false,
+})
 
 // Narrow card shape — only what CollectionTile renders. Matches the
 // column list in `src/app/api/collection/route.ts` and the server-side

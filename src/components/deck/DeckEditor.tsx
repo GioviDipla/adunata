@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import {
   Trash2,
   Download,
@@ -19,13 +20,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { CARD_GAME_COLUMNS } from '@/lib/supabase/columns'
 import { Button } from '@/components/ui/Button'
-import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
-import DeckExport from './DeckExport'
-import ProxyPrintModal from './ProxyPrintModal'
 import AddCardSearch from './AddCardSearch'
-import CardDetail from '@/components/cards/CardDetail'
-import ImportCardsModal from './ImportCardsModal'
 import DeckContent from './DeckContent'
 import { useDeckOverlay } from '@/lib/hooks/useDeckOverlay'
 import DeckSectionsPanel from './DeckSectionsPanel'
@@ -33,6 +29,14 @@ import VisibilityToggle from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
+
+// Heavy dependencies (recharts, jsPDF) — defer until the user opens the
+// matching surface. Saves ~940KB of recharts off the initial bundle.
+const DeckStats = dynamic(() => import('./DeckStats'), { ssr: false })
+const DeckExport = dynamic(() => import('./DeckExport'), { ssr: false })
+const ProxyPrintModal = dynamic(() => import('./ProxyPrintModal'), { ssr: false })
+const ImportCardsModal = dynamic(() => import('./ImportCardsModal'), { ssr: false })
+const CardDetail = dynamic(() => import('@/components/cards/CardDetail'), { ssr: false })
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 type DeckRow = Database['public']['Tables']['decks']['Row']
@@ -239,26 +243,22 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
     [cards, activeTab]
   )
 
-  const tabCounts = useMemo<Record<BoardTab, number | null>>(
-    () => ({
-      main: cards
-        .filter((c) => c.board === 'main')
-        .reduce((s, c) => s + c.quantity, 0),
-      sideboard: cards
-        .filter((c) => c.board === 'sideboard')
-        .reduce((s, c) => s + c.quantity, 0),
-      maybeboard: cards
-        .filter((c) => c.board === 'maybeboard')
-        .reduce((s, c) => s + c.quantity, 0),
-      tokens: cards
-        .filter((c) => c.board === 'tokens')
-        .reduce((s, c) => s + c.quantity, 0),
-      removed: cards
-        .filter((c) => c.board === 'removed')
-        .reduce((s, c) => s + c.quantity, 0),
-    }),
-    [cards]
-  )
+  // Single pass over `cards` instead of 5 filter+reduce passes.
+  const tabCounts = useMemo<Record<BoardTab, number | null>>(() => {
+    const counts: Record<BoardTab, number> = {
+      main: 0,
+      sideboard: 0,
+      maybeboard: 0,
+      tokens: 0,
+      removed: 0,
+    }
+    for (const c of cards) {
+      if (c.board in counts) {
+        counts[c.board as BoardTab] += c.quantity
+      }
+    }
+    return counts
+  }, [cards])
 
   const handleQuantityChange = useCallback(
     async (cardId: number, newQuantity: number, board: string) => {

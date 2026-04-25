@@ -1,14 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { Search, Loader2, ChevronDown, ChevronUp, X, ArrowUpDown, Heart } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
 import type { Database } from '@/types/supabase'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import CardGrid from './CardGrid'
-import CardDetail from './CardDetail'
 import CardContextMenu from './CardContextMenu'
+
+// CardDetail mounts only when a card is opened — defer the chunk so the
+// initial /cards paint doesn't ship modal + printings panel + Scryfall
+// renderer until the user actually picks a card.
+const CardDetail = dynamic(() => import('./CardDetail'), { ssr: false })
 
 type Card = Database['public']['Tables']['cards']['Row']
 
