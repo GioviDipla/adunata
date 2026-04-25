@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { Crown, RotateCcw } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import type { Database } from '@/types/supabase'
+
+const LONG_PRESS_MS = 350
+const LONG_PRESS_MOVE_PX = 10
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -37,28 +40,16 @@ interface DeckGridViewProps {
   cols?: number
 }
 
-function useGridLongPress(delay = 500) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const triggered = useRef(false)
-  const callbackRef = useRef<(() => void) | null>(null)
-
-  const start = useCallback((cb: () => void) => {
-    triggered.current = false
-    callbackRef.current = cb
-    timerRef.current = setTimeout(() => {
-      triggered.current = true
-      cb()
-    }, delay)
-  }, [delay])
-
-  const cancel = useCallback(() => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
-    }
-  }, [])
-
-  return { start, cancel, wasLongPress: () => triggered.current }
+// Inline long-press tracker shared across the grid's cards. The
+// `triggered` flag is a one-shot — `consume()` returns the value and
+// clears it so a long-press doesn't suppress the next tap. `start`
+// records the pointer position so a drift > LONG_PRESS_MOVE_PX cancels
+// the press (treats it as a scroll).
+interface LongPressRef {
+  timer: ReturnType<typeof setTimeout> | null
+  triggered: boolean
+  startX: number
+  startY: number
 }
 
 export default function DeckGridView({
@@ -75,7 +66,48 @@ export default function DeckGridView({
   cols,
 }: DeckGridViewProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
-  const longPress = useGridLongPress(500)
+  const longPressRef = useRef<LongPressRef>({
+    timer: null,
+    triggered: false,
+    startX: 0,
+    startY: 0,
+  })
+
+  const startLongPress = (e: React.PointerEvent, cb: () => void) => {
+    const ref = longPressRef.current
+    if (ref.timer) clearTimeout(ref.timer)
+    ref.triggered = false
+    ref.startX = e.clientX
+    ref.startY = e.clientY
+    ref.timer = setTimeout(() => {
+      ref.triggered = true
+      ref.timer = null
+      cb()
+    }, LONG_PRESS_MS)
+  }
+  const cancelLongPress = () => {
+    const ref = longPressRef.current
+    if (ref.timer) {
+      clearTimeout(ref.timer)
+      ref.timer = null
+    }
+  }
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const ref = longPressRef.current
+    if (!ref.timer) return
+    if (
+      Math.abs(e.clientX - ref.startX) > LONG_PRESS_MOVE_PX ||
+      Math.abs(e.clientY - ref.startY) > LONG_PRESS_MOVE_PX
+    ) {
+      cancelLongPress()
+    }
+  }
+  const consumeLongPress = () => {
+    const ref = longPressRef.current
+    const v = ref.triggered
+    ref.triggered = false
+    return v
+  }
   if (cards.length === 0) {
     return (
       <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
@@ -121,15 +153,13 @@ export default function DeckGridView({
             }}
             onPointerDown={(e) => {
               if (editingMode && e.pointerType === 'touch') {
-                longPress.start(() => {
-                  // Long-press opens card detail in editing mode.
-                  onCardClick?.(entry.card)
-                })
+                startLongPress(e, () => onCardClick?.(entry.card))
               }
             }}
-            onPointerUp={() => longPress.cancel()}
-            onPointerLeave={() => longPress.cancel()}
-            onPointerCancel={() => longPress.cancel()}
+            onPointerMove={handlePointerMove}
+            onPointerUp={cancelLongPress}
+            onPointerLeave={cancelLongPress}
+            onPointerCancel={cancelLongPress}
             style={{ touchAction: 'manipulation' }}
           >
             {/* Card image */}
@@ -141,7 +171,7 @@ export default function DeckGridView({
                 loading="lazy"
                 draggable={false}
                 onClick={(e) => {
-                  if (longPress.wasLongPress()) return
+                  if (consumeLongPress()) return
                   if (editingMode) {
                     openContext(e.clientX, e.clientY)
                   } else {
@@ -153,7 +183,7 @@ export default function DeckGridView({
               <div
                 className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2 cursor-pointer select-none"
                 onClick={(e) => {
-                  if (longPress.wasLongPress()) return
+                  if (consumeLongPress()) return
                   if (editingMode) {
                     openContext(e.clientX, e.clientY)
                   } else {

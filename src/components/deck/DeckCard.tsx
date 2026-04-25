@@ -172,8 +172,9 @@ function DeckCardImpl({
       onPointerDown={(e) => {
         lastPointerPos.current = { x: e.clientX, y: e.clientY }
         pointerIsTouch.current = e.pointerType === 'touch'
-        if (editingMode) longPress.onPointerDown()
+        if (editingMode) longPress.onPointerDown(e)
       }}
+      onPointerMove={editingMode ? longPress.onPointerMove : undefined}
       onPointerUp={editingMode ? longPress.onPointerUp : undefined}
       onPointerLeave={() => {
         if (editingMode) longPress.onPointerLeave()

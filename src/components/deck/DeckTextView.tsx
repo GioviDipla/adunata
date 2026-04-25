@@ -54,22 +54,39 @@ export default function DeckTextView({
   // context menu, long-press / right-click = open card detail. View
   // mode keeps tap = open detail.
   const editingMode = !!onMoveToBoard
-  // Per-row long-press timer state. Tracks whether the long-press fired
-  // so the click handler can suppress its action.
+  // Per-row long-press timer state. `consumeLongPress` is one-shot — it
+  // returns the flag and clears it so a long-press doesn't suppress the
+  // next tap.
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressFired = useRef(false)
-  const startLongPress = (cb: () => void) => {
+  const longPressStart = useRef<{ x: number; y: number } | null>(null)
+  const startLongPress = (e: React.PointerEvent, cb: () => void) => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
     longPressFired.current = false
+    longPressStart.current = { x: e.clientX, y: e.clientY }
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true
+      longPressTimer.current = null
       cb()
-    }, 500)
+    }, 350)
   }
   const cancelLongPress = () => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
     }
+    longPressStart.current = null
+  }
+  const handleLongPressMove = (e: React.PointerEvent) => {
+    if (!longPressTimer.current || !longPressStart.current) return
+    const dx = Math.abs(e.clientX - longPressStart.current.x)
+    const dy = Math.abs(e.clientY - longPressStart.current.y)
+    if (dx > 10 || dy > 10) cancelLongPress()
+  }
+  const consumeLongPress = () => {
+    const v = longPressFired.current
+    longPressFired.current = false
+    return v
   }
 
   if (cards.length === 0 && (!groupsProp || groupsProp.length === 0)) {
@@ -128,9 +145,10 @@ export default function DeckTextView({
                       }}
                       onPointerDown={(e) => {
                         if (editingMode && e.pointerType === 'touch') {
-                          startLongPress(() => onCardClick?.(entry.card))
+                          startLongPress(e, () => onCardClick?.(entry.card))
                         }
                       }}
+                      onPointerMove={handleLongPressMove}
                       onPointerUp={cancelLongPress}
                       onPointerLeave={cancelLongPress}
                       onPointerCancel={cancelLongPress}
@@ -140,7 +158,7 @@ export default function DeckTextView({
                       </span>
                       <button
                         onClick={(e) => {
-                          if (longPressFired.current) return
+                          if (consumeLongPress()) return
                           if (editingMode) {
                             setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
                           } else {

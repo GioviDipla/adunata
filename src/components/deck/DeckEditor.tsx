@@ -109,6 +109,22 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
     return m
   }, [overlayData])
 
+  // Count cards per section so the sections panel can show inline chips.
+  // Cards on the 'removed' board don't count toward any section.
+  const sectionCardCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    let uncategorized = 0
+    for (const c of cards) {
+      if (c.board === 'removed' || c.board === 'tokens') continue
+      if (c.section_id) {
+        map[c.section_id] = (map[c.section_id] ?? 0) + c.quantity
+      } else {
+        uncategorized += c.quantity
+      }
+    }
+    return { map, uncategorized }
+  }, [cards])
+
   const applySectionUpdates = useCallback(
     (updates: Array<{ id: string; section_id: string }>) => {
       if (!updates.length) return
@@ -757,6 +773,8 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
                   sections={sections}
                   onChange={setSections}
                   onAutoAssignUpdates={applySectionUpdates}
+                  cardCounts={sectionCardCounts.map}
+                  uncategorizedCount={sectionCardCounts.uncategorized}
                 />
               </div>
             )}
@@ -908,6 +926,8 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
               sections={sections}
               onChange={setSections}
               onAutoAssignUpdates={applySectionUpdates}
+              cardCounts={sectionCardCounts.map}
+              uncategorizedCount={sectionCardCounts.uncategorized}
             />
             <div className="rounded-xl border border-border bg-bg-surface p-4">
               <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-font-primary">
