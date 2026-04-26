@@ -15,6 +15,8 @@ import {
   Printer,
   Library,
   ClipboardCopy,
+  Layers,
+  BarChart3,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +27,7 @@ import AddCardSearch from './AddCardSearch'
 import DeckContent from './DeckContent'
 import { useDeckOverlay } from '@/lib/hooks/useDeckOverlay'
 import DeckSectionsPanel from './DeckSectionsPanel'
+import SidebarCards, { type SidebarPanel } from './SidebarCards'
 import VisibilityToggle from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
 import type { Database } from '@/types/supabase'
@@ -918,27 +921,65 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
           )}
         </div>
 
-        {/* Right panel: sections + stats — only on lg+ */}
+        {/* Right panel: stats + sections — only on lg+. Order is user-
+            persistable via SidebarCards (drag handle on hover), and each
+            card is collapsible via its header chevron. Defaults: stats
+            first, sections second. */}
         <div className="hidden lg:block w-80 shrink-0">
-          <div className="sticky top-6 flex flex-col gap-4">
-            <DeckSectionsPanel
+          <div className="sticky top-6">
+            <SidebarCards
               deckId={deck.id}
-              sections={sections}
-              onChange={setSections}
-              onAutoAssignUpdates={applySectionUpdates}
-              cardCounts={sectionCardCounts.map}
-              uncategorizedCount={sectionCardCounts.uncategorized}
+              panels={[
+                {
+                  id: 'stats',
+                  header: (
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-font-primary">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-bg-accent/10 text-font-accent">
+                        <BarChart3 className="h-4 w-4" />
+                      </span>
+                      Stats
+                      <span className="ml-auto text-[10px] font-normal text-font-muted">
+                        {deck.format}
+                      </span>
+                    </h2>
+                  ),
+                  body: (
+                    <DeckStats
+                      cards={statsCards}
+                      format={deck.format}
+                      commanderIdentity={commanderIdentity}
+                    />
+                  ),
+                },
+                {
+                  id: 'sections',
+                  header: (
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-font-primary">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-bg-accent/10 text-font-accent">
+                        <Layers className="h-4 w-4" />
+                      </span>
+                      Sections
+                      {sections.length > 0 && (
+                        <span className="ml-auto rounded-full bg-bg-cell px-2 py-0.5 text-[10px] font-semibold tabular-nums text-font-secondary">
+                          {sections.length}
+                        </span>
+                      )}
+                    </h2>
+                  ),
+                  body: (
+                    <DeckSectionsPanel
+                      chromeless
+                      deckId={deck.id}
+                      sections={sections}
+                      onChange={setSections}
+                      onAutoAssignUpdates={applySectionUpdates}
+                      cardCounts={sectionCardCounts.map}
+                      uncategorizedCount={sectionCardCounts.uncategorized}
+                    />
+                  ),
+                },
+              ]}
             />
-            <div className="rounded-xl border border-border bg-bg-surface p-4">
-              <h2 className="mb-3 flex items-center gap-2 text-base font-bold text-font-primary">
-                <span className="inline-block h-2 w-2 rounded-full bg-font-accent" />
-                Stats
-                <span className="text-xs font-normal text-font-muted">
-                  · {deck.format}
-                </span>
-              </h2>
-              <DeckStats cards={statsCards} format={deck.format} commanderIdentity={commanderIdentity} />
-            </div>
           </div>
         </div>
       </div>

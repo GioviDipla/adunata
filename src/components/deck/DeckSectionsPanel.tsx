@@ -42,6 +42,9 @@ interface Props {
   cardCounts?: Record<string, number>
   /** Cards with no section. */
   uncategorizedCount?: number
+  /** When true, drop the panel's own outer chrome (border, gradient, title) —
+   *  used by SidebarCards which wraps each panel in its own collapsible card. */
+  chromeless?: boolean
 }
 
 // Curated palette — picked to feel cohesive with the dark UI and to map
@@ -66,6 +69,7 @@ export default function DeckSectionsPanel({
   onAutoAssignUpdates,
   cardCounts,
   uncategorizedCount = 0,
+  chromeless = false,
 }: Props) {
   const router = useRouter()
   const [draftName, setDraftName] = useState('')
@@ -224,38 +228,46 @@ export default function DeckSectionsPanel({
   )
   const totalCards = totalAssigned + uncategorizedCount
 
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-border-light/60 bg-gradient-to-br from-bg-surface via-bg-surface to-bg-cell/40 shadow-sm">
-      {/* Soft accent glow on the top edge */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-font-accent/40 to-transparent" />
-
-      <div className="flex flex-col gap-4 p-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-bg-accent/10 text-font-accent">
-              <Layers className="h-4 w-4" />
-            </span>
-            <div>
-              <h3 className="text-sm font-bold tracking-tight text-font-primary">
-                Sections
-              </h3>
-              {totalCards > 0 && (
-                <p className="text-[10px] text-font-muted">
-                  {totalAssigned} / {totalCards} sorted
-                  {uncategorizedCount > 0 && (
-                    <> · {uncategorizedCount} uncategorized</>
-                  )}
-                </p>
-              )}
-            </div>
-          </div>
-          {sections.length > 0 && (
-            <span className="rounded-full bg-bg-cell px-2 py-0.5 text-[10px] font-semibold tabular-nums text-font-secondary">
-              {sections.length}
-            </span>
-          )}
+  const Wrapper = chromeless
+    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
+    : ({ children }: { children: React.ReactNode }) => (
+        <div className="relative overflow-hidden rounded-2xl border border-border-light/60 bg-gradient-to-br from-bg-surface via-bg-surface to-bg-cell/40 shadow-sm">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-font-accent/40 to-transparent" />
+          {children}
         </div>
+      )
+
+  return (
+    <Wrapper>
+      <div className={`flex flex-col gap-4 ${chromeless ? '' : 'p-4'}`}>
+        {/* Internal header — hidden when SidebarCards already provides one */}
+        {!chromeless && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-bg-accent/10 text-font-accent">
+                <Layers className="h-4 w-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold tracking-tight text-font-primary">
+                  Sections
+                </h3>
+                {totalCards > 0 && (
+                  <p className="text-[10px] text-font-muted">
+                    {totalAssigned} / {totalCards} sorted
+                    {uncategorizedCount > 0 && (
+                      <> · {uncategorizedCount} uncategorized</>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+            {sections.length > 0 && (
+              <span className="rounded-full bg-bg-cell px-2 py-0.5 text-[10px] font-semibold tabular-nums text-font-secondary">
+                {sections.length}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Empty state */}
         {sections.length === 0 && (
@@ -360,7 +372,7 @@ export default function DeckSectionsPanel({
           </button>
         </div>
       </div>
-    </div>
+    </Wrapper>
   )
 }
 
