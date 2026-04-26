@@ -15,6 +15,9 @@ interface HandAreaProps {
   cards: HandCardEntry[]
   onPlayCard: (instanceId: string) => void
   onCardPreview?: (card: CardRow, instanceId?: string) => void
+  /** Tap (click) opens the action menu near the cursor/finger. When provided,
+   *  tap no longer plays — Play moves to the menu. */
+  onCardAction?: (card: CardRow, instanceId: string, x: number, y: number) => void
   selectable?: boolean
   selectedIds?: Set<string>
   onToggleSelect?: (instanceId: string) => void
@@ -25,6 +28,7 @@ function HandCardButton({
   index,
   onPlayCard,
   onCardPreview,
+  onCardAction,
   selectable,
   isSelected,
   onToggleSelect,
@@ -33,6 +37,7 @@ function HandCardButton({
   index: number
   onPlayCard: (id: string) => void
   onCardPreview?: (card: CardRow, instanceId?: string) => void
+  onCardAction?: (card: CardRow, instanceId: string, x: number, y: number) => void
   selectable: boolean
   isSelected: boolean
   onToggleSelect?: (id: string) => void
@@ -42,14 +47,18 @@ function HandCardButton({
     delay: 400,
   })
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     if (longPress.wasLongPress()) return
     if (selectable && onToggleSelect) {
       onToggleSelect(hc.instanceId)
+      return
+    }
+    if (onCardAction) {
+      onCardAction(hc.card, hc.instanceId, e.clientX, e.clientY)
     } else {
       onPlayCard(hc.instanceId)
     }
-  }, [longPress, selectable, onToggleSelect, onPlayCard, hc.instanceId])
+  }, [longPress, selectable, onToggleSelect, onCardAction, onPlayCard, hc.card, hc.instanceId])
 
   return (
     <button
@@ -71,7 +80,7 @@ function HandCardButton({
         zIndex: index,
         touchAction: 'manipulation',
       }}
-      title={`${hc.card.name} — tap to ${selectable ? 'select' : 'play'}, hold to preview`}
+      title={`${hc.card.name} — tap for ${selectable ? 'select' : 'actions'}, hold to preview`}
     >
       {hc.card.image_small ? (
         <img
@@ -108,6 +117,7 @@ export default function HandArea({
   cards,
   onPlayCard,
   onCardPreview,
+  onCardAction,
   selectable = false,
   selectedIds,
   onToggleSelect,
@@ -125,6 +135,7 @@ export default function HandArea({
             index={index}
             onPlayCard={onPlayCard}
             onCardPreview={onCardPreview}
+            onCardAction={onCardAction}
             selectable={selectable}
             isSelected={selectable && (selectedIds?.has(hc.instanceId) ?? false)}
             onToggleSelect={onToggleSelect}

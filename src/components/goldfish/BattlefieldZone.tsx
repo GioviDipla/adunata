@@ -22,6 +22,9 @@ interface BattlefieldZoneProps {
   cards: BattlefieldCard[]
   onTapToggle: (instanceId: string) => void
   onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
+  /** Tap (click) opens the action menu near the cursor/finger. When provided,
+   *  tap no longer toggles tap-state — that moves to the menu's Tap row. */
+  onCardAction?: (card: CardRow, instanceId: string, tapped: boolean, x: number, y: number) => void
   /** Current game phase — used to ring-highlight cards whose pre-computed
    *  trigger flag matches (e.g. upkeep-trigger cards during the upkeep phase). */
   phase?: GamePhase
@@ -44,11 +47,13 @@ function BattlefieldCardButton({
   bc,
   onTapToggle,
   onCardPreview,
+  onCardAction,
   phase,
 }: {
   bc: BattlefieldCard
   onTapToggle: (id: string) => void
   onCardPreview?: (card: CardRow, instanceId: string, tapped: boolean) => void
+  onCardAction?: (card: CardRow, instanceId: string, tapped: boolean, x: number, y: number) => void
   phase?: GamePhase
 }) {
   const longPress = useLongPress({
@@ -56,10 +61,14 @@ function BattlefieldCardButton({
     delay: 400,
   })
 
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     if (longPress.wasLongPress()) return
-    onTapToggle(bc.instanceId)
-  }, [longPress, onTapToggle, bc.instanceId])
+    if (onCardAction) {
+      onCardAction(bc.card, bc.instanceId, bc.tapped, e.clientX, e.clientY)
+    } else {
+      onTapToggle(bc.instanceId)
+    }
+  }, [longPress, onCardAction, onTapToggle, bc.card, bc.instanceId, bc.tapped])
 
   const triggerKey = phaseTriggerKey(phase)
   const triggersNow = triggerKey ? Boolean(bc.card[triggerKey]) : false
@@ -78,7 +87,7 @@ function BattlefieldCardButton({
           : 'border-border hover:border-bg-accent'
       } ${triggersNow ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-bg-dark' : ''}`}
       style={{ width: CARD_W, height: CARD_H, touchAction: 'manipulation' }}
-      title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''}${triggersNow ? ' — triggers this phase' : ''} — hold or right-click for actions`}
+      title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''}${triggersNow ? ' — triggers this phase' : ''} — tap for actions, hold to preview`}
     >
       {bc.card.image_small ? (
         <img
@@ -130,6 +139,7 @@ export default function BattlefieldZone({
   cards,
   onTapToggle,
   onCardPreview,
+  onCardAction,
   phase,
 }: BattlefieldZoneProps) {
   return (
@@ -144,6 +154,7 @@ export default function BattlefieldZone({
             bc={bc}
             onTapToggle={onTapToggle}
             onCardPreview={onCardPreview}
+            onCardAction={onCardAction}
             phase={phase}
           />
         ))}

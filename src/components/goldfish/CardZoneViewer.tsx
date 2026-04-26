@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Shuffle, X } from 'lucide-react'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 import { getCardTypeCategory } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
@@ -23,7 +24,8 @@ interface CardZoneViewerProps {
    */
   onCloseAndShuffle?: () => void
   onCardPreview?: (card: CardRow) => void
-  onCardAction?: (entry: CardEntry) => void
+  /** Tap (click) opens the action menu. Long-press shows the preview. */
+  onCardAction?: (entry: CardEntry, x: number, y: number) => void
   groupByType?: boolean
 }
 
@@ -36,42 +38,34 @@ function ZoneCard({
 }: {
   entry: CardEntry
   onCardPreview?: (card: CardRow) => void
-  onCardAction?: (entry: CardEntry) => void
+  onCardAction?: (entry: CardEntry, x: number, y: number) => void
 }) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const triggered = useRef(false)
+  // Tap → action menu, long-press → preview. Mirrors deck/cards browser.
+  const longPress = useLongPress({
+    onLongPress: () => onCardPreview?.(entry.card),
+    delay: 400,
+  })
 
-  const handlePointerDown = useCallback(() => {
-    triggered.current = false
-    timerRef.current = setTimeout(() => {
-      triggered.current = true
-      onCardAction?.(entry)
-    }, 500)
-  }, [entry, onCardAction])
-
-  const handlePointerUp = useCallback(() => {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
-  }, [])
-
-  const handleClick = useCallback(() => {
-    if (triggered.current) { triggered.current = false; return }
-    onCardPreview?.(entry.card)
-  }, [entry.card, onCardPreview])
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (longPress.wasLongPress()) return
+    if (onCardAction) {
+      onCardAction(entry, e.clientX, e.clientY)
+    } else {
+      onCardPreview?.(entry.card)
+    }
+  }, [longPress, entry, onCardAction, onCardPreview])
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    onCardAction?.(entry)
-  }, [entry, onCardAction])
+    onCardPreview?.(entry.card)
+  }, [entry.card, onCardPreview])
 
   return (
     <div className="relative">
       <button
         onClick={handleClick}
         onContextMenu={handleContextMenu}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        {...longPress}
         className="w-full overflow-hidden rounded-lg border border-border select-none"
         style={{ touchAction: 'manipulation' }}
       >
