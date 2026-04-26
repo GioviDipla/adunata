@@ -38,6 +38,7 @@ import TokenCreator, { type TokenDefinition } from './TokenCreator'
 import CommanderChoiceModal from './CommanderChoiceModal'
 import SpecialActionsMenu from './SpecialActionsMenu'
 import RevealedCardsChooser from './RevealedCardsChooser'
+import CardActionMenu, { type ActionMenuZone, type ActionMenuDest } from '@/components/game/CardActionMenu'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -87,15 +88,18 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
   }
 }
 
-/** Command zone card button — long-press or tap opens preview, where the user can Cast. */
+/** Command zone card button — tap opens the action menu (Cast),
+ *  long-press / right-click opens the preview overlay. */
 function CommandZoneCard({
   cardId,
   data,
   onOpenPreview,
+  onOpenAction,
 }: {
   cardId: number
   data: CardMap[string] | undefined
   onOpenPreview: (card: CardRow) => void
+  onOpenAction: (card: CardRow, x: number, y: number) => void
 }) {
   const longPress = useLongPress({
     onLongPress: () => {
@@ -104,9 +108,9 @@ function CommandZoneCard({
     delay: 400,
   })
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
     if (longPress.wasLongPress()) return
-    if (data) onOpenPreview(toCardRow(cardId, data))
+    if (data) onOpenAction(toCardRow(cardId, data), e.clientX, e.clientY)
   }
 
   return (
@@ -119,7 +123,7 @@ function CommandZoneCard({
       {...longPress}
       className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card select-none"
       style={{ width: 48, height: 67, touchAction: 'manipulation' }}
-      title={`${data?.name ?? '?'} — tap to preview & cast`}
+      title={`${data?.name ?? '?'} — tap to cast, hold to preview`}
     >
       {data?.imageSmall ? (
         <img
@@ -133,6 +137,49 @@ function CommandZoneCard({
           <span className="text-center text-[8px] font-semibold text-font-primary">
             {data?.name ?? '?'}
           </span>
+        </div>
+      )}
+    </button>
+  )
+}
+
+/** Peek card tile — tap opens the action menu, long-press / right-click previews. */
+function PeakCardButton({
+  card,
+  instanceId: _instanceId,
+  onOpenAction,
+  onOpenPreview,
+}: {
+  card: CardRow
+  instanceId: string
+  onOpenAction: (card: CardRow, x: number, y: number) => void
+  onOpenPreview: (card: CardRow) => void
+}) {
+  const longPress = useLongPress({
+    onLongPress: () => onOpenPreview(card),
+    delay: 400,
+  })
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (longPress.wasLongPress()) return
+    onOpenAction(card, e.clientX, e.clientY)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      onContextMenu={(e) => { e.preventDefault(); onOpenPreview(card) }}
+      {...longPress}
+      className="w-24 select-none"
+      style={{ touchAction: 'manipulation' }}
+      title={`${card.name} — tap for actions, hold to preview`}
+    >
+      {card.image_small ? (
+        <img src={card.image_small} alt={card.name} className="w-full rounded-lg pointer-events-none" draggable={false} />
+      ) : (
+        <div className="flex aspect-[5/7] items-center justify-center rounded-lg bg-bg-cell p-2">
+          <span className="text-[9px] text-font-primary text-center">{card.name}</span>
         </div>
       )}
     </button>
@@ -162,6 +209,16 @@ export default function PlayGame(props: PlayGameProps) {
   const [showTokenCreator, setShowTokenCreator] = useState(false)
   const [showSpecialActions, setShowSpecialActions] = useState(false)
   const [peakCards, setPeakCards] = useState<{ instanceId: string; card: CardRow }[] | null>(null)
+  const [actionMenu, setActionMenu] = useState<{
+    x: number
+    y: number
+    zone: ActionMenuZone
+    instanceId: string
+    cardId: number
+    cardName: string
+    isCommander: boolean
+    tapped?: boolean
+  } | null>(null)
   const [deckTokens, setDeckTokens] = useState<TokenDefinition[]>([])
   const libraryViewLoggedRef = useRef(false)
 
@@ -721,6 +778,110 @@ export default function PlayGame(props: PlayGameProps) {
 
   const closePreview = useCallback(() => setPreview(null), [])
 
+  // Open the action menu anchored at (x, y). Used by the tap gesture on
+  // any card surface owned by the player. Long-press still opens preview.
+  const openActionMenu = useCallback(
+    (
+      zone: ActionMenuZone,
+      instanceId: string,
+      card: CardRow,
+      x: number,
+      y: number,
+      tapped?: boolean,
+    ) => {
+      setActionMenu({
+        x,
+        y,
+        zone,
+        instanceId,
+        cardId: card.id as unknown as number,
+        cardName: card.name,
+        isCommander: isCommanderCard(card),
+        tapped,
+      })
+    },
+    [isCommanderCard],
+  )
+
+  const closeActionMenu = useCallback(() => setActionMenu(null), [])
+
+  /**
+   * Dispatcher: move a card from `zone` to `dest` using the existing handlers.
+   * Source-aware so the engine receives the correct `from` value.
+   * Tokens leaving the battlefield evaporate via the existing handler chain.
+   */
+  const handleActionMenuMove = useCallback(
+    (
+      zone: ActionMenuZone,
+      instanceId: string,
+      dest: ActionMenuDest,
+    ) => {
+      // Map ActionMenuZone -> engine `from` zone string.
+      const from =
+        zone === 'hand' ? 'hand'
+        : zone === 'battlefield' ? 'battlefield'
+        : zone === 'graveyard' ? 'graveyard'
+        : zone === 'exile' ? 'exile'
+        : zone === 'library_top' || zone === 'library_bottom' ? 'library'
+        : zone === 'command' ? 'commandZone'
+        : null
+
+      if (!from) return
+      const data = cardMap[instanceId]
+      if (!data) return
+
+      // Helpers below use `from` to drive the existing zone handlers.
+      switch (dest) {
+        case 'play':
+          if (from === 'hand') {
+            handlePlayCard(instanceId)
+          } else if (from === 'commandZone') {
+            handleCastCommander(instanceId)
+          } else {
+            handlePlayFromZone(instanceId, from)
+          }
+          break
+        case 'hand':
+          if (from === 'battlefield') handleReturnToHand(instanceId)
+          else handleReturnToHandFromZone(instanceId, from)
+          break
+        case 'graveyard':
+          if (from === 'hand') handleDiscardFromHand(instanceId)
+          else if (from === 'battlefield') handleSendToGraveyard(instanceId)
+          else handleSendToGraveyardFromZone(instanceId, from)
+          break
+        case 'exile':
+          if (from === 'hand') handleExileFromHand(instanceId)
+          else if (from === 'battlefield') handleExile(instanceId)
+          else handleExileFromZone(instanceId, from)
+          break
+        case 'library_top':
+          handleSendToTop(instanceId, from)
+          break
+        case 'library_bottom':
+          handleSendToBottom(instanceId, from)
+          break
+        case 'command':
+          if (from === 'battlefield') handleReturnToCommandZone(instanceId)
+          else {
+            // For non-battlefield zones, send to commandZone via createMoveZone.
+            sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, from, 'commandZone'))
+          }
+          break
+      }
+      setPreview(null)
+    },
+    [
+      cardMap, sendAction, userId, myName,
+      handlePlayCard, handleCastCommander, handlePlayFromZone,
+      handleReturnToHand, handleReturnToHandFromZone,
+      handleDiscardFromHand, handleSendToGraveyard, handleSendToGraveyardFromZone,
+      handleExileFromHand, handleExile, handleExileFromZone,
+      handleSendToTop, handleSendToBottom,
+      handleReturnToCommandZone,
+    ],
+  )
+
   // Combat: declare attackers
   const handleDeclareAttackers = useCallback((attackerIds: string[], attackerNames: string[]) => {
     sendAction(createDeclareAttackers(userId, myName, attackerIds, attackerNames))
@@ -1191,6 +1352,7 @@ export default function PlayGame(props: PlayGameProps) {
             cards={myBattlefieldByZone.creatures}
             onTapToggle={handleTapToggle}
             phase={gameState?.phase}
+            onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
             onCardPreview={(card, id, tapped) => {
               const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
               setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
@@ -1205,6 +1367,7 @@ export default function PlayGame(props: PlayGameProps) {
                 cards={myBattlefieldByZone.other}
                 onTapToggle={handleTapToggle}
                 phase={gameState?.phase}
+                onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
                 onCardPreview={(card, id, tapped) =>
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
                 }
@@ -1220,6 +1383,7 @@ export default function PlayGame(props: PlayGameProps) {
                 cards={myBattlefieldByZone.tokens}
                 onTapToggle={handleTapToggle}
                 phase={gameState?.phase}
+                onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
                 onCardPreview={(card, id, tapped) => {
                   const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped, counters: bfCard?.counters })
@@ -1235,6 +1399,7 @@ export default function PlayGame(props: PlayGameProps) {
               cards={myBattlefieldByZone.lands}
               onTapToggle={handleTapToggle}
               phase={gameState?.phase}
+              onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
               onCardPreview={(card, id, tapped) =>
                 setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
               }
@@ -1262,6 +1427,7 @@ export default function PlayGame(props: PlayGameProps) {
             <HandArea
               cards={myHandCards}
               onPlayCard={handlePlayCard}
+              onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
               onCardPreview={(card, instanceId) =>
                 setPreview({ card, zone: 'hand', instanceId })
               }
@@ -1280,6 +1446,7 @@ export default function PlayGame(props: PlayGameProps) {
                     onOpenPreview={(row) =>
                       setPreview({ card: row, zone: 'commandZone', instanceId: c.instanceId })
                     }
+                    onOpenAction={(row, x, y) => openActionMenu('command', c.instanceId, row, x, y)}
                   />
                 )
               })}
@@ -1324,7 +1491,7 @@ export default function PlayGame(props: PlayGameProps) {
           cards={graveyardCards}
           onClose={() => setViewingZone(null)}
           onCardPreview={(card) => setPreview({ card })}
-          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'graveyard', instanceId: entry.instanceId })}
+          onCardAction={(entry, x, y) => openActionMenu('graveyard', entry.instanceId, entry.card, x, y)}
           groupByType
         />
       )}
@@ -1334,7 +1501,7 @@ export default function PlayGame(props: PlayGameProps) {
           cards={exileCards}
           onClose={() => setViewingZone(null)}
           onCardPreview={(card) => setPreview({ card })}
-          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'exile', instanceId: entry.instanceId })}
+          onCardAction={(entry, x, y) => openActionMenu('exile', entry.instanceId, entry.card, x, y)}
           groupByType
         />
       )}
@@ -1345,7 +1512,7 @@ export default function PlayGame(props: PlayGameProps) {
           onClose={() => setViewingZone(null)}
           onCloseAndShuffle={handleCloseAndShuffleLibrary}
           onCardPreview={(card) => setPreview({ card })}
-          onCardAction={(entry) => setPreview({ card: entry.card, zone: 'library', instanceId: entry.instanceId })}
+          onCardAction={(entry, x, y) => openActionMenu('library_top', entry.instanceId, entry.card, x, y)}
         />
       )}
 
@@ -1597,28 +1764,61 @@ export default function PlayGame(props: PlayGameProps) {
         />
       )}
 
-      {/* Peak cards viewer */}
+      {/* Peek cards viewer — tap a card to open the action menu (full set of
+       *  destinations), long-press / right-click to inspect. Lets the player
+       *  send a peeked card directly to hand, battlefield, GY, exile, top,
+       *  bottom from inside the peek modal instead of closing it first. */}
       {peakCards && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-dark/80" onClick={() => setPeakCards(null)}>
           <div className="mx-4 w-full max-w-lg rounded-xl border border-border bg-bg-surface p-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-3 text-sm font-bold text-font-primary">Top {peakCards.length} Card{peakCards.length > 1 ? 's' : ''}</h3>
+            <h3 className="mb-1 text-sm font-bold text-font-primary">Top {peakCards.length} Card{peakCards.length > 1 ? 's' : ''}</h3>
+            <p className="mb-3 text-[10px] text-font-muted">Tap a card for actions, hold to preview.</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {peakCards.map((pc) => (
-                <div key={pc.instanceId} className="w-24">
-                  {pc.card.image_small ? (
-                    <img src={pc.card.image_small} alt={pc.card.name} className="w-full rounded-lg" />
-                  ) : (
-                    <div className="flex aspect-[5/7] items-center justify-center rounded-lg bg-bg-cell p-2">
-                      <span className="text-[9px] text-font-primary text-center">{pc.card.name}</span>
-                    </div>
-                  )}
-                </div>
+                <PeakCardButton
+                  key={pc.instanceId}
+                  card={pc.card}
+                  instanceId={pc.instanceId}
+                  onOpenAction={(card, x, y) => openActionMenu('library_top', pc.instanceId, card, x, y)}
+                  onOpenPreview={(card) => setPreview({ card })}
+                />
               ))}
             </div>
             <button onClick={() => setPeakCards(null)}
               className="mt-4 w-full rounded-lg bg-bg-accent py-2 text-sm font-bold text-font-white">Done</button>
           </div>
         </div>
+      )}
+
+      {/* Action menu portal — common to every card surface above. */}
+      {actionMenu && (
+        <CardActionMenu
+          x={actionMenu.x}
+          y={actionMenu.y}
+          zone={actionMenu.zone}
+          isMine
+          isCommander={actionMenu.isCommander}
+          tapped={actionMenu.tapped}
+          cardName={actionMenu.cardName}
+          onMoveTo={(dest) => {
+            handleActionMenuMove(actionMenu.zone, actionMenu.instanceId, dest)
+            setActionMenu(null)
+            // If we acted on a peeked card, clear the peek viewer too.
+            if (actionMenu.zone === 'library_top' || actionMenu.zone === 'library_bottom') {
+              setPeakCards((prev) => {
+                if (!prev) return prev
+                const next = prev.filter((p) => p.instanceId !== actionMenu.instanceId)
+                return next.length === 0 ? null : next
+              })
+            }
+          }}
+          onTap={
+            actionMenu.zone === 'battlefield'
+              ? () => handleTapToggle(actionMenu.instanceId)
+              : undefined
+          }
+          onClose={closeActionMenu}
+        />
       )}
     </div>
   )
