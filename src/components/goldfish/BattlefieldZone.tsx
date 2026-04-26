@@ -61,14 +61,17 @@ function BattlefieldCardButton({
     delay: 400,
   })
 
+  // Lands tap = tap/untap (mana). Other cards tap = action menu when wired.
+  // Right-click / long-press always opens preview.
+  const isLand = (bc.card.type_line ?? '').toLowerCase().includes('land')
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (longPress.wasLongPress()) return
-    if (onCardAction) {
-      onCardAction(bc.card, bc.instanceId, bc.tapped, e.clientX, e.clientY)
-    } else {
+    if (isLand || !onCardAction) {
       onTapToggle(bc.instanceId)
+    } else {
+      onCardAction(bc.card, bc.instanceId, bc.tapped, e.clientX, e.clientY)
     }
-  }, [longPress, onCardAction, onTapToggle, bc.card, bc.instanceId, bc.tapped])
+  }, [longPress, onCardAction, onTapToggle, bc.card, bc.instanceId, bc.tapped, isLand])
 
   const triggerKey = phaseTriggerKey(phase)
   const triggersNow = triggerKey ? Boolean(bc.card[triggerKey]) : false

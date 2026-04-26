@@ -786,11 +786,6 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
           {/* Board tabs */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
             {(['main', 'sideboard', 'maybeboard', 'tokens', 'removed'] as BoardTab[]).map((tab) => {
-              const isRemoved = tab === 'removed'
-              const removedCount = tabCounts.removed ?? 0
-              // Hide the Removed tab when there are no removed cards yet — keeps
-              // the bar clean for first-time users.
-              if (isRemoved && removedCount === 0) return null
               return (
                 <button
                   key={tab}

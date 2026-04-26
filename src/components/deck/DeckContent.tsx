@@ -269,7 +269,16 @@ export default function DeckContent({
     // groupMode === 'none' — single bucket
     const flat = [...visibleCards].sort(sortFn)
     return flat.length > 0 ? [['All Cards', flat]] : []
+    // Note: caller filters out empty groups via `entries.length > 0` so
+    // "Wincons (0)" / "Self Mill (0)" never render.
   }, [visibleCards, groupMode, sortMode, sections, sortFn])
+
+  // Filtered for render — drops empty buckets so non-matching groups
+  // don't show "No cards in this section." stubs.
+  const renderGroups = useMemo(
+    () => groupedCards.filter(([, entries]) => entries.length > 0),
+    [groupedCards],
+  )
 
   const flatSortedCards = useMemo(
     () => groupedCards.flatMap(([, entries]) => entries),
@@ -597,13 +606,13 @@ export default function DeckContent({
       {/* Main list */}
       {viewMode === 'list' && (
         <>
-          {groupedCards.length === 0 ? (
+          {renderGroups.length === 0 ? (
             <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
               <p className="text-font-muted">No cards here.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {groupedCards.map(([key, entries]) => {
+              {renderGroups.map(([key, entries]) => {
                 const count = entries.reduce((s, e) => s + e.quantity, 0)
                 let headerLabel: string = key
                 let headerDot: string | null = null
@@ -686,9 +695,9 @@ export default function DeckContent({
       )}
 
       {viewMode === 'grid' && (
-        groupMode !== 'none' && groupedCards.length > 0 ? (
+        groupMode !== 'none' && renderGroups.length > 0 ? (
           <div className="flex flex-col gap-4">
-            {groupedCards.map(([key, entries]) => {
+            {renderGroups.map(([key, entries]) => {
               const count = entries.reduce((s, e) => s + e.quantity, 0)
               let headerLabel: string = key
               let headerDot: string | null = null
@@ -772,7 +781,7 @@ export default function DeckContent({
       {viewMode === 'text' && (
         <DeckTextView
           cards={flatSortedCards}
-          groups={groupedCards}
+          groups={renderGroups}
           isCommander={isCommander}
           onToggleCommander={onToggleCommander}
           onCardClick={onCardClick}
