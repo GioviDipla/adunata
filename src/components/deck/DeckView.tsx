@@ -288,6 +288,12 @@ export default function DeckView({
                   <span className="text-font-muted">missing (Cardmarket)</span>
                 </span>
               )}
+              {overlayData.missingUsd > 0 && (
+                <span className="text-font-secondary">
+                  · ${overlayData.missingUsd.toFixed(2)}{' '}
+                  <span className="text-font-muted">fallback (TCGPlayer)</span>
+                </span>
+              )}
               <div className="ml-auto flex items-center gap-2">
                 {overlayToast && (
                   <span className="text-[11px] text-bg-green">{overlayToast}</span>

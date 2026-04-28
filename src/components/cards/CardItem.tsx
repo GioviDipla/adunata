@@ -6,6 +6,7 @@ import { Heart } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
 import { useLongPress } from '@/lib/hooks/useLongPress'
+import { formatPreferredPrice } from '@/lib/utils/price'
 
 type Card = Database['public']['Tables']['cards']['Row']
 
@@ -87,13 +88,9 @@ export default function CardItem({ card, liked, onSelect, onContextAction }: Car
         )}
 
         {/* Price badge — EUR (Cardmarket) primary, USD fallback */}
-        {card.prices_eur != null ? (
+        {formatPreferredPrice(card) ? (
           <div className="absolute top-1.5 right-1.5 bg-black/75 backdrop-blur-sm text-font-primary text-xs font-medium px-1.5 py-0.5 rounded">
-            €{Number(card.prices_eur).toFixed(2)}
-          </div>
-        ) : card.prices_usd != null ? (
-          <div className="absolute top-1.5 right-1.5 bg-black/75 backdrop-blur-sm text-font-primary text-xs font-medium px-1.5 py-0.5 rounded">
-            ${Number(card.prices_usd).toFixed(2)}
+            {formatPreferredPrice(card)}
           </div>
         ) : null}
       </div>

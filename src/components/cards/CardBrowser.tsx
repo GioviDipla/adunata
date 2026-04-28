@@ -76,7 +76,7 @@ export default function CardBrowser({
   userDecks = [],
   initialLikedIds = [],
 }: CardBrowserProps) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [cards, setCards] = useState<Card[]>(initialCards)
   const [loading, setLoading] = useState(false)
@@ -219,9 +219,9 @@ export default function CardBrowser({
           case 'cmc_desc':
             query = query.order('cmc', { ascending: false }).order('name', { ascending: true }); break
           case 'price_asc':
-            query = query.order('prices_eur', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
+            query = query.order('price_sort', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
           case 'price_desc':
-            query = query.order('prices_eur', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
+            query = query.order('price_sort', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
           case 'type_asc':
             query = query.order('type_line', { ascending: true }).order('name', { ascending: true }); break
         }

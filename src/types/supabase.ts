@@ -33,6 +33,7 @@ export interface Database {
           prices_usd_foil: number | null
           prices_eur: number | null
           prices_eur_foil: number | null
+          price_sort: number | null
           released_at: string | null
           legalities: Json | null
           power: string | null
@@ -75,6 +76,7 @@ export interface Database {
           prices_usd_foil?: number | null
           prices_eur?: number | null
           prices_eur_foil?: number | null
+          price_sort?: never
           released_at?: string | null
           legalities?: Json | null
           power?: string | null
@@ -117,6 +119,7 @@ export interface Database {
           prices_usd_foil?: number | null
           prices_eur?: number | null
           prices_eur_foil?: number | null
+          price_sort?: never
           released_at?: string | null
           legalities?: Json | null
           power?: string | null

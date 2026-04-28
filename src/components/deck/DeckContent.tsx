@@ -14,6 +14,7 @@ import DeckCard from './DeckCard'
 import DeckGridView from './DeckGridView'
 import DeckTextView from './DeckTextView'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
+import { getPriceSortValue, summarizePreferredPrices } from '@/lib/utils/price'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
 
@@ -208,8 +209,8 @@ export default function DeckContent({
         return (a, b) => a.card.name.localeCompare(b.card.name)
       case 'price':
         return (a, b) =>
-          ((b.card.prices_eur ?? b.card.prices_usd ?? 0) as number) -
-          ((a.card.prices_eur ?? a.card.prices_usd ?? 0) as number) ||
+          getPriceSortValue(b.card) -
+          getPriceSortValue(a.card) ||
           a.card.name.localeCompare(b.card.name)
       case 'released':
         return (a, b) =>
@@ -622,13 +623,6 @@ export default function DeckContent({
                   const section = sections?.find((x) => x.id === key)
                   headerLabel = section?.name ?? 'Uncategorized'
                   headerDot = section?.color ?? (section ? '#475569' : null)
-                  const totalEur = entries.reduce((sum, e) => {
-                    const price =
-                      (e.card.prices_eur as unknown as number | null) ??
-                      (e.card.prices_usd as unknown as number | null) ??
-                      0
-                    return sum + Number(price) * e.quantity
-                  }, 0)
                   const nonLand = entries.filter(
                     (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
                   )
@@ -639,7 +633,8 @@ export default function DeckContent({
                   const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
                   const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
                   const parts: string[] = []
-                  if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
+                  const priceSummary = summarizePreferredPrices(entries)
+                  if (priceSummary) parts.push(priceSummary)
                   if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
                   headerExtras = parts.length > 0 ? parts.join(' · ') : null
                 }
@@ -706,13 +701,6 @@ export default function DeckContent({
                 const section = sections?.find((x) => x.id === key)
                 headerLabel = section?.name ?? 'Uncategorized'
                 headerDot = section?.color ?? (section ? '#475569' : null)
-                const totalEur = entries.reduce((sum, e) => {
-                  const price =
-                    (e.card.prices_eur as unknown as number | null) ??
-                    (e.card.prices_usd as unknown as number | null) ??
-                    0
-                  return sum + Number(price) * e.quantity
-                }, 0)
                 const nonLand = entries.filter(
                   (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
                 )
@@ -723,7 +711,8 @@ export default function DeckContent({
                 const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
                 const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
                 const parts: string[] = []
-                if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
+                const priceSummary = summarizePreferredPrices(entries)
+                if (priceSummary) parts.push(priceSummary)
                 if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
                 headerExtras = parts.length > 0 ? parts.join(' · ') : null
               }
