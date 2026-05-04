@@ -324,6 +324,7 @@ export default function DeckSectionsPanel({
         {/* Section list */}
         {sections.length > 0 && (
           <DndContext
+            id={`deck-sections-${deckId}`}
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}

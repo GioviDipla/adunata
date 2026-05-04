@@ -108,6 +108,7 @@ export default function SidebarCards({ deckId, panels }: Props) {
 
   return (
     <DndContext
+      id={`deck-sidebar-${deckId}`}
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
@@ -186,4 +187,3 @@ function SortablePanelCard({ panel, collapsed, onToggle }: SortablePanelCardProp
     </div>
   )
 }
-
