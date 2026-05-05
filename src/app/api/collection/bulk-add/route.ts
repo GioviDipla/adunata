@@ -6,14 +6,19 @@ interface BulkItem {
   card_id: string | number
   quantity: number
   foil?: boolean
+  language?: string
+  condition?: string
 }
+
+const VALID_CONDITIONS = ['M', 'NM', 'LP', 'MP', 'HP', 'D'] as const
+type Condition = typeof VALID_CONDITIONS[number]
 
 /**
  * Add a hand-picked subset of cards to the caller's collection.
  *
- * Expected JSON body: `{ items: [{ card_id, quantity, foil? }, ...] }`.
- * Merges on (user, card, foil, language='en', condition='NM') by bumping
- * quantity — same semantics as POST /api/collection but in batch.
+ * Body: `{ items: [{ card_id, quantity, foil?, language?, condition? }, ...] }`.
+ * Merges on (user, card, foil, language, condition) by bumping quantity.
+ * Defaults: foil=false, language='en', condition='NM'.
  */
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
@@ -37,6 +42,13 @@ export async function POST(req: Request) {
       continue
     }
     const foil = !!raw.foil
+    const language = typeof raw.language === 'string' && raw.language.length <= 5
+      ? raw.language
+      : 'en'
+    const conditionRaw = typeof raw.condition === 'string' ? raw.condition : 'NM'
+    const condition: Condition = (VALID_CONDITIONS as readonly string[]).includes(conditionRaw)
+      ? (conditionRaw as Condition)
+      : 'NM'
 
     const { data: existing } = await supabase
       .from('user_cards')
@@ -44,8 +56,8 @@ export async function POST(req: Request) {
       .eq('user_id', user.id)
       .eq('card_id', cardId as never)
       .eq('foil', foil)
-      .eq('language', 'en')
-      .eq('condition', 'NM')
+      .eq('language', language)
+      .eq('condition', condition)
       .maybeSingle()
 
     if (existing) {
@@ -62,8 +74,8 @@ export async function POST(req: Request) {
         card_id: cardId as never,
         quantity: qty,
         foil,
-        language: 'en',
-        condition: 'NM',
+        language,
+        condition,
       })
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
@@ -73,5 +85,6 @@ export async function POST(req: Request) {
   }
 
   revalidatePath('/collection')
+  revalidatePath('/cards')
   return NextResponse.json({ inserted, skipped, total: items.length })
 }
