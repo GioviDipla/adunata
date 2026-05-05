@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
-// Narrow select: only what the `/collection` page renders.
+// Narrow select: only what the `/collection` page renders. `scryfall_id`
+// + `released_at` are included so the tile can match the full CardItem
+// behaviour (printings query + sort by release).
 const COLLECTION_SELECT = `id, quantity, foil, language, condition, acquired_price_eur, notes,
-   card:cards!card_id(id, name, name_it, mana_cost, type_line, image_small, image_normal, cmc, rarity, set_code, color_identity, prices_eur, prices_usd)`
+   card:cards!card_id(id, scryfall_id, name, name_it, mana_cost, type_line, image_small, image_normal, cmc, rarity, set_code, color_identity, prices_eur, prices_usd, released_at)`
 
 export async function GET(req: Request) {
   const supabase = await createClient()

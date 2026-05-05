@@ -21,14 +21,27 @@ import {
   ArrowUpDown,
 } from 'lucide-react'
 import CollectionTile from './CollectionTile'
+import CardContextMenu from '@/components/cards/CardContextMenu'
 import { useDebounce } from '@/lib/hooks/useDebounce'
+import { createClient } from '@/lib/supabase/client'
+import { CARD_DETAIL_COLUMNS } from '@/lib/supabase/columns'
+import type { Database } from '@/types/supabase'
+
+type FullCard = Database['public']['Tables']['cards']['Row']
 
 const CollectionImportModal = dynamic(() => import('./CollectionImportModal'), {
   ssr: false,
 })
 
+// CardDetail mounts only when a tile is opened. Keeps the printings
+// panel + Scryfall renderer off the initial /cards chunk.
+const CardDetail = dynamic(() => import('@/components/cards/CardDetail'), {
+  ssr: false,
+})
+
 export interface CollectionCard {
   id: number
+  scryfall_id?: string | null
   name: string
   name_it: string | null
   mana_cost: string | null
@@ -41,6 +54,7 @@ export interface CollectionCard {
   color_identity: string[] | null
   prices_eur: number | null
   prices_usd: number | null
+  released_at?: string | null
 }
 
 export interface CollectionItem {
@@ -59,10 +73,18 @@ interface SetInfo {
   latest_release: string
 }
 
+interface DeckSummary {
+  id: string
+  name: string
+  format: string
+}
+
 interface Props {
   initialItems: CollectionItem[]
   total: number
   sets?: SetInfo[]
+  userDecks?: DeckSummary[]
+  initialLikedIds?: string[]
 }
 
 const CARD_TYPES = [
@@ -112,7 +134,10 @@ export default function CollectionView({
   initialItems,
   total,
   sets = [],
+  userDecks = [],
+  initialLikedIds = [],
 }: Props) {
+  const supabase = useMemo(() => createClient(), [])
   const [items, setItems] = useState<CollectionItem[]>(initialItems)
   const [totalCount, setTotalCount] = useState(total)
   const [importOpen, setImportOpen] = useState(false)
@@ -121,6 +146,11 @@ export default function CollectionView({
   const [showFilters, setShowFilters] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
   const [loadingAll, setLoadingAll] = useState(false)
+
+  // Detail modal + context menu state — mirrors CardBrowser.
+  const [selectedCard, setSelectedCard] = useState<FullCard | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ card: CollectionCard; x: number; y: number } | null>(null)
+  const [likedIds, setLikedIds] = useState<Set<string>>(() => new Set(initialLikedIds))
 
   // ---- Filters (same primitive set as CardBrowser).
   const [searchText, setSearchText] = useState('')
@@ -140,7 +170,7 @@ export default function CollectionView({
   const [creatureType, setCreatureType] = useState('')
   const debouncedCreatureType = useDebounce(creatureType, 200)
   const [foilOnly, setFoilOnly] = useState(false)
-  const [sortBy, setSortBy] = useState<SortValue>('name_asc')
+  const [sortBy, setSortBy] = useState<SortValue>('price_desc')
   const [gridCols, setGridCols] = useState<number>(4)
 
   // Persisted grid columns — same key shape as CardBrowser keeps them
@@ -198,20 +228,12 @@ export default function CollectionView({
   // collection to be present, so we trigger the loop on any signal that
   // the user wants to reason about more than the first page.
   const fullLoadedRef = useRef(false)
-  const needFullDataset =
-    showFilters ||
-    statsOpen ||
-    debouncedSearch.trim().length > 0 ||
-    selectedColors.length > 0 ||
-    commanderIdentity.length > 0 ||
-    selectedTypes.length > 0 ||
-    !!selectedRarity ||
-    cmcMin !== '' ||
-    cmcMax !== '' ||
-    !!selectedSet ||
-    debouncedCreatureType.trim().length > 0 ||
-    foilOnly ||
-    sortBy !== 'name_asc'
+  // Always load the full dataset — sort + stats + filters all need it,
+  // and the default Price High→Low sort would be wrong on a partial
+  // page. The sequential paginated fetch (loadAll) runs on mount and
+  // every time totals change, falling through quickly when we already
+  // have everything.
+  const needFullDataset = true
 
   useEffect(() => {
     if (!needFullDataset) return
@@ -422,6 +444,58 @@ export default function CollectionView({
       setTotalCount((c) => c + 1)
     }
   }, [items])
+
+  // Tap on a tile → context menu (Add to Deck / Like / Share). Mirrors
+  // CardBrowser's `handleContextAction`.
+  const handleContextAction = useCallback(
+    (card: CollectionCard, x: number, y: number) => {
+      setContextMenu({ card, x, y })
+    },
+    [],
+  )
+
+  // Long-press / right-click / double-click → CardDetail. Collection rows
+  // carry only the grid-projection fields; fetch the full row before
+  // mounting the modal so printings + legalities + image_art_crop work.
+  const handleSelectCard = useCallback(
+    async (card: CollectionCard) => {
+      // Optimistic open with the partial card so the modal isn't a blank
+      // flash. CardDetail tolerates the projected shape because every
+      // column it reads is nullable; the full row replaces it in-place.
+      setSelectedCard({
+        ...(card as unknown as FullCard),
+      })
+      const { data } = await supabase
+        .from('cards')
+        .select(CARD_DETAIL_COLUMNS)
+        .eq('id', card.id as unknown as number)
+        .maybeSingle()
+      if (data) setSelectedCard(data as unknown as FullCard)
+    },
+    [supabase],
+  )
+
+  const toggleLike = useCallback(async (card: CollectionCard) => {
+    const id = String(card.id)
+    const wasLiked = likedIds.has(id)
+    setLikedIds((prev) => {
+      const next = new Set(prev)
+      if (wasLiked) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    try {
+      const res = await fetch(`/api/cards/${id}/like`, { method: 'POST' })
+      if (!res.ok) throw new Error('like failed')
+    } catch {
+      setLikedIds((prev) => {
+        const next = new Set(prev)
+        if (wasLiked) next.add(id)
+        else next.delete(id)
+        return next
+      })
+    }
+  }, [likedIds])
 
   async function refetchFirstPage() {
     const res = await fetch('/api/collection?limit=50&offset=0')
@@ -980,6 +1054,9 @@ export default function CollectionView({
                 item={item}
                 onQuantity={handleQuantity}
                 onRemove={handleRemove}
+                onContextAction={handleContextAction}
+                onSelectCard={handleSelectCard}
+                liked={likedIds.has(String(item.card.id))}
               />
             )}
           />
@@ -992,6 +1069,32 @@ export default function CollectionView({
           onImported={() => {
             void refetchFirstPage()
           }}
+        />
+      )}
+
+      {selectedCard && (
+        <CardDetail
+          card={selectedCard}
+          onClose={() => setSelectedCard(null)}
+          userDecks={userDecks}
+        />
+      )}
+
+      {contextMenu && (
+        <CardContextMenu
+          cardId={contextMenu.card.id}
+          cardName={contextMenu.card.name}
+          shareUrl={
+            typeof window !== 'undefined'
+              ? `${window.location.origin}/cards?open=${contextMenu.card.id}`
+              : `/cards?open=${contextMenu.card.id}`
+          }
+          x={contextMenu.x}
+          y={contextMenu.y}
+          liked={likedIds.has(String(contextMenu.card.id))}
+          userDecks={userDecks}
+          onToggleLike={() => toggleLike(contextMenu.card)}
+          onClose={() => setContextMenu(null)}
         />
       )}
 

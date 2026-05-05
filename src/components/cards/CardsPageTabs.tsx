@@ -96,6 +96,8 @@ export default function CardsPageTabs({
           initialItems={collection.initialItems}
           total={collection.total}
           sets={sets}
+          userDecks={userDecks}
+          initialLikedIds={initialLikedIds}
         />
       ) : null}
     </div>
