@@ -39,6 +39,14 @@ import CommanderChoiceModal from './CommanderChoiceModal'
 import SpecialActionsMenu from './SpecialActionsMenu'
 import RevealedCardsChooser from './RevealedCardsChooser'
 import CardActionMenu, { type ActionMenuZone, type ActionMenuDest } from '@/components/game/CardActionMenu'
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -594,6 +602,23 @@ export default function PlayGame(props: PlayGameProps) {
     if (!data) return
     sendAction(createPlayCard(userId, myName, instanceId, data.cardId, data.name, 'hand', 'battlefield'))
   }, [cardMap, sendAction, userId, myName])
+
+  // Drag-and-drop: cards in hand are draggables, battlefield zones are
+  // droppables. Pointer activation distance keeps a tap below threshold
+  // routed to the click handler so the action menu still works.
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 12 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  )
+  const handleDragEnd = useCallback((e: DragEndEvent) => {
+    const fromZone = (e.active.data.current as { from?: string } | undefined)?.from
+    const toZone = (e.over?.data.current as { to?: string } | undefined)?.to
+    const instanceId = (e.active.data.current as { instanceId?: string } | undefined)?.instanceId
+    if (!fromZone || !toZone || !instanceId) return
+    if (fromZone === 'hand' && toZone === 'battlefield') {
+      handlePlayCard(instanceId)
+    }
+  }, [handlePlayCard])
 
   const handleSendToGraveyard = useCallback((instanceId: string) => {
     if (!myState) return
@@ -1250,6 +1275,7 @@ export default function PlayGame(props: PlayGameProps) {
   }
 
   return (
+    <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
     <div
       className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
@@ -1363,6 +1389,7 @@ export default function PlayGame(props: PlayGameProps) {
             cards={myBattlefieldByZone.creatures}
             onTapToggle={handleTapToggle}
             phase={gameState?.phase}
+            dropId="bf-creatures"
             onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
             onCardPreview={(card, id, tapped) => {
               const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
@@ -1378,6 +1405,7 @@ export default function PlayGame(props: PlayGameProps) {
                 cards={myBattlefieldByZone.other}
                 onTapToggle={handleTapToggle}
                 phase={gameState?.phase}
+                dropId="bf-other"
                 onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
                 onCardPreview={(card, id, tapped) =>
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
@@ -1394,6 +1422,7 @@ export default function PlayGame(props: PlayGameProps) {
                 cards={myBattlefieldByZone.tokens}
                 onTapToggle={handleTapToggle}
                 phase={gameState?.phase}
+                dropId="bf-tokens"
                 onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
                 onCardPreview={(card, id, tapped) => {
                   const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
@@ -1410,6 +1439,7 @@ export default function PlayGame(props: PlayGameProps) {
               cards={myBattlefieldByZone.lands}
               onTapToggle={handleTapToggle}
               phase={gameState?.phase}
+              dropId="bf-lands"
               onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
               onCardPreview={(card, id, tapped) =>
                 setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
@@ -1438,6 +1468,7 @@ export default function PlayGame(props: PlayGameProps) {
             <HandArea
               cards={myHandCards}
               onPlayCard={handlePlayCard}
+              draggable
               onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
               onCardPreview={(card, instanceId) =>
                 setPreview({ card, zone: 'hand', instanceId })
@@ -1837,5 +1868,6 @@ export default function PlayGame(props: PlayGameProps) {
         />
       )}
     </div>
+    </DndContext>
   )
 }

@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback } from 'react'
+import { useDraggable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
 
@@ -21,6 +23,9 @@ interface HandAreaProps {
   selectable?: boolean
   selectedIds?: Set<string>
   onToggleSelect?: (instanceId: string) => void
+  /** When true, hand cards become @dnd-kit draggables. The parent must
+   *  provide a `<DndContext>` and handle drops onto target zones. */
+  draggable?: boolean
 }
 
 function HandCardButton({
@@ -32,6 +37,7 @@ function HandCardButton({
   selectable,
   isSelected,
   onToggleSelect,
+  draggable,
 }: {
   hc: HandCardEntry
   index: number
@@ -41,10 +47,20 @@ function HandCardButton({
   selectable: boolean
   isSelected: boolean
   onToggleSelect?: (id: string) => void
+  draggable?: boolean
 }) {
   const longPress = useLongPress({
     onLongPress: () => onCardPreview?.(hc.card, hc.instanceId),
     delay: 400,
+  })
+
+  // dnd-kit's draggable. We pass an activationConstraint via the parent
+  // sensor (PointerSensor with distance) so a tap below threshold still
+  // routes to the click handler — drag and click coexist.
+  const drag = useDraggable({
+    id: `hand:${hc.instanceId}`,
+    data: { from: 'hand', instanceId: hc.instanceId, cardId: hc.card.id },
+    disabled: !draggable || selectable,
   })
 
   const handleClick = useCallback((e: React.MouseEvent) => {
@@ -62,23 +78,26 @@ function HandCardButton({
 
   return (
     <button
+      ref={drag.setNodeRef}
       onClick={handleClick}
       onContextMenu={(e) => {
         e.preventDefault()
         onCardPreview?.(hc.card, hc.instanceId)
       }}
       {...longPress.handlers}
+      {...(draggable && !selectable ? { ...drag.attributes, ...drag.listeners } : {})}
       className={`relative shrink-0 overflow-hidden rounded-lg border transition-all hover:-translate-y-1 select-none ${
         isSelected
           ? 'border-bg-red ring-2 ring-bg-red/40'
           : 'border-border-light hover:border-bg-accent'
-      }`}
+      } ${drag.isDragging ? 'opacity-40' : ''}`}
       style={{
         width: 72,
         height: 100,
         marginLeft: index > 0 ? -8 : 0,
-        zIndex: index,
-        touchAction: 'manipulation',
+        zIndex: drag.isDragging ? 999 : index,
+        touchAction: draggable && !selectable ? 'none' : 'manipulation',
+        transform: drag.transform ? CSS.Translate.toString(drag.transform) : undefined,
       }}
       title={`${hc.card.name} — tap for ${selectable ? 'select' : 'actions'}, hold to preview`}
     >
@@ -121,6 +140,7 @@ export default function HandArea({
   selectable = false,
   selectedIds,
   onToggleSelect,
+  draggable = false,
 }: HandAreaProps) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -139,6 +159,7 @@ export default function HandArea({
             selectable={selectable}
             isSelected={selectable && (selectedIds?.has(hc.instanceId) ?? false)}
             onToggleSelect={onToggleSelect}
+            draggable={draggable}
           />
         ))}
         {cards.length === 0 && (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
+import { useDroppable } from '@dnd-kit/core'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import KeywordBadges from '@/components/play/KeywordBadges'
 import type { Database } from '@/types/supabase'
@@ -28,6 +29,9 @@ interface BattlefieldZoneProps {
   /** Current game phase — used to ring-highlight cards whose pre-computed
    *  trigger flag matches (e.g. upkeep-trigger cards during the upkeep phase). */
   phase?: GamePhase
+  /** When set, the zone container becomes a @dnd-kit droppable target
+   *  with this id. Parent reads `data: { to: 'battlefield' }` on drop. */
+  dropId?: string
 }
 
 /** Map a game phase onto the flag name whose cards deserve a highlight ring. */
@@ -144,13 +148,24 @@ export default function BattlefieldZone({
   onCardPreview,
   onCardAction,
   phase,
+  dropId,
 }: BattlefieldZoneProps) {
+  const drop = useDroppable({
+    id: dropId ?? `battlefield-noop-${title}`,
+    data: { to: 'battlefield' },
+    disabled: !dropId,
+  })
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[9px] font-semibold tracking-wider text-font-muted">
         {title} ({cards.length})
       </span>
-      <div className="flex flex-wrap gap-1.5">
+      <div
+        ref={dropId ? drop.setNodeRef : undefined}
+        className={`flex flex-wrap gap-1.5 rounded-lg transition-colors ${
+          dropId && drop.isOver ? 'bg-bg-accent/15 ring-2 ring-bg-accent/60' : ''
+        }`}
+      >
         {cards.map((bc) => (
           <BattlefieldCardButton
             key={bc.instanceId}
