@@ -40,6 +40,7 @@ const DeckExport = dynamic(() => import('./DeckExport'), { ssr: false })
 const ProxyPrintModal = dynamic(() => import('./ProxyPrintModal'), { ssr: false })
 const ImportCardsModal = dynamic(() => import('./ImportCardsModal'), { ssr: false })
 const CardDetail = dynamic(() => import('@/components/cards/CardDetail'), { ssr: false })
+const AddToCollectionModal = dynamic(() => import('./AddToCollectionModal'), { ssr: false })
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 type DeckRow = Database['public']['Tables']['decks']['Row']
@@ -74,6 +75,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
   const [editingName, setEditingName] = useState(deck.name)
   const [showExport, setShowExport] = useState(false)
   const [showProxyPrint, setShowProxyPrint] = useState(false)
+  const [showAddToCollection, setShowAddToCollection] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
@@ -709,6 +711,16 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             Proxy
           </Button>
           <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowAddToCollection(true)}
+            title="Pick which cards to add to your collection"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Collezione</span>
+            <span className="sm:hidden">Coll</span>
+          </Button>
+          <Button
             variant={overlayOn ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => setOverlayOn((p) => !p)}
@@ -1001,6 +1013,13 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
           deckName={deckName}
           cards={statsCards}
           onClose={() => setShowProxyPrint(false)}
+        />
+      )}
+
+      {showAddToCollection && (
+        <AddToCollectionModal
+          cards={cards.filter((c) => c.board !== 'removed')}
+          onClose={() => setShowAddToCollection(false)}
         />
       )}
 
