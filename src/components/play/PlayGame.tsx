@@ -1828,6 +1828,11 @@ export default function PlayGame(props: PlayGameProps) {
               ? () => handleTapToggle(actionMenu.instanceId)
               : undefined
           }
+          onCopy={
+            actionMenu.zone === 'battlefield'
+              ? () => handleCopy(actionMenu.instanceId)
+              : undefined
+          }
           onClose={closeActionMenu}
         />
       )}

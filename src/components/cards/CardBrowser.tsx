@@ -199,13 +199,19 @@ export default function CardBrowser({
       // Other sorts fall back to offset pagination — still fine for typical browse depth.
       if (isDefaultSort) {
         query = query
-          .limit(PAGE_SIZE)
           .order('released_at', { ascending: false, nullsFirst: false })
           .order('id', { ascending: false })
         if (after) {
-          query = query.or(
-            `released_at.lt.${after.releasedAt},and(released_at.eq.${after.releasedAt},id.lt.${after.id})`
-          )
+          query = query
+            .limit(PAGE_SIZE)
+            .or(
+              `released_at.lt.${after.releasedAt},and(released_at.eq.${after.releasedAt},id.lt.${after.id})`
+            )
+        } else {
+          // Either the very first page (offset=0) or a fallback when the
+          // last card has no released_at — in both cases use range so we
+          // actually advance instead of re-fetching the same first page.
+          query = query.range(offset, offset + PAGE_SIZE - 1)
         }
       } else {
         query = query.range(offset, offset + PAGE_SIZE - 1)

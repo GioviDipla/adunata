@@ -55,18 +55,15 @@ export default function LoginPage() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-col items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/icons/icon-120.png"
-          alt="Adunata"
-          width={72}
-          height={72}
-          className="h-18 w-18 rounded-xl shadow-lg"
-        />
-        <h1 className="text-2xl font-bold text-font-primary">Adunata!!!</h1>
+      <div className="mb-8 flex flex-col items-center gap-2 text-center">
+        <h1
+          className="text-2xl font-bold text-font-primary sm:text-3xl"
+          style={{ textShadow: '0 2px 18px rgba(0,0,0,0.6)' }}
+        >
+          Bentornato
+        </h1>
         <p className="text-sm text-font-secondary">
-          Sign in to your account
+          Accedi al tuo account Adunata
         </p>
       </div>
 

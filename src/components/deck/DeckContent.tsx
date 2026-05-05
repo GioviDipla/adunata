@@ -9,6 +9,7 @@ import {
   ArrowUpDown,
   Filter,
   Layers,
+  ChevronDown,
 } from 'lucide-react'
 import DeckCard from './DeckCard'
 import DeckGridView from './DeckGridView'
@@ -159,6 +160,40 @@ export default function DeckContent({
   const [sectionFilter, setSectionFilter] = useState<Set<string>>(new Set())
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set())
   const [showFilterPanel, setShowFilterPanel] = useState(false)
+
+  // Collapsed sections — initialized from server-side `is_collapsed` flag.
+  // When the user is editing the deck we also persist the toggle via PATCH.
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    () => new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+  )
+  // Re-sync when the section list changes identity (e.g. preset apply).
+  useEffect(() => {
+    setCollapsedSections(
+      new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+    )
+  }, [sections])
+
+  const toggleSectionCollapsed = useCallback(
+    (key: string) => {
+      // Empty key = uncategorized bucket — collapse only locally, no row.
+      setCollapsedSections((prev) => {
+        const next = new Set(prev)
+        const willCollapse = !next.has(key)
+        if (willCollapse) next.add(key)
+        else next.delete(key)
+        // Persist for owner-edit sessions only. Best-effort fire-and-forget.
+        if (deckId && key) {
+          void fetch(`/api/decks/${deckId}/sections/${key}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ is_collapsed: willCollapse }),
+          }).catch(() => {})
+        }
+        return next
+      })
+    },
+    [deckId],
+  )
 
   const visibleCards = useMemo(() => {
     const noType = typeFilter.size === 0
@@ -641,24 +676,50 @@ export default function DeckContent({
                   headerExtras = parts.length > 0 ? parts.join(' · ') : null
                 }
 
+                const isCollapsed = collapsedSections.has(key)
+                const accent = headerDot ?? '#475569'
                 return (
-                  <div key={key || '__uncategorized__'}>
-                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
-                      {headerDot && (
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ background: headerDot }}
-                        />
-                      )}
-                      {headerLabel}
-                      <span className="text-xs text-font-muted">({count})</span>
-                      {headerExtras && (
-                        <span className="text-[10px] text-font-muted">
-                          {headerExtras}
-                        </span>
-                      )}
-                    </h3>
-                    <div className="flex flex-col gap-1">
+                  <div
+                    key={key || '__uncategorized__'}
+                    className="relative overflow-hidden rounded-xl border border-border-light/60 bg-bg-surface/40"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-2 left-1.5 w-0.5 rounded-full"
+                      style={{ background: accent, boxShadow: `0 0 6px ${accent}40` }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleSectionCollapsed(key)}
+                      aria-expanded={!isCollapsed}
+                      className="flex w-full items-center gap-2 px-3 py-2 pl-4 text-left transition-colors hover:bg-bg-cell/40"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-font-muted transition-transform ${
+                          isCollapsed ? '-rotate-90' : ''
+                        }`}
+                      />
+                      <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-semibold text-font-secondary">
+                        {headerDot && (
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-full"
+                            style={{ background: headerDot }}
+                          />
+                        )}
+                        {headerLabel}
+                        <span className="text-xs text-font-muted">({count})</span>
+                        {headerExtras && (
+                          <span className="text-[10px] text-font-muted">
+                            {headerExtras}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                    <div
+                      className={`flex flex-col gap-1 px-2 pb-2 pl-4 transition-all ${
+                        isCollapsed ? 'hidden' : ''
+                      }`}
+                    >
                       {entries.map((entry) => (
                         <DeckCard
                           key={`${entry.card.id}-${entry.board}`}
@@ -718,36 +779,62 @@ export default function DeckContent({
                 if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
                 headerExtras = parts.length > 0 ? parts.join(' · ') : null
               }
+              const isCollapsed = collapsedSections.has(key)
+              const accent = headerDot ?? '#475569'
               return (
-                <div key={key || '__uncategorized__'}>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
-                    {headerDot && (
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-full"
-                        style={{ background: headerDot }}
-                      />
-                    )}
-                    {headerLabel}
-                    <span className="text-xs text-font-muted">({count})</span>
-                    {headerExtras && (
-                      <span className="text-[10px] text-font-muted">
-                        {headerExtras}
-                      </span>
-                    )}
-                  </h3>
-                  <DeckGridView
-                    cards={entries}
-                    onQuantityChange={onQuantityChange}
-                    onRemove={onRemove}
-                    isCommander={isCommander}
-                    onToggleCommander={onToggleCommander}
-                    onCardClick={onCardClick}
-                    readOnly={readOnly}
-                    onMoveToBoard={onMoveToBoard}
-                    sections={editingWired ? sectionOptions : undefined}
-                    onSectionChange={onSectionChange}
-                    cols={gridCols ?? undefined}
+                <div
+                  key={key || '__uncategorized__'}
+                  className="relative overflow-hidden rounded-xl border border-border-light/60 bg-bg-surface/40"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-2 left-1.5 w-0.5 rounded-full"
+                    style={{ background: accent, boxShadow: `0 0 6px ${accent}40` }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => toggleSectionCollapsed(key)}
+                    aria-expanded={!isCollapsed}
+                    className="flex w-full items-center gap-2 px-3 py-2 pl-4 text-left transition-colors hover:bg-bg-cell/40"
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-font-muted transition-transform ${
+                        isCollapsed ? '-rotate-90' : ''
+                      }`}
+                    />
+                    <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-semibold text-font-secondary">
+                      {headerDot && (
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full"
+                          style={{ background: headerDot }}
+                        />
+                      )}
+                      {headerLabel}
+                      <span className="text-xs text-font-muted">({count})</span>
+                      {headerExtras && (
+                        <span className="text-[10px] text-font-muted">
+                          {headerExtras}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="px-2 pb-2 pl-4">
+                      <DeckGridView
+                        cards={entries}
+                        onQuantityChange={onQuantityChange}
+                        onRemove={onRemove}
+                        isCommander={isCommander}
+                        onToggleCommander={onToggleCommander}
+                        onCardClick={onCardClick}
+                        readOnly={readOnly}
+                        onMoveToBoard={onMoveToBoard}
+                        sections={editingWired ? sectionOptions : undefined}
+                        onSectionChange={onSectionChange}
+                        cols={gridCols ?? undefined}
+                      />
+                    </div>
+                  )}
                 </div>
               )
             })}

@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import Link from 'next/link'
-import { Copy, Check, Globe, Printer, Library, ClipboardCopy } from 'lucide-react'
+import { Copy, Check, Globe, Printer, Library, ClipboardCopy, Plus } from 'lucide-react'
 import DeckContent, { type DeckCardEntry } from './DeckContent'
 import ProxyPrintModal from './ProxyPrintModal'
+import AddToCollectionModal from './AddToCollectionModal'
 import ShareDeckButton from './ShareDeckButton'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
@@ -42,6 +43,7 @@ export default function DeckView({
   const [activeTab, setActiveTab] = useState<BoardTab>('main')
   const [showExpandedStats, setShowExpandedStats] = useState(false)
   const [showProxyPrint, setShowProxyPrint] = useState(false)
+  const [showAddToCollection, setShowAddToCollection] = useState(false)
   const [overlayOn, setOverlayOn] = useState(false)
   const [overlayToast, setOverlayToast] = useState<string | null>(null)
 
@@ -197,6 +199,17 @@ export default function DeckView({
           >
             <Printer className="h-3.5 w-3.5" /> Proxy
           </button>
+          {viewerId && (
+            <button
+              onClick={() => setShowAddToCollection(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-secondary transition-colors hover:bg-bg-hover"
+              title="Pick which cards to add to your collection"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Aggiungi a collezione</span>
+              <span className="sm:hidden">Collezione</span>
+            </button>
+          )}
           <ShareDeckButton
             deckId={deck.id}
             deckName={deck.name}
@@ -355,6 +368,13 @@ export default function DeckView({
           deckName={deck.name}
           cards={cards}
           onClose={() => setShowProxyPrint(false)}
+        />
+      )}
+
+      {showAddToCollection && (
+        <AddToCollectionModal
+          cards={cards}
+          onClose={() => setShowAddToCollection(false)}
         />
       )}
     </div>

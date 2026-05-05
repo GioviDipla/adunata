@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+html {
+  /* Reserve scrollbar space at all times so navigation between short and
+     tall pages does not shift the layout (visible "scrollbar appears /
+     disappears" flicker). On platforms without a visible scrollbar (mobile)
+     this declaration is a no-op. */
+  scrollbar-gutter: stable;
+}
+
 html, body {
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
