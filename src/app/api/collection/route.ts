@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const url = new URL(req.url)
-  const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 200)
+  const limit = Math.min(Number(url.searchParams.get('limit') ?? 50), 500)
   const offset = Number(url.searchParams.get('offset') ?? 0)
 
   const { data, error, count } = await supabase
