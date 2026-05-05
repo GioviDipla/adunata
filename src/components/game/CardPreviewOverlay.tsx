@@ -93,7 +93,7 @@ function CounterRow({ name, value, onSet, onAdd, onRemove }: {
   const [editing, setEditing] = useState(false)
 
   useEffect(() => {
-    if (!editing) setDraft(String(value))
+    if (!editing) queueMicrotask(() => setDraft(String(value)))
   }, [value, editing])
 
   const commit = () => {

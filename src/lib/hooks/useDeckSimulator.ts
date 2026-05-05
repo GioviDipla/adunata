@@ -26,13 +26,17 @@ export function useDeckSimulator(input: SimInput | null): {
 
   useEffect(() => {
     if (!input) {
-      setResult(null)
-      setRunning(false)
+      queueMicrotask(() => {
+        setResult(null)
+        setRunning(false)
+      })
       return
     }
     if (input.mainDeck.length === 0) {
-      setResult(null)
-      setRunning(false)
+      queueMicrotask(() => {
+        setResult(null)
+        setRunning(false)
+      })
       return
     }
     let cancelled = false
@@ -41,7 +45,7 @@ export function useDeckSimulator(input: SimInput | null): {
     // Mark "running" immediately so the UI can show the spinner during
     // the debounce window — feels snappier than appearing idle for 750ms
     // before the worker even starts.
-    setRunning(true)
+    queueMicrotask(() => setRunning(true))
 
     const launch = setTimeout(() => {
       if (cancelled) return

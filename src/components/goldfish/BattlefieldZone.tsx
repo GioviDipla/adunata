@@ -83,7 +83,7 @@ function BattlefieldCardButton({
         e.preventDefault()
         onCardPreview?.(bc.card, bc.instanceId, bc.tapped)
       }}
-      {...longPress}
+      {...longPress.handlers}
       className={`relative overflow-hidden rounded-lg border transition-transform select-none ${
         bc.tapped
           ? 'rotate-90 border-font-muted'

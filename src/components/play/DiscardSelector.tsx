@@ -42,7 +42,7 @@ function DiscardCardButton({
         e.preventDefault()
         onPreview?.(instanceId)
       }}
-      {...longPress}
+      {...longPress.handlers}
       className={`flex flex-col items-center overflow-hidden rounded-lg border-2 transition-colors select-none ${
         isSelected
           ? 'border-bg-red bg-bg-red/10'

@@ -123,16 +123,18 @@ export default function DeckContent({
         stored = JSON.parse(raw)
       } catch { /* ignore */ }
     }
-    if (stored?.view) setViewMode(stored.view)
-    if (stored?.group) setGroupMode(stored.group)
-    if (stored?.sort) setSortMode(stored.sort)
-    if (typeof stored?.cols === 'number') {
-      setGridCols(stored.cols)
-    } else {
-      // Pick the responsive default once. ≥sm (640px) → 5, else 3.
-      const isWide = window.matchMedia('(min-width: 640px)').matches
-      setGridCols(isWide ? 5 : 3)
-    }
+    queueMicrotask(() => {
+      if (stored?.view) setViewMode(stored.view)
+      if (stored?.group) setGroupMode(stored.group)
+      if (stored?.sort) setSortMode(stored.sort)
+      if (typeof stored?.cols === 'number') {
+        setGridCols(stored.cols)
+      } else {
+        // Pick the responsive default once. ≥sm (640px) → 5, else 3.
+        const isWide = window.matchMedia('(min-width: 640px)').matches
+        setGridCols(isWide ? 5 : 3)
+      }
+    })
   }, [deckId])
 
   useEffect(() => {
@@ -147,7 +149,7 @@ export default function DeckContent({
   // If sections appear/disappear, fix orphan group selection.
   useEffect(() => {
     if (groupMode === 'section' && (sections?.length ?? 0) === 0) {
-      setGroupMode('type')
+      queueMicrotask(() => setGroupMode('type'))
     }
   }, [groupMode, sections])
 

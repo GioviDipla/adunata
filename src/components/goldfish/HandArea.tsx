@@ -67,7 +67,7 @@ function HandCardButton({
         e.preventDefault()
         onCardPreview?.(hc.card, hc.instanceId)
       }}
-      {...longPress}
+      {...longPress.handlers}
       className={`relative shrink-0 overflow-hidden rounded-lg border transition-all hover:-translate-y-1 select-none ${
         isSelected
           ? 'border-bg-red ring-2 ring-bg-red/40'
