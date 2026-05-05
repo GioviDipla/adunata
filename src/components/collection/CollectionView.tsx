@@ -1,16 +1,24 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import dynamic from 'next/dynamic'
 import { VirtuosoGrid } from 'react-virtuoso'
 import {
   Upload,
   Trash2,
-  Filter,
   ChevronDown,
+  ChevronUp,
   X,
   BarChart3,
   Loader2,
+  Search,
+  ArrowUpDown,
 } from 'lucide-react'
 import CollectionTile from './CollectionTile'
 import { useDebounce } from '@/lib/hooks/useDebounce'
@@ -45,9 +53,16 @@ export interface CollectionItem {
   card: CollectionCard
 }
 
+interface SetInfo {
+  set_code: string
+  set_name: string
+  latest_release: string
+}
+
 interface Props {
   initialItems: CollectionItem[]
   total: number
+  sets?: SetInfo[]
 }
 
 const CARD_TYPES = [
@@ -67,11 +82,24 @@ const MANA_COLORS = [
 
 const PAGE_SIZE = 200
 
-/** Map a card's `type_line` onto one of the canonical CARD_TYPES bins. */
+// Sort options mirror CardBrowser exactly so users moving between tabs
+// share muscle memory.
+const SORT_OPTIONS = [
+  { value: 'released_at_desc', label: 'Newest' },
+  { value: 'name_asc',  label: 'Name A→Z' },
+  { value: 'name_desc', label: 'Name Z→A' },
+  { value: 'cmc_asc',   label: 'CMC Low→High' },
+  { value: 'cmc_desc',  label: 'CMC High→Low' },
+  { value: 'type_asc',  label: 'Type' },
+  { value: 'price_asc',  label: 'Price Low→High' },
+  { value: 'price_desc', label: 'Price High→Low' },
+] as const
+
+type SortValue = typeof SORT_OPTIONS[number]['value']
+
 function categorizeType(typeLine: string | null): string {
   if (!typeLine) return 'Other'
   const lc = typeLine.toLowerCase()
-  // Order matters — "Token" appears in token-creating types so check first.
   if (lc.includes('token')) return 'Token'
   for (const t of CARD_TYPES) {
     if (t === 'Token') continue
@@ -80,33 +108,111 @@ function categorizeType(typeLine: string | null): string {
   return 'Other'
 }
 
-export default function CollectionView({ initialItems, total }: Props) {
+export default function CollectionView({
+  initialItems,
+  total,
+  sets = [],
+}: Props) {
   const [items, setItems] = useState<CollectionItem[]>(initialItems)
   const [totalCount, setTotalCount] = useState(total)
   const [importOpen, setImportOpen] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetting, setResetting] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
   const [loadingAll, setLoadingAll] = useState(false)
 
-  // Filters
-  const [query, setQuery] = useState('')
-  const debouncedQuery = useDebounce(query, 200)
+  // ---- Filters (same primitive set as CardBrowser).
+  const [searchText, setSearchText] = useState('')
+  const debouncedSearch = useDebounce(searchText, 200)
   const [selectedColors, setSelectedColors] = useState<string[]>([])
-  const [colorMode, setColorMode] = useState<'and' | 'or' | 'identity'>('or')
+  const [colorMode, setColorMode] = useState<'and' | 'or'>('or')
+  const [commanderIdentity, setCommanderIdentity] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [typeMode, setTypeMode] = useState<'and' | 'or'>('and')
   const [selectedRarity, setSelectedRarity] = useState('')
   const [cmcMin, setCmcMin] = useState('')
   const [cmcMax, setCmcMax] = useState('')
   const [selectedSet, setSelectedSet] = useState('')
+  const [setSearch, setSetSearch] = useState('')
+  const [setDropdownOpen, setSetDropdownOpen] = useState(false)
+  const setBoxRef = useRef<HTMLDivElement | null>(null)
+  const [creatureType, setCreatureType] = useState('')
+  const debouncedCreatureType = useDebounce(creatureType, 200)
+  const [foilOnly, setFoilOnly] = useState(false)
+  const [sortBy, setSortBy] = useState<SortValue>('name_asc')
+  const [gridCols, setGridCols] = useState<number>(4)
 
-  // Auto-load every page when filters or stats are active so client-side
-  // filtering and stats reflect the entire collection — not just the
-  // first paginated page.
-  const needFullDataset = filtersOpen || statsOpen
+  // Persisted grid columns — same key shape as CardBrowser keeps them
+  // separate from the browse view.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = window.localStorage.getItem('adunata:collection-view')
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as { cols?: number; sort?: SortValue }
+      if (typeof parsed.cols === 'number') setGridCols(parsed.cols)
+      if (parsed.sort) setSortBy(parsed.sort)
+    } catch { /* ignore */ }
+  }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(
+      'adunata:collection-view',
+      JSON.stringify({ cols: gridCols, sort: sortBy }),
+    )
+  }, [gridCols, sortBy])
+
+  // Close set dropdown on outside click — copied from CardBrowser.
+  useEffect(() => {
+    if (!setDropdownOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (setBoxRef.current && !setBoxRef.current.contains(e.target as Node)) {
+        setSetDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [setDropdownOpen])
+
+  const sortedSets = useMemo(
+    () => [...sets].sort((a, b) => a.set_name.localeCompare(b.set_name)),
+    [sets],
+  )
+  const filteredSets = useMemo(() => {
+    const q = setSearch.trim().toLowerCase()
+    if (!q) return sortedSets
+    return sortedSets.filter(
+      (s) =>
+        s.set_name.toLowerCase().includes(q) ||
+        s.set_code.toLowerCase().includes(q),
+    )
+  }, [sortedSets, setSearch])
+  const selectedSetInfo = useMemo(
+    () => sets.find((s) => s.set_code === selectedSet) || null,
+    [sets, selectedSet],
+  )
+
+  // ---- Auto-load full dataset when filters / stats / sort beyond
+  // simple paging are needed. Sorting client-side requires the whole
+  // collection to be present, so we trigger the loop on any signal that
+  // the user wants to reason about more than the first page.
   const fullLoadedRef = useRef(false)
+  const needFullDataset =
+    showFilters ||
+    statsOpen ||
+    debouncedSearch.trim().length > 0 ||
+    selectedColors.length > 0 ||
+    commanderIdentity.length > 0 ||
+    selectedTypes.length > 0 ||
+    !!selectedRarity ||
+    cmcMin !== '' ||
+    cmcMax !== '' ||
+    !!selectedSet ||
+    debouncedCreatureType.trim().length > 0 ||
+    foilOnly ||
+    sortBy !== 'name_asc'
+
   useEffect(() => {
     if (!needFullDataset) return
     if (fullLoadedRef.current) return
@@ -119,7 +225,6 @@ export default function CollectionView({ initialItems, total }: Props) {
       setLoadingAll(true)
       try {
         let offset = items.length
-        // Loop fetch in PAGE_SIZE chunks until we have everything.
         while (!cancelled && offset < totalCount) {
           const res = await fetch(
             `/api/collection?limit=${PAGE_SIZE}&offset=${offset}`,
@@ -132,8 +237,6 @@ export default function CollectionView({ initialItems, total }: Props) {
           if (cancelled) break
           if (Array.isArray(next) && next.length > 0) {
             setItems((p) => {
-              // Dedup on item id — server pagination is stable but a
-              // concurrent refetch (e.g. import success) may overlap.
               const existing = new Set(p.map((it) => it.id))
               const fresh = next.filter((it) => !existing.has(it.id))
               return [...p, ...fresh]
@@ -154,11 +257,13 @@ export default function CollectionView({ initialItems, total }: Props) {
   }, [needFullDataset, items.length, totalCount])
 
   const filtered = useMemo(() => {
-    const q = debouncedQuery.trim().toLowerCase()
+    const q = debouncedSearch.trim().toLowerCase()
     const noColor = selectedColors.length === 0
+    const noCommander = commanderIdentity.length === 0
     const noType = selectedTypes.length === 0
     const cmcMinNum = cmcMin === '' ? null : Number(cmcMin)
     const cmcMaxNum = cmcMax === '' ? null : Number(cmcMax)
+    const creatureNeedle = debouncedCreatureType.trim().toLowerCase()
 
     return items.filter((it) => {
       const c = it.card
@@ -167,16 +272,19 @@ export default function CollectionView({ initialItems, total }: Props) {
         const nameIt = c.name_it?.toLowerCase() ?? ''
         if (!name.includes(q) && !nameIt.includes(q)) return false
       }
+      if (foilOnly && !it.foil) return false
       if (!noColor) {
         const ci = c.color_identity ?? []
-        if (colorMode === 'identity') {
-          // Card's color identity must be a subset of the chips.
-          if (!ci.every((col) => selectedColors.includes(col))) return false
-        } else if (colorMode === 'and') {
+        if (colorMode === 'and') {
           if (!selectedColors.every((col) => ci.includes(col))) return false
         } else {
           if (!selectedColors.some((col) => ci.includes(col))) return false
         }
+      }
+      if (!noCommander) {
+        // Subset semantics — card identity must be ⊆ commanderIdentity.
+        const ci = c.color_identity ?? []
+        if (!ci.every((col) => commanderIdentity.includes(col))) return false
       }
       if (!noType) {
         const tl = (c.type_line ?? '').toLowerCase()
@@ -190,14 +298,51 @@ export default function CollectionView({ initialItems, total }: Props) {
       if (cmcMinNum != null && (c.cmc ?? 0) < cmcMinNum) return false
       if (cmcMaxNum != null && (c.cmc ?? 0) > cmcMaxNum) return false
       if (selectedSet && c.set_code !== selectedSet) return false
+      if (creatureNeedle.length > 0 &&
+          !(c.type_line ?? '').toLowerCase().includes(creatureNeedle)) return false
       return true
     })
   }, [
-    items, debouncedQuery, selectedColors, colorMode, selectedTypes, typeMode,
-    selectedRarity, cmcMin, cmcMax, selectedSet,
+    items, debouncedSearch, foilOnly, selectedColors, colorMode,
+    commanderIdentity, selectedTypes, typeMode, selectedRarity,
+    cmcMin, cmcMax, selectedSet, debouncedCreatureType,
   ])
 
-  // ---- Stats: computed from the *full* dataset once auto-load resolves.
+  const sorted = useMemo(() => {
+    const arr = [...filtered]
+    const cmp = (a: CollectionItem, b: CollectionItem) => a.card.name.localeCompare(b.card.name)
+    switch (sortBy) {
+      case 'name_asc':
+        arr.sort(cmp); break
+      case 'name_desc':
+        arr.sort((a, b) => b.card.name.localeCompare(a.card.name)); break
+      case 'cmc_asc':
+        arr.sort((a, b) => (a.card.cmc ?? 0) - (b.card.cmc ?? 0) || cmp(a, b)); break
+      case 'cmc_desc':
+        arr.sort((a, b) => (b.card.cmc ?? 0) - (a.card.cmc ?? 0) || cmp(a, b)); break
+      case 'type_asc':
+        arr.sort((a, b) =>
+          (a.card.type_line ?? '').localeCompare(b.card.type_line ?? '') || cmp(a, b),
+        ); break
+      case 'price_asc':
+        arr.sort((a, b) =>
+          (a.card.prices_eur ?? a.card.prices_usd ?? 0) -
+          (b.card.prices_eur ?? b.card.prices_usd ?? 0) || cmp(a, b),
+        ); break
+      case 'price_desc':
+        arr.sort((a, b) =>
+          (b.card.prices_eur ?? b.card.prices_usd ?? 0) -
+          (a.card.prices_eur ?? a.card.prices_usd ?? 0) || cmp(a, b),
+        ); break
+      case 'released_at_desc':
+        // No released_at on CollectionCard — fall back to name to keep the
+        // option visible without a UI lie.
+        arr.sort(cmp); break
+    }
+    return arr
+  }, [filtered, sortBy])
+
+  // ---- Stats from full dataset.
   const stats = useMemo(() => {
     let totalCards = 0
     let totalEur = 0
@@ -213,20 +358,16 @@ export default function CollectionView({ initialItems, total }: Props) {
       const usd = (it.card.prices_usd ?? 0) * qty
       totalEur += eur
       totalUsd += usd
-
       const setCode = it.card.set_code ?? '—'
       const setRow = bySet.get(setCode) ?? { count: 0, eur: 0, usd: 0 }
       setRow.count += qty
       setRow.eur += eur
       setRow.usd += usd
       bySet.set(setCode, setRow)
-
       const cat = categorizeType(it.card.type_line)
       byType.set(cat, (byType.get(cat) ?? 0) + qty)
-
       const rarity = it.card.rarity ?? 'unknown'
       byRarity.set(rarity, (byRarity.get(rarity) ?? 0) + qty)
-
       for (const col of it.card.color_identity ?? []) {
         byColor.set(col, (byColor.get(col) ?? 0) + qty)
       }
@@ -242,21 +383,10 @@ export default function CollectionView({ initialItems, total }: Props) {
     }
   }, [items])
 
-  // Distinct sets from the (possibly partial) dataset — used to populate
-  // the set filter dropdown without an extra round-trip.
-  const setOptions = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const it of items) {
-      const c = it.card.set_code
-      if (!c) continue
-      m.set(c, (m.get(c) ?? 0) + it.quantity)
-    }
-    return Array.from(m.entries()).sort((a, b) => b[1] - a[1])
-  }, [items])
-
+  // ---- Mutations.
   const loadMore = useCallback(async () => {
     if (items.length >= totalCount) return
-    if (needFullDataset) return // full-load loop handles this
+    if (needFullDataset) return
     const res = await fetch(`/api/collection?limit=50&offset=${items.length}`)
     if (!res.ok) return
     const { items: next, total: t } = (await res.json()) as {
@@ -322,28 +452,46 @@ export default function CollectionView({ initialItems, total }: Props) {
   }
 
   function clearFilters() {
-    setQuery('')
+    setSearchText('')
     setSelectedColors([])
+    setCommanderIdentity([])
     setSelectedTypes([])
     setSelectedRarity('')
     setCmcMin('')
     setCmcMax('')
     setSelectedSet('')
+    setSetSearch('')
+    setColorMode('or')
+    setTypeMode('and')
+    setCreatureType('')
+    setFoilOnly(false)
   }
 
-  const filtersActive =
-    debouncedQuery.trim().length > 0 ||
-    selectedColors.length > 0 ||
-    selectedTypes.length > 0 ||
-    !!selectedRarity ||
-    cmcMin !== '' ||
-    cmcMax !== '' ||
-    !!selectedSet
-
-  const toggleColor = (c: string) =>
-    setSelectedColors((p) => p.includes(c) ? p.filter((x) => x !== c) : [...p, c])
+  const toggleColor = (color: string) =>
+    setSelectedColors((prev) =>
+      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color],
+    )
+  const toggleCommanderColor = (color: string) =>
+    setCommanderIdentity((prev) =>
+      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color],
+    )
   const toggleType = (t: string) =>
-    setSelectedTypes((p) => p.includes(t) ? p.filter((x) => x !== t) : [...p, t])
+    setSelectedTypes((prev) =>
+      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t],
+    )
+
+  const activeFilterCount = [
+    debouncedSearch.trim().length > 0,
+    selectedColors.length > 0,
+    commanderIdentity.length > 0,
+    selectedTypes.length > 0,
+    selectedRarity,
+    cmcMin,
+    cmcMax,
+    selectedSet,
+    debouncedCreatureType.trim().length > 0,
+    foilOnly,
+  ].filter(Boolean).length
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-3 p-3 sm:p-4">
@@ -366,26 +514,6 @@ export default function CollectionView({ initialItems, total }: Props) {
           >
             <BarChart3 className="h-3.5 w-3.5" />
             Statistiche
-          </button>
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-              filtersOpen || filtersActive
-                ? 'border-bg-accent bg-bg-accent/15 text-font-accent'
-                : 'border-border bg-bg-surface text-font-secondary hover:bg-bg-hover'
-            }`}
-          >
-            <Filter className="h-3.5 w-3.5" />
-            Filtri
-            {filtersActive && (
-              <span className="ml-1 rounded-full bg-bg-accent px-1.5 py-0.5 text-[9px] font-bold text-font-white">
-                ON
-              </span>
-            )}
-            <ChevronDown
-              className={`h-3 w-3 transition-transform ${filtersOpen ? 'rotate-180' : ''}`}
-            />
           </button>
           <button
             type="button"
@@ -415,60 +543,379 @@ export default function CollectionView({ initialItems, total }: Props) {
         />
       )}
 
-      {filtersOpen && (
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-bg-surface p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-font-secondary">Filtri</span>
-            {filtersActive && (
-              <button
-                onClick={clearFilters}
-                className="inline-flex items-center gap-1 text-[11px] text-font-muted hover:text-font-primary"
-              >
-                <X className="h-3 w-3" /> Pulisci tutto
-              </button>
-            )}
-          </div>
+      {/* ---- Search bar (CardBrowser parity) */}
+      <div className="relative flex items-stretch gap-2">
+        <div className="relative flex-1">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-font-muted"
+            size={18}
+          />
+          <input
+            type="text"
+            placeholder="Search by card name…"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="w-full rounded-lg border border-border bg-bg-card py-3 pl-10 pr-4 text-font-primary placeholder:text-font-muted transition-colors focus:border-bg-accent focus:outline-none focus:ring-1 focus:ring-bg-accent"
+          />
+        </div>
+      </div>
 
-          {/* Colors */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-semibold text-font-muted">
-              Colori
+      {/* ---- Filter toggle + sort + grid cols (CardBrowser parity) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => setShowFilters((p) => !p)}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+            showFilters || activeFilterCount > 0
+              ? 'bg-bg-accent/20 text-font-accent'
+              : 'border border-border bg-bg-card text-font-secondary hover:text-font-primary'
+          }`}
+        >
+          {showFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="rounded-full bg-bg-accent px-1.5 py-0.5 text-[9px] font-bold text-font-white">
+              {activeFilterCount}
             </span>
-            <div className="flex gap-1">
-              {MANA_COLORS.map((c) => {
-                const active = selectedColors.includes(c.code)
+          )}
+        </button>
+
+        <div className="h-6 w-px bg-border" />
+
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-bg-card px-2.5 py-2 text-sm text-font-secondary">
+          <ArrowUpDown size={14} className="shrink-0 text-font-muted" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortValue)}
+            className="cursor-pointer bg-transparent text-sm text-font-primary focus:outline-none"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value} className="bg-bg-surface">
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div
+          className="flex items-center gap-0.5 rounded-lg border border-border bg-bg-card p-1"
+          role="group"
+          aria-label="Grid columns"
+        >
+          <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+            Cols
+          </span>
+          {[2, 3, 4, 5, 6].map((n) => (
+            <button
+              key={n}
+              onClick={() => setGridCols(n)}
+              className={`flex h-7 w-7 items-center justify-center rounded-md text-xs font-medium transition-colors ${
+                gridCols === n
+                  ? 'bg-bg-surface text-font-primary shadow-sm'
+                  : 'text-font-muted hover:text-font-primary'
+              }`}
+              title={`${n} columns`}
+              aria-label={`${n} columns`}
+              aria-pressed={gridCols === n}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+
+        {activeFilterCount > 0 && (
+          <button
+            onClick={clearFilters}
+            className="text-xs text-font-accent transition-colors hover:text-font-primary"
+          >
+            Clear all
+          </button>
+        )}
+
+        {loadingAll && items.length < totalCount && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-font-muted">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {items.length}/{totalCount}…
+          </span>
+        )}
+      </div>
+
+      {/* ---- Expanded filters (CardBrowser parity) */}
+      {showFilters && (
+        <div className="space-y-4 rounded-xl border border-border bg-bg-surface p-4">
+          {/* Colors */}
+          <div>
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-font-muted">Colors</span>
+              {selectedColors.length > 1 && (
+                <button
+                  onClick={() => setColorMode((m) => (m === 'and' ? 'or' : 'and'))}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                    colorMode === 'and'
+                      ? 'bg-bg-accent/20 text-font-accent'
+                      : 'bg-bg-yellow/20 text-bg-yellow'
+                  }`}
+                  title={
+                    colorMode === 'and'
+                      ? 'AND: card must include ALL selected colors'
+                      : 'OR: card must include ANY selected color'
+                  }
+                >
+                  {colorMode.toUpperCase()}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {MANA_COLORS.map((color) => {
+                const isActive = selectedColors.includes(color.code)
                 return (
                   <button
-                    key={c.code}
-                    type="button"
-                    onClick={() => toggleColor(c.code)}
-                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-transform ${
-                      active ? 'scale-110 ring-2 ring-font-accent' : 'opacity-70'
+                    key={color.code}
+                    onClick={() => toggleColor(color.code)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-all ${
+                      isActive
+                        ? 'scale-110 ring-2 ring-font-primary ring-offset-2 ring-offset-bg-surface'
+                        : 'opacity-60 hover:opacity-100'
                     }`}
-                    style={{ background: c.bg, color: c.text }}
+                    style={{ backgroundColor: color.bg, color: color.text }}
+                    title={color.code}
                   >
-                    {c.label}
+                    {color.label}
                   </button>
                 )
               })}
             </div>
-            <select
-              value={colorMode}
-              onChange={(e) => setColorMode(e.target.value as typeof colorMode)}
-              className="ml-1 rounded border border-border bg-bg-cell px-2 py-1 text-[11px] text-font-secondary"
+          </div>
+
+          {/* Foil only */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setFoilOnly((v) => !v)}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                foilOnly
+                  ? 'bg-purple-500/20 text-purple-200 ring-1 ring-purple-500/40'
+                  : 'border border-border bg-bg-card text-font-secondary hover:text-font-primary'
+              }`}
             >
-              <option value="or">Almeno uno</option>
-              <option value="and">Tutti</option>
-              <option value="identity">Identità ⊆ selezione</option>
-            </select>
+              ✦ Foil only
+            </button>
+          </div>
+
+          {/* Commander Color Identity */}
+          <div>
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-font-muted">
+                Commander Color Identity{' '}
+                <span className="text-font-muted">
+                  (only cards legal in this identity)
+                </span>
+              </span>
+              {commanderIdentity.length > 0 && (
+                <button
+                  onClick={() => setCommanderIdentity([])}
+                  className="text-[10px] text-font-accent transition-colors hover:text-font-primary"
+                  type="button"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {MANA_COLORS.map((color) => {
+                const isActive = commanderIdentity.includes(color.code)
+                return (
+                  <button
+                    key={color.code}
+                    onClick={() => toggleCommanderColor(color.code)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition-all ${
+                      isActive
+                        ? 'scale-110 ring-2 ring-font-primary ring-offset-2 ring-offset-bg-surface'
+                        : 'opacity-60 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: color.bg, color: color.text }}
+                    title={`Include ${color.code} in commander identity`}
+                    type="button"
+                  >
+                    {color.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            {/* Set combobox */}
+            <div ref={setBoxRef} className="relative min-w-[240px] flex-1">
+              <label className="mb-1 block text-xs font-medium text-font-muted">
+                Set
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={
+                    setDropdownOpen
+                      ? setSearch
+                      : selectedSetInfo
+                        ? `${selectedSetInfo.set_name} (${selectedSetInfo.set_code.toUpperCase()})`
+                        : setSearch
+                  }
+                  onFocus={() => {
+                    setSetDropdownOpen(true)
+                    setSetSearch('')
+                  }}
+                  onChange={(e) => {
+                    setSetSearch(e.target.value)
+                    setSetDropdownOpen(true)
+                  }}
+                  placeholder="All Sets — type to search..."
+                  className="w-full rounded-lg border border-border bg-bg-card py-2 pl-3 pr-16 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+                />
+                {selectedSet && (
+                  <button
+                    onClick={() => {
+                      setSelectedSet('')
+                      setSetSearch('')
+                      setSetDropdownOpen(false)
+                    }}
+                    className="absolute right-7 top-1/2 -translate-y-1/2 text-font-muted hover:text-font-primary"
+                    title="Clear set"
+                    type="button"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <ChevronDown
+                  className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-font-muted"
+                  size={14}
+                  onClick={() => setSetDropdownOpen((v) => !v)}
+                />
+              </div>
+              {setDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSet('')
+                      setSetSearch('')
+                      setSetDropdownOpen(false)
+                    }}
+                    className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-bg-hover ${
+                      !selectedSet ? 'text-font-accent' : 'text-font-secondary'
+                    }`}
+                  >
+                    All Sets
+                  </button>
+                  {filteredSets.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-font-muted">
+                      No matching sets
+                    </div>
+                  ) : (
+                    filteredSets.map((s) => (
+                      <button
+                        key={s.set_code}
+                        type="button"
+                        onClick={() => {
+                          setSelectedSet(s.set_code)
+                          setSetSearch('')
+                          setSetDropdownOpen(false)
+                        }}
+                        className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-bg-hover ${
+                          s.set_code === selectedSet ? 'text-font-accent' : 'text-font-primary'
+                        }`}
+                      >
+                        {s.set_name}{' '}
+                        <span className="text-font-muted">
+                          ({s.set_code.toUpperCase()})
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Rarity */}
+            <div className="min-w-[140px]">
+              <label className="mb-1 block text-xs font-medium text-font-muted">
+                Rarity
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedRarity}
+                  onChange={(e) => setSelectedRarity(e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-border bg-bg-card py-2 pl-3 pr-8 text-sm capitalize text-font-primary focus:border-bg-accent focus:outline-none"
+                >
+                  <option value="">All Rarities</option>
+                  {RARITIES.map((r) => (
+                    <option key={r} value={r} className="capitalize">
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-font-muted"
+                />
+              </div>
+            </div>
+
+            {/* CMC */}
+            <div className="min-w-[160px]">
+              <label className="mb-1 block text-xs font-medium text-font-muted">
+                CMC
+              </label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={cmcMin}
+                  onChange={(e) => setCmcMin(e.target.value)}
+                  placeholder="min"
+                  className="w-20 rounded-lg border border-border bg-bg-card px-2 py-2 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+                />
+                <span className="text-font-muted">—</span>
+                <input
+                  type="number"
+                  value={cmcMax}
+                  onChange={(e) => setCmcMax(e.target.value)}
+                  placeholder="max"
+                  className="w-20 rounded-lg border border-border bg-bg-card px-2 py-2 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Creature type / subtype */}
+            <div className="min-w-[180px] flex-1">
+              <label className="mb-1 block text-xs font-medium text-font-muted">
+                Creature type / subtype
+              </label>
+              <input
+                type="text"
+                value={creatureType}
+                onChange={(e) => setCreatureType(e.target.value)}
+                placeholder="es. Goblin, Dragon, Equipment…"
+                className="w-full rounded-lg border border-border bg-bg-card px-3 py-2 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+              />
+            </div>
           </div>
 
           {/* Types */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-semibold text-font-muted">
-              Tipi
-            </span>
-            <div className="flex flex-wrap gap-1">
+          <div>
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-xs font-medium text-font-muted">Card type</span>
+              {selectedTypes.length > 1 && (
+                <button
+                  onClick={() => setTypeMode((m) => (m === 'and' ? 'or' : 'and'))}
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
+                    typeMode === 'and'
+                      ? 'bg-bg-accent/20 text-font-accent'
+                      : 'bg-bg-yellow/20 text-bg-yellow'
+                  }`}
+                >
+                  {typeMode.toUpperCase()}
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
               {CARD_TYPES.map((t) => {
                 const active = selectedTypes.includes(t)
                 return (
@@ -476,10 +923,10 @@ export default function CollectionView({ initialItems, total }: Props) {
                     key={t}
                     type="button"
                     onClick={() => toggleType(t)}
-                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                       active
                         ? 'bg-bg-accent text-font-white'
-                        : 'bg-bg-cell text-font-secondary hover:bg-bg-hover'
+                        : 'bg-bg-card text-font-secondary hover:bg-bg-hover'
                     }`}
                   >
                     {t}
@@ -487,78 +934,9 @@ export default function CollectionView({ initialItems, total }: Props) {
                 )
               })}
             </div>
-            <select
-              value={typeMode}
-              onChange={(e) => setTypeMode(e.target.value as typeof typeMode)}
-              className="ml-1 rounded border border-border bg-bg-cell px-2 py-1 text-[11px] text-font-secondary"
-            >
-              <option value="and">Tutti</option>
-              <option value="or">Almeno uno</option>
-            </select>
-          </div>
-
-          {/* Rarity / CMC / Set */}
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-1.5 text-[11px] text-font-muted">
-              Rarità
-              <select
-                value={selectedRarity}
-                onChange={(e) => setSelectedRarity(e.target.value)}
-                className="rounded border border-border bg-bg-cell px-2 py-1 text-[11px] text-font-secondary"
-              >
-                <option value="">Tutte</option>
-                {RARITIES.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-1.5 text-[11px] text-font-muted">
-              CMC
-              <input
-                type="number"
-                value={cmcMin}
-                onChange={(e) => setCmcMin(e.target.value)}
-                placeholder="min"
-                className="h-7 w-14 rounded border border-border bg-bg-cell px-2 text-[11px] text-font-primary"
-              />
-              <span>—</span>
-              <input
-                type="number"
-                value={cmcMax}
-                onChange={(e) => setCmcMax(e.target.value)}
-                placeholder="max"
-                className="h-7 w-14 rounded border border-border bg-bg-cell px-2 text-[11px] text-font-primary"
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-[11px] text-font-muted">
-              Set
-              <select
-                value={selectedSet}
-                onChange={(e) => setSelectedSet(e.target.value)}
-                className="rounded border border-border bg-bg-cell px-2 py-1 text-[11px] text-font-secondary"
-              >
-                <option value="">Tutti</option>
-                {setOptions.map(([code, count]) => (
-                  <option key={code} value={code}>{code.toUpperCase()} ({count})</option>
-                ))}
-              </select>
-            </label>
-            {loadingAll && items.length < totalCount && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-font-muted">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Carico {items.length}/{totalCount}…
-              </span>
-            )}
           </div>
         </div>
       )}
-
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Cerca per nome…"
-        className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
-      />
 
       {totalCount === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-bg-surface p-8 text-center">
@@ -571,21 +949,32 @@ export default function CollectionView({ initialItems, total }: Props) {
             <Upload className="h-4 w-4" /> Importa un CSV per iniziare
           </button>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-bg-surface p-8 text-center">
           <p className="text-font-muted">Nessuna carta corrisponde ai filtri.</p>
         </div>
       ) : (
         <>
           <div className="text-[11px] text-font-muted">
-            {filtered.length} di {totalCount} carte
-            {filtersActive && ' (filtrate)'}
+            {sorted.length} di {totalCount} carte
+            {activeFilterCount > 0 && ' (filtrate)'}
           </div>
           <VirtuosoGrid
             style={{ height: '75vh' }}
-            data={filtered}
+            data={sorted}
             endReached={loadMore}
-            listClassName="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6"
+            // VirtuosoGrid doesn't accept inline `style` on its list slot
+            // through the typed surface, so we force grid layout via a
+            // class derived from the chosen column count. The five
+            // possible class strings below are statically present so the
+            // Tailwind JIT compiles them.
+            listClassName={
+              gridCols === 2 ? 'grid grid-cols-2 gap-2'
+              : gridCols === 3 ? 'grid grid-cols-3 gap-2'
+              : gridCols === 4 ? 'grid grid-cols-4 gap-2'
+              : gridCols === 5 ? 'grid grid-cols-5 gap-2'
+              : 'grid grid-cols-6 gap-2'
+            }
             itemContent={(_, item) => (
               <CollectionTile
                 item={item}
@@ -672,7 +1061,6 @@ function StatsPanel({
         )}
       </div>
 
-      {/* Totals */}
       <div className="mb-4 grid grid-cols-3 gap-2">
         <Tile label="Carte" value={stats.totalCards.toString()} />
         <Tile

@@ -92,7 +92,11 @@ export default function CardsPageTabs({
           initialLikedIds={initialLikedIds}
         />
       ) : collection ? (
-        <CollectionView initialItems={collection.initialItems} total={collection.total} />
+        <CollectionView
+          initialItems={collection.initialItems}
+          total={collection.total}
+          sets={sets}
+        />
       ) : null}
     </div>
   )
