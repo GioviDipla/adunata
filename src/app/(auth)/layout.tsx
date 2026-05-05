@@ -5,32 +5,39 @@ export default function AuthLayout({
 }) {
   return (
     <div
-      className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-bg-dark px-4 py-12"
-      style={{ paddingTop: 'max(3rem, env(safe-area-inset-top))' }}
+      className="relative isolate min-h-screen overflow-hidden bg-bg-dark"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      {/* Background hero — same brand artwork as the marketing home, top-anchored
-          so the logotype reads behind the auth card instead of being clipped. */}
+      {/* Background hero — identical sizing/position to the marketing home
+          (`src/app/page.tsx` lines 35-41) so the brand artwork reads the
+          same on /login as on /. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-20 bg-[length:140%_auto] bg-[position:center_-2rem] bg-no-repeat opacity-70 saturate-110 sm:bg-[length:90%_auto] sm:bg-[position:center_top]"
+        className="pointer-events-none absolute inset-0 -z-20 bg-[length:100%_auto] bg-top bg-no-repeat opacity-80 saturate-110 sm:bg-cover sm:opacity-80"
         style={{ backgroundImage: "url('/icons/logo-full.png')" }}
       />
-      {/* Fading gradient — keeps the card legible while preserving the hero
-          texture at the very top edge of the viewport. */}
+      {/* Same fading gradient as home — gentle at the very top so the
+          banner reads, then darkens through the middle so the card floats
+          on a dark wash. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            'linear-gradient(180deg, rgba(18,18,24,0.05) 0%, rgba(18,18,24,0.28) 22%, rgba(18,18,24,0.62) 48%, rgba(18,18,24,0.86) 72%, #121218 100%)',
+            'linear-gradient(180deg, rgba(18,18,24,0.02) 0%, rgba(18,18,24,0.14) 18%, rgba(18,18,24,0.46) 44%, rgba(18,18,24,0.78) 68%, #121218 100%)',
         }}
       />
-      <div
-        className="w-full max-w-md rounded-2xl border border-font-white/10 bg-bg-surface/85 p-8 shadow-2xl backdrop-blur-md"
-        style={{ boxShadow: '0 30px 60px -20px rgba(0,0,0,0.7)' }}
-      >
-        {children}
-      </div>
+
+      {/* Layout: tall hero spacer on top (mirrors home's pt-52/pt-64),
+          card centered below, footer hint at the bottom. */}
+      <main className="flex min-h-screen flex-col items-center px-4 pb-10 pt-40 sm:pt-56 lg:pt-64">
+        <div
+          className="w-full max-w-md rounded-2xl border border-font-white/10 bg-bg-surface/85 p-8 backdrop-blur-md"
+          style={{ boxShadow: '0 30px 60px -20px rgba(0,0,0,0.7)' }}
+        >
+          {children}
+        </div>
+      </main>
     </div>
   );
 }
