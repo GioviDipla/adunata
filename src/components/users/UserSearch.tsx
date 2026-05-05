@@ -34,12 +34,14 @@ export default function UserSearch({ initialUsers }: UserSearchProps) {
     // full-table trigram scans on single-character queries and keeps the
     // "Latest joiners" empty state visible while the user is still typing.
     if (trimmed.length < 2) {
-      setResults(null)
-      setLoading(false)
+      queueMicrotask(() => {
+        setResults(null)
+        setLoading(false)
+      })
       return
     }
 
-    setLoading(true)
+    queueMicrotask(() => setLoading(true))
     const controller = new AbortController()
     const handle = setTimeout(async () => {
       try {

@@ -52,7 +52,7 @@ export default function DeckView({
     if (typeof window === 'undefined') return
     const key = `adunata:deck-overlay:${deck.id}`
     const raw = window.localStorage.getItem(key)
-    if (raw === '1') setOverlayOn(true)
+    if (raw === '1') queueMicrotask(() => setOverlayOn(true))
   }, [deck.id])
 
   useEffect(() => {

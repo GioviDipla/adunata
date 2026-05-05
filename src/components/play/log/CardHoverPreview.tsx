@@ -1,13 +1,7 @@
 'use client'
 
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-
-interface Position {
-  top: number
-  left?: number
-  right?: number
-}
 
 /**
  * Floating card image preview anchored to the opposite side of the viewport
@@ -24,11 +18,12 @@ export default function CardHoverPreview({
   imageUrl: string
   name: string
 }) {
-  const [position, setPosition] = useState<Position | null>(null)
+  const previewRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const el = anchorRef.current
-    if (!el) return
+    const preview = previewRef.current
+    if (!el || !preview) return
 
     const rect = el.getBoundingClientRect()
     const vw = window.innerWidth
@@ -44,19 +39,19 @@ export default function CardHoverPreview({
     let top = rect.top + rect.height / 2 - previewH / 2
     top = Math.max(8, Math.min(vh - previewH - 8, top))
 
-    setPosition(
-      onRight
-        ? { top, left: rect.right + gap }
-        : { top, right: vw - rect.left + gap },
-    )
+    preview.style.top = `${top}px`
+    preview.style.left = onRight ? `${rect.right + gap}px` : ''
+    preview.style.right = onRight ? '' : `${vw - rect.left + gap}px`
+    preview.style.visibility = 'visible'
   }, [anchorRef])
 
-  if (!position || typeof document === 'undefined') return null
+  if (typeof document === 'undefined') return null
 
   return createPortal(
     <div
+      ref={previewRef}
       className="pointer-events-none fixed z-[60] hidden md:block"
-      style={{ top: position.top, left: position.left, right: position.right }}
+      style={{ visibility: 'hidden' }}
     >
       <img
         src={imageUrl}

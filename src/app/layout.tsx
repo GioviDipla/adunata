@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import { MobileViewportFix } from "@/components/MobileViewportFix";
+import { TapDebugProbe } from "@/components/TapDebugProbe";
 import "./globals.css";
 
 const inter = Inter({
@@ -51,6 +52,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-bg-dark text-font-primary font-[family-name:var(--font-inter)] antialiased">
         <MobileViewportFix />
+        <TapDebugProbe />
         {children}
         <Script
           id="sw-register"

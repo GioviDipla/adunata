@@ -121,7 +121,7 @@ function CommandZoneCard({
         e.preventDefault()
         if (data) onOpenPreview(toCardRow(cardId, data))
       }}
-      {...longPress}
+      {...longPress.handlers}
       className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card select-none"
       style={{ width: 48, height: 67, touchAction: 'manipulation' }}
       title={`${data?.name ?? '?'} — tap to cast, hold to preview`}
@@ -171,7 +171,7 @@ function PeakCardButton({
       type="button"
       onClick={handleClick}
       onContextMenu={(e) => { e.preventDefault(); onOpenPreview(card) }}
-      {...longPress}
+      {...longPress.handlers}
       className="w-24 select-none"
       style={{ touchAction: 'manipulation' }}
       title={`${card.name} — tap for actions, hold to preview`}
@@ -227,11 +227,13 @@ export default function PlayGame(props: PlayGameProps) {
   useEffect(() => {
     if (mode === 'goldfish') {
       const gProps = props as PlayGameProps & { mode: 'goldfish' }
-      setGameState(gProps.initialState)
-      setCardMap(gProps.initialCardMap)
-      setPlayerNames({ [userId]: 'You', [gProps.botId]: gProps.botConfig.name })
-      if (gProps.deckTokens) setDeckTokens(gProps.deckTokens)
-      setLoading(false)
+      queueMicrotask(() => {
+        setGameState(gProps.initialState)
+        setCardMap(gProps.initialCardMap)
+        setPlayerNames({ [userId]: 'You', [gProps.botId]: gProps.botConfig.name })
+        if (gProps.deckTokens) setDeckTokens(gProps.deckTokens)
+        setLoading(false)
+      })
       return
     }
 
@@ -262,18 +264,20 @@ export default function PlayGame(props: PlayGameProps) {
   useEffect(() => {
     if (mode !== 'goldfish') return
     const gProps = props as PlayGameProps & { mode: 'goldfish' }
-    setGameState(prev => {
-      if (!prev?.mulliganStage) return prev
-      const botDecision = prev.mulliganStage.playerDecisions[gProps.botId]
-      if (botDecision && !botDecision.decided) {
-        return applyAction(prev, {
-          type: 'keep_hand',
-          playerId: gProps.botId,
-          data: {},
-          text: '',
-        })
-      }
-      return prev
+    queueMicrotask(() => {
+      setGameState(prev => {
+        if (!prev?.mulliganStage) return prev
+        const botDecision = prev.mulliganStage.playerDecisions[gProps.botId]
+        if (botDecision && !botDecision.decided) {
+          return applyAction(prev, {
+            type: 'keep_hand',
+            playerId: gProps.botId,
+            data: {},
+            text: '',
+          })
+        }
+        return prev
+      })
     })
   }, [mode])
 
@@ -434,7 +438,9 @@ export default function PlayGame(props: PlayGameProps) {
   useEffect(() => {
     if (viewingZone === 'library' && !libraryViewLoggedRef.current) {
       libraryViewLoggedRef.current = true
-      sendAction({ type: 'library_view' as GameActionType, playerId: userId, data: {}, text: `${myName} is searching their library` })
+      queueMicrotask(() => {
+        sendAction({ type: 'library_view' as GameActionType, playerId: userId, data: {}, text: `${myName} is searching their library` })
+      })
     }
     if (viewingZone !== 'library') {
       libraryViewLoggedRef.current = false
@@ -581,13 +587,13 @@ export default function PlayGame(props: PlayGameProps) {
     } else {
       sendAction(createTap(userId, myName, instanceId, name))
     }
-  }, [myState, cardMap, sendAction, userId])
+  }, [myState, cardMap, sendAction, userId, myName])
 
   const handlePlayCard = useCallback((instanceId: string) => {
     const data = cardMap[instanceId]
     if (!data) return
     sendAction(createPlayCard(userId, myName, instanceId, data.cardId, data.name, 'hand', 'battlefield'))
-  }, [cardMap, sendAction, userId])
+  }, [cardMap, sendAction, userId, myName])
 
   const handleSendToGraveyard = useCallback((instanceId: string) => {
     if (!myState) return
@@ -600,7 +606,7 @@ export default function PlayGame(props: PlayGameProps) {
     if (isCmd) (action.data as Record<string, unknown>).isCommander = true
     if (isCmd) (action.data as Record<string, unknown>).cardName = data?.name ?? 'Commander'
     sendAction(action)
-  }, [myState, cardMap, sendAction, userId, isCommanderCard])
+  }, [myState, cardMap, sendAction, userId, myName, isCommanderCard])
 
   const handleExile = useCallback((instanceId: string) => {
     if (!myState) return
@@ -613,7 +619,7 @@ export default function PlayGame(props: PlayGameProps) {
     if (isCmd) (action.data as Record<string, unknown>).isCommander = true
     if (isCmd) (action.data as Record<string, unknown>).cardName = data?.name ?? 'Commander'
     sendAction(action)
-  }, [myState, cardMap, sendAction, userId, isCommanderCard])
+  }, [myState, cardMap, sendAction, userId, myName, isCommanderCard])
 
   const handleReturnToHand = useCallback((instanceId: string) => {
     if (!myState) return
@@ -621,7 +627,7 @@ export default function PlayGame(props: PlayGameProps) {
     if (!card) return
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
     sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'hand'))
-  }, [myState, cardMap, sendAction, userId])
+  }, [myState, cardMap, sendAction, userId, myName])
 
   const handleReturnToCommandZone = useCallback((instanceId: string) => {
     if (!myState) return
@@ -886,20 +892,20 @@ export default function PlayGame(props: PlayGameProps) {
   // Combat: declare attackers
   const handleDeclareAttackers = useCallback((attackerIds: string[], attackerNames: string[]) => {
     sendAction(createDeclareAttackers(userId, myName, attackerIds, attackerNames))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   const handleSkipAttackers = useCallback(() => {
     sendAction(createDeclareAttackers(userId, myName, [], []))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   // Combat: declare blockers
   const handleDeclareBlockers = useCallback((assignments: { blockerId: string; attackerId: string; blockerName: string; attackerName: string }[]) => {
     sendAction(createDeclareBlockers(userId, myName, assignments))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   const handleSkipBlockers = useCallback(() => {
     sendAction(createDeclareBlockers(userId, myName, []))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   // Discard to 7.
   // Must await each action sequentially: concurrent writes to game_states
@@ -982,7 +988,9 @@ export default function PlayGame(props: PlayGameProps) {
     const { attackers, blockers } = gameState.combat
     if (attackers.length === 0) {
       // No attackers, just pass
-      sendAction(createCombatDamage(userId, 0, [], 'No combat damage'))
+      queueMicrotask(() => {
+        sendAction(createCombatDamage(userId, 0, [], 'No combat damage'))
+      })
       return
     }
 
@@ -1045,7 +1053,9 @@ export default function PlayGame(props: PlayGameProps) {
       ? `Combat: ${descParts.join('; ')}${damageToPlayer > 0 ? ` | ${damageToPlayer} to opponent` : ''}`
       : 'No combat damage'
 
-    sendAction(createCombatDamage(userId, damageToPlayer, creaturesDamaged, description))
+    queueMicrotask(() => {
+      sendAction(createCombatDamage(userId, damageToPlayer, creaturesDamaged, description))
+    })
   }, [gameState, userId, opponentId, cardMap, sendAction])
 
   // Attacker eligibility: creatures, tokens, or permanents with altered P/T
@@ -1075,7 +1085,7 @@ export default function PlayGame(props: PlayGameProps) {
     if (hasEligibleAttackers) return
     if (autoSkippedAttackersRef.current === gameState.turn) return
     autoSkippedAttackersRef.current = gameState.turn
-    handleSkipAttackers()
+    queueMicrotask(() => handleSkipAttackers())
   }, [gameState, isActivePlayer, hasPriority, hasEligibleAttackers, handleSkipAttackers])
 
   // Overlay conditions
