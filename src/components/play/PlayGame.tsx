@@ -509,6 +509,21 @@ export default function PlayGame(props: PlayGameProps) {
       .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
   }, [myState, cardMap])
 
+  // Top card of graveyard / exile for the zone-stack widgets in the action bar.
+  const graveyardTop = useMemo(() => {
+    const last = myState?.graveyard?.[myState.graveyard.length - 1]
+    if (!last) return null
+    const data = cardMap[last.instanceId] ?? cardMap[String(last.cardId)]
+    return data ? toCardRow(last.cardId, data) : null
+  }, [myState, cardMap])
+
+  const exileTop = useMemo(() => {
+    const last = myState?.exile?.[myState.exile.length - 1]
+    if (!last) return null
+    const data = cardMap[last.instanceId] ?? cardMap[String(last.cardId)]
+    return data ? toCardRow(last.cardId, data) : null
+  }, [myState, cardMap])
+
   // Exile cards for zone viewer
   const exileCards = useMemo(() => {
     if (!myState) return []
@@ -1532,6 +1547,8 @@ export default function PlayGame(props: PlayGameProps) {
         libraryCount={myState.libraryCount}
         graveyardCount={myState.graveyard.length}
         exileCount={myState.exile.length}
+        graveyardTopCard={graveyardTop}
+        exileTopCard={exileTop}
         hasPriority={hasPriority}
         isActivePlayer={isActivePlayer}
         onPassPriority={() => sendAction(createPassPriority(userId, myName))}
