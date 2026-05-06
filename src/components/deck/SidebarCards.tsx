@@ -157,7 +157,7 @@ function SortablePanelCard({ panel, collapsed, onToggle }: SortablePanelCardProp
         <button
           {...attributes}
           {...listeners}
-          className="flex h-7 w-5 cursor-grab touch-none items-center justify-center text-font-muted opacity-0 transition-opacity hover:text-font-primary group-hover/panel:opacity-100 active:cursor-grabbing"
+          className="flex h-7 w-5 cursor-grab touch-none items-center justify-center text-font-muted opacity-100 transition-opacity hover:text-font-primary active:cursor-grabbing sm:opacity-0 sm:group-hover/panel:opacity-100"
           aria-label="Reorder panel"
           title="Drag to reorder"
         >
