@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback } from 'react'
-import { useDroppable } from '@dnd-kit/core'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import KeywordBadges from '@/components/play/KeywordBadges'
 import type { Database } from '@/types/supabase'
@@ -65,6 +66,11 @@ function BattlefieldCardButton({
     delay: 400,
   })
 
+  const drag = useDraggable({
+    id: `bf:${bc.instanceId}`,
+    data: { from: 'battlefield', instanceId: bc.instanceId, cardId: bc.card.id },
+  })
+
   // Lands tap = tap/untap (mana). Other cards tap = action menu when wired.
   // Right-click / long-press always opens preview.
   const isLand = (bc.card.type_line ?? '').toLowerCase().includes('land')
@@ -80,20 +86,29 @@ function BattlefieldCardButton({
   const triggerKey = phaseTriggerKey(phase)
   const triggersNow = triggerKey ? Boolean(bc.card[triggerKey]) : false
 
+  const dragStyle = drag.transform
+    ? { transform: CSS.Translate.toString(drag.transform), zIndex: 999 }
+    : {}
+
   return (
     <button
+      ref={drag.setNodeRef}
       onClick={handleClick}
       onContextMenu={(e) => {
         e.preventDefault()
         onCardPreview?.(bc.card, bc.instanceId, bc.tapped)
       }}
       {...longPress.handlers}
+      {...drag.attributes}
+      {...drag.listeners}
       className={`relative overflow-hidden rounded-lg border transition-transform select-none ${
         bc.tapped
           ? 'rotate-90 border-font-muted'
           : 'border-border hover:border-bg-accent'
-      } ${triggersNow ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-bg-dark' : ''}`}
-      style={{ width: CARD_W, height: CARD_H, touchAction: 'manipulation' }}
+      } ${triggersNow ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-bg-dark' : ''} ${
+        drag.isDragging ? 'opacity-40' : ''
+      }`}
+      style={{ width: CARD_W, height: CARD_H, touchAction: 'none', ...dragStyle }}
       title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''}${triggersNow ? ' — triggers this phase' : ''} — tap for actions, hold to preview`}
     >
       {bc.card.image_small ? (
