@@ -10,6 +10,8 @@ import {
   Filter,
   Layers,
   ChevronDown,
+  ChevronsDown,
+  ChevronsUp,
 } from 'lucide-react'
 import DeckCard from './DeckCard'
 import DeckGridView from './DeckGridView'
@@ -194,6 +196,37 @@ export default function DeckContent({
     },
     [deckId],
   )
+
+  const allCollapsed = useMemo(() => {
+    if (!sections || sections.length === 0) return false
+    return sections.every((s) => collapsedSections.has(s.id))
+  }, [sections, collapsedSections])
+
+  const toggleAllSections = useCallback(async () => {
+    if (!sections || sections.length === 0 || !deckId) return
+    const next = !allCollapsed
+    // Optimistic local toggle
+    setCollapsedSections(
+      next ? new Set(sections.map((s) => s.id)) : new Set(),
+    )
+    try {
+      const res = await fetch(`/api/decks/${deckId}/sections`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ is_collapsed: next }),
+      })
+      if (!res.ok) {
+        // Rollback on failure: re-derive from current `sections` server state.
+        setCollapsedSections(
+          new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+        )
+      }
+    } catch {
+      setCollapsedSections(
+        new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+      )
+    }
+  }, [allCollapsed, sections, deckId])
 
   const visibleCards = useMemo(() => {
     const noType = typeFilter.size === 0
@@ -459,6 +492,24 @@ export default function DeckContent({
             ))}
           </select>
         </label>
+
+        {groupMode === 'section' && (sections?.length ?? 0) > 0 && (
+          <button
+            onClick={toggleAllSections}
+            className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-3 text-xs text-font-secondary hover:text-font-primary"
+            aria-label={allCollapsed ? 'Expand all sections' : 'Collapse all sections'}
+            title={allCollapsed ? 'Expand all' : 'Collapse all'}
+          >
+            {allCollapsed ? (
+              <ChevronsDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronsUp className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">
+              {allCollapsed ? 'Expand all' : 'Collapse all'}
+            </span>
+          </button>
+        )}
 
         <button
           onClick={() => setShowFilterPanel((prev) => !prev)}

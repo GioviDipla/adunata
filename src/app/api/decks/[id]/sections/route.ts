@@ -50,3 +50,27 @@ export async function POST(
   revalidatePath(`/decks/${deckId}`)
   return NextResponse.json({ section: data })
 }
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: deckId } = await params
+  const body = await req.json().catch(() => ({}))
+  if (typeof body.is_collapsed !== 'boolean') {
+    return NextResponse.json(
+      { error: 'is_collapsed boolean required' },
+      { status: 400 },
+    )
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('deck_sections')
+    .update({ is_collapsed: body.is_collapsed })
+    .eq('deck_id', deckId)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  revalidatePath(`/decks/${deckId}`)
+  return NextResponse.json({ ok: true })
+}
