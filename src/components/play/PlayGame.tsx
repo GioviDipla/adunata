@@ -41,6 +41,7 @@ import RevealedCardsChooser from './RevealedCardsChooser'
 import CardActionMenu, { type ActionMenuZone, type ActionMenuDest } from '@/components/game/CardActionMenu'
 import {
   DndContext,
+  useDroppable,
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { useDndSensors } from '@/lib/hooks/useDndSensors'
@@ -604,15 +605,7 @@ export default function PlayGame(props: PlayGameProps) {
   // droppables. Pointer activation distance keeps a tap below threshold
   // routed to the click handler so the action menu still works.
   const dndSensors = useDndSensors('game')
-  const handleDragEnd = useCallback((e: DragEndEvent) => {
-    const fromZone = (e.active.data.current as { from?: string } | undefined)?.from
-    const toZone = (e.over?.data.current as { to?: string } | undefined)?.to
-    const instanceId = (e.active.data.current as { instanceId?: string } | undefined)?.instanceId
-    if (!fromZone || !toZone || !instanceId) return
-    if (fromZone === 'hand' && toZone === 'battlefield') {
-      handlePlayCard(instanceId)
-    }
-  }, [handlePlayCard])
+  const { setNodeRef: setHandDropRef, isOver: isHandDropOver } = useDroppable({ id: 'zone-hand', data: { to: 'hand' } })
 
   const handleSendToGraveyard = useCallback((instanceId: string) => {
     if (!myState) return
@@ -647,6 +640,40 @@ export default function PlayGame(props: PlayGameProps) {
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
     sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'hand'))
   }, [myState, cardMap, sendAction, userId, myName])
+
+  const handleDragEnd = useCallback((e: DragEndEvent) => {
+    const fromZone = (e.active.data.current as { from?: string } | undefined)?.from
+    const toZone = (e.over?.data.current as { to?: string } | undefined)?.to
+    const instanceId = (e.active.data.current as { instanceId?: string } | undefined)?.instanceId
+    if (!fromZone || !toZone || !instanceId) return
+
+    // hand → battlefield (existing path: play the card with mana cost UI)
+    if (fromZone === 'hand' && toZone === 'battlefield') {
+      handlePlayCard(instanceId)
+      return
+    }
+
+    // Anywhere → graveyard / exile / hand / libraryTop / libraryBottom
+    // For battlefield→graveyard/exile we already have helpers that flag
+    // commander; reuse them so commander tax/transfer logic still fires.
+    if (fromZone === 'battlefield' && toZone === 'graveyard') {
+      handleSendToGraveyard(instanceId)
+      return
+    }
+    if (fromZone === 'battlefield' && toZone === 'exile') {
+      handleExile(instanceId)
+      return
+    }
+    if (fromZone === 'battlefield' && toZone === 'hand') {
+      handleReturnToHand(instanceId)
+      return
+    }
+
+    // Generic path for the remaining combinations.
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, fromZone, toZone))
+  }, [handlePlayCard, handleSendToGraveyard, handleExile, handleReturnToHand, cardMap, sendAction, userId, myName])
 
   const handleReturnToCommandZone = useCallback((instanceId: string) => {
     if (!myState) return
@@ -1459,15 +1486,20 @@ export default function PlayGame(props: PlayGameProps) {
       <div className="border-t border-border bg-bg-card px-3 py-2">
         <div className="flex gap-2">
           <div className="flex-1 min-w-0">
-            <HandArea
-              cards={myHandCards}
-              onPlayCard={handlePlayCard}
-              draggable
-              onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
-              onCardPreview={(card, instanceId) =>
-                setPreview({ card, zone: 'hand', instanceId })
-              }
-            />
+            <div
+              ref={setHandDropRef}
+              className={`rounded-lg transition-shadow ${isHandDropOver ? 'ring-2 ring-bg-accent' : ''}`}
+            >
+              <HandArea
+                cards={myHandCards}
+                onPlayCard={handlePlayCard}
+                draggable
+                onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
+                onCardPreview={(card, instanceId) =>
+                  setPreview({ card, zone: 'hand', instanceId })
+                }
+              />
+            </div>
           </div>
           {myState.commandZone.length > 0 && (
             <div className="flex shrink-0 flex-col gap-1">

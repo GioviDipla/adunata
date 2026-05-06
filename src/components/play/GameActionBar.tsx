@@ -1,7 +1,9 @@
 'use client'
 
+import type * as React from 'react'
 import { useEffect, useRef } from 'react'
 import { Heart, Minus, Plus, Layers, Archive, Ban, SkipForward, Flag, Sparkles } from 'lucide-react'
+import { useDroppable } from '@dnd-kit/core'
 import PriorityIndicator from './PriorityIndicator'
 import { GAME_PHASES } from '@/lib/game/phases'
 import type { GamePhase } from '@/lib/game/types'
@@ -94,18 +96,30 @@ export default function GameActionBar({
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={() => onViewZone('graveyard')} className="flex items-center gap-1 active:brightness-125" aria-label="Graveyard">
-            <Archive size={16} className="text-zinc-400" />
-            <span className="text-sm font-semibold tabular-nums text-font-primary">{graveyardCount}</span>
-          </button>
-          <button onClick={() => onViewZone('exile')} className="flex items-center gap-1 active:brightness-125" aria-label="Exile">
-            <Ban size={16} className="text-red-400" />
-            <span className="text-sm font-semibold tabular-nums text-font-primary">{exileCount}</span>
-          </button>
-          <button onClick={() => onViewZone('library')} className="flex items-center gap-1 active:brightness-125" aria-label="Library">
-            <Layers size={16} className="text-blue-400" />
-            <span className="text-sm font-semibold tabular-nums text-font-primary">{libraryCount}</span>
-          </button>
+          <ZoneCounter
+            label="Graveyard"
+            icon={<Archive size={16} className="text-zinc-400" />}
+            count={graveyardCount}
+            dropId="zone-graveyard"
+            dropTo="graveyard"
+            onClick={() => onViewZone('graveyard')}
+          />
+          <ZoneCounter
+            label="Exile"
+            icon={<Ban size={16} className="text-red-400" />}
+            count={exileCount}
+            dropId="zone-exile"
+            dropTo="exile"
+            onClick={() => onViewZone('exile')}
+          />
+          <ZoneCounter
+            label="Library"
+            icon={<Layers size={16} className="text-blue-400" />}
+            count={libraryCount}
+            dropId="zone-library-top"
+            dropTo="libraryTop"
+            onClick={() => onViewZone('library')}
+          />
         </div>
       </div>
 
@@ -163,5 +177,36 @@ export default function GameActionBar({
         )}
       </div>
     </div>
+  )
+}
+
+function ZoneCounter({
+  label,
+  icon,
+  count,
+  dropId,
+  dropTo,
+  onClick,
+}: {
+  label: string
+  icon: React.ReactNode
+  count: number
+  dropId: string
+  dropTo: 'graveyard' | 'exile' | 'libraryTop'
+  onClick: () => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: dropId, data: { to: dropTo } })
+  return (
+    <button
+      ref={setNodeRef}
+      onClick={onClick}
+      aria-label={label}
+      className={`flex items-center gap-1 rounded-md px-1.5 py-1 transition-colors active:brightness-125 ${
+        isOver ? 'bg-bg-accent/25 ring-2 ring-bg-accent' : ''
+      }`}
+    >
+      {icon}
+      <span className="text-sm font-semibold tabular-nums text-font-primary">{count}</span>
+    </button>
   )
 }
