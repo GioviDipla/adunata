@@ -96,7 +96,7 @@ function HandCardButton({
         height: 100,
         marginLeft: index > 0 ? -8 : 0,
         zIndex: drag.isDragging ? 999 : index,
-        touchAction: draggable && !selectable ? 'none' : 'manipulation',
+        touchAction: draggable && !selectable ? 'pan-x' : 'manipulation',
         transform: drag.transform ? CSS.Translate.toString(drag.transform) : undefined,
       }}
       title={`${hc.card.name} — tap for ${selectable ? 'select' : 'actions'}, hold to preview`}
@@ -147,7 +147,10 @@ export default function HandArea({
       <span className="text-[9px] font-semibold tracking-wider text-font-muted">
         YOUR HAND ({cards.length})
       </span>
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
+      <div
+        className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide"
+        style={{ overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch' }}
+      >
         {cards.map((hc, index) => (
           <HandCardButton
             key={hc.instanceId}
