@@ -1,13 +1,5 @@
 @import "tailwindcss";
 
-html {
-  /* Reserve scrollbar space at all times so navigation between short and
-     tall pages does not shift the layout (visible "scrollbar appears /
-     disappears" flicker). On platforms without a visible scrollbar (mobile)
-     this declaration is a no-op. */
-  scrollbar-gutter: stable;
-}
-
 html, body {
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
@@ -15,7 +7,6 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-user-drag: none;
-  touch-action: manipulation;
 }
 
 input,
@@ -46,6 +37,14 @@ img {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Opt-in: pages whose content can be shorter than the viewport (login, simple
+   modals) can apply this on their root scroll container to avoid the gutter
+   appearing/disappearing when the user navigates between short and tall
+   pages. Avoid on `html` itself — that wastes a gutter on every long page. */
+.scrollbar-stable {
+  scrollbar-gutter: stable;
 }
 
 /* Universal safe-area handling for full-screen fixed overlays.
