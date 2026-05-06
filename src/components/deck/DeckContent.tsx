@@ -692,7 +692,7 @@ export default function DeckContent({
                       type="button"
                       onClick={() => toggleSectionCollapsed(key)}
                       aria-expanded={!isCollapsed}
-                      className="flex w-full items-center gap-2 px-3 py-2 pl-4 text-left transition-colors hover:bg-bg-cell/40"
+                      className="flex w-full items-center gap-2 py-2 pl-4 pr-3 sm:pr-4 text-left transition-colors hover:bg-bg-cell/40"
                     >
                       <ChevronDown
                         className={`h-4 w-4 shrink-0 text-font-muted transition-transform ${
@@ -716,7 +716,7 @@ export default function DeckContent({
                       </span>
                     </button>
                     <div
-                      className={`flex flex-col gap-1 px-2 pb-2 pl-4 transition-all ${
+                      className={`flex flex-col gap-1 pl-4 pr-3 sm:pr-4 pb-3 transition-all ${
                         isCollapsed ? 'hidden' : ''
                       }`}
                     >
@@ -795,7 +795,7 @@ export default function DeckContent({
                     type="button"
                     onClick={() => toggleSectionCollapsed(key)}
                     aria-expanded={!isCollapsed}
-                    className="flex w-full items-center gap-2 px-3 py-2 pl-4 text-left transition-colors hover:bg-bg-cell/40"
+                    className="flex w-full items-center gap-2 py-2 pl-4 pr-3 sm:pr-4 text-left transition-colors hover:bg-bg-cell/40"
                   >
                     <ChevronDown
                       className={`h-4 w-4 shrink-0 text-font-muted transition-transform ${
@@ -819,7 +819,7 @@ export default function DeckContent({
                     </span>
                   </button>
                   {!isCollapsed && (
-                    <div className="px-2 pb-2 pl-4">
+                    <div className="pl-4 pr-3 sm:pr-4 pb-3">
                       <DeckGridView
                         cards={entries}
                         onQuantityChange={onQuantityChange}
