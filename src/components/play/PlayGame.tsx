@@ -41,12 +41,9 @@ import RevealedCardsChooser from './RevealedCardsChooser'
 import CardActionMenu, { type ActionMenuZone, type ActionMenuDest } from '@/components/game/CardActionMenu'
 import {
   DndContext,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
+import { useDndSensors } from '@/lib/hooks/useDndSensors'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -606,10 +603,7 @@ export default function PlayGame(props: PlayGameProps) {
   // Drag-and-drop: cards in hand are draggables, battlefield zones are
   // droppables. Pointer activation distance keeps a tap below threshold
   // routed to the click handler so the action menu still works.
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 12 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
-  )
+  const dndSensors = useDndSensors('game')
   const handleDragEnd = useCallback((e: DragEndEvent) => {
     const fromZone = (e.active.data.current as { from?: string } | undefined)?.from
     const toZone = (e.over?.data.current as { to?: string } | undefined)?.to

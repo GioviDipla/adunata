@@ -16,19 +16,15 @@ import {
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { useDndSensors } from '@/lib/hooks/useDndSensors'
 import { CSS } from '@dnd-kit/utilities'
 import type { SectionRow } from '@/types/deck'
 
@@ -75,10 +71,7 @@ export default function DeckSectionsPanel({
   const [draftName, setDraftName] = useState('')
   const [busy, setBusy] = useState(false)
   const [autoAssignSummary, setAutoAssignSummary] = useState<string | null>(null)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
+  const sensors = useDndSensors('sortable')
 
   async function addSection() {
     const name = draftName.trim()

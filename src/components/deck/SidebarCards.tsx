@@ -5,19 +5,15 @@ import { ChevronDown, GripVertical } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { useDndSensors } from '@/lib/hooks/useDndSensors'
 import { CSS } from '@dnd-kit/utilities'
 
 export interface SidebarPanel {
@@ -79,10 +75,7 @@ export default function SidebarCards({ deckId, panels }: Props) {
     window.localStorage.setItem(KEY(deckId), JSON.stringify(payload))
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
+  const sensors = useDndSensors('sortable')
 
   function toggleCollapsed(id: string) {
     const next = { ...collapsed, [id]: !collapsed[id] }
