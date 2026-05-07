@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [email, setEmail] = useState('');
   const [createdAt, setCreatedAt] = useState('');
@@ -53,18 +53,19 @@ export default function ProfilePage() {
         })
       );
 
-      // Fetch deck count
-      const { count } = await supabase
-        .from('decks')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+      // Fetch deck count + profile in parallel
+      const [{ count }, { data: profile }] = await Promise.all([
+        supabase
+          .from('decks')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+        supabase
+          .from('profiles')
+          .select('username, display_name, bio, username_changed_at')
+          .eq('id', user.id)
+          .single(),
+      ]);
       setDeckCount(count ?? 0);
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('username, display_name, bio, username_changed_at')
-        .eq('id', user.id)
-        .single();
 
       if (profile) {
         setUsername(profile.username);
