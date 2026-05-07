@@ -852,7 +852,7 @@ export default function CardBrowser({
 
             <div className="flex-1 min-w-[260px]">
               <label className="mb-1 block text-xs font-medium text-font-muted">
-                Rules Text <span className="text-font-muted">(searches oracle text)</span>
+                Rules Text <span className="text-font-muted">(oracle text — SQL LIKE, % wildcard)</span>
               </label>
               <div className="relative">
                 <input type="text" placeholder='e.g. "draw a card", "deals damage". Use % as wildcard (creature%less to cast)' value={selectedKeyword} onChange={(e) => setSelectedKeyword(e.target.value)}
