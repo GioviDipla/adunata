@@ -122,6 +122,7 @@ const SORT_OPTIONS = [
   { value: 'type_asc',  label: 'Type' },
   { value: 'price_asc',  label: 'Price Low→High' },
   { value: 'price_desc', label: 'Price High→Low' },
+  { value: 'quantity_desc', label: 'Quantity' },
 ] as const
 
 type SortValue = typeof SORT_OPTIONS[number]['value']
@@ -364,9 +365,9 @@ export default function CollectionView({
           (a.card.prices_eur ?? a.card.prices_usd ?? 0) || cmp(a, b),
         ); break
       case 'released_at_desc':
-        // No released_at on CollectionCard — fall back to name to keep the
-        // option visible without a UI lie.
         arr.sort(cmp); break
+      case 'quantity_desc':
+        arr.sort((a, b) => b.quantity - a.quantity || cmp(a, b)); break
     }
     return arr
   }, [filtered, sortBy])
