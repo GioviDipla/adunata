@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Heart } from 'lucide-react'
 import type { Database } from '@/types/supabase'
@@ -17,7 +17,7 @@ interface CardItemProps {
   onContextAction?: (card: Card, x: number, y: number) => void
 }
 
-export default function CardItem({ card, liked, onSelect, onContextAction }: CardItemProps) {
+const CardItem = memo(function CardItem({ card, liked, onSelect, onContextAction }: CardItemProps) {
   const [showPreview, setShowPreview] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -148,4 +148,6 @@ export default function CardItem({ card, liked, onSelect, onContextAction }: Car
       )}
     </div>
   )
-}
+}, (prev, next) => prev.card.id === next.card.id && prev.liked === next.liked)
+
+export default CardItem

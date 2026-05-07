@@ -182,8 +182,25 @@ export default function CardBrowser({
 
   const isDefaultSort = sortBy === 'released_at_desc'
 
+  // Keep filter values in a ref so buildQuery doesn't recreate on every
+  // keystroke — only supabase, isDefaultSort, debouncedSearch, and
+  // searchLang are real deps.
+  const filtersRef = useRef({
+    selectedColors, commanderIdentity, selectedTypes, typeMode,
+    selectedRarity, cmcMin, cmcMax, selectedSet,
+    debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy,
+    colorMode,
+  })
+  filtersRef.current = {
+    selectedColors, commanderIdentity, selectedTypes, typeMode,
+    selectedRarity, cmcMin, cmcMax, selectedSet,
+    debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy,
+    colorMode,
+  }
+
   const buildQuery = useCallback(
     (opts: { offset?: number; after?: { releasedAt: string; id: string } | null } = {}) => {
+      const filters = filtersRef.current
       const { offset = 0, after = null } = opts
       let query = supabase
         .from('cards')
@@ -226,7 +243,7 @@ export default function CardBrowser({
         }
       } else {
         query = query.range(offset, offset + PAGE_SIZE - 1)
-        switch (sortBy) {
+        switch (filters.sortBy) {
           case 'name_asc':
             query = query.order('name', { ascending: true }); break
           case 'name_desc':
@@ -244,61 +261,53 @@ export default function CardBrowser({
         }
       }
 
-      if (selectedColors.length > 0) {
-        if (selectedColors.length === 1 || colorMode === 'and') {
-          query = query.contains('color_identity', selectedColors)
+      if (filters.selectedColors.length > 0) {
+        if (filters.selectedColors.length === 1 || filters.colorMode === 'and') {
+          query = query.contains('color_identity', filters.selectedColors)
         } else {
-          query = query.overlaps('color_identity', selectedColors)
+          query = query.overlaps('color_identity', filters.selectedColors)
         }
       }
 
-      if (commanderIdentity.length > 0) {
-        query = query.containedBy('color_identity', commanderIdentity)
+      if (filters.commanderIdentity.length > 0) {
+        query = query.containedBy('color_identity', filters.commanderIdentity)
       }
 
-      if (showLikedOnly) {
-        // Empty-set shortcut: no likes → no rows. Using a guaranteed-empty
-        // id value avoids sending an invalid `.in('id', [])` to PostgREST.
-        // Cast: cards.id is uuid at runtime; the TS types claim number.
-        const ids = likedIds.size > 0 ? Array.from(likedIds) : ['00000000-0000-0000-0000-000000000000']
+      if (filters.showLikedOnly) {
+        const ids = filters.likedIds.size > 0 ? Array.from(filters.likedIds) : ['00000000-0000-0000-0000-000000000000']
         query = query.in('id', ids as unknown as number[])
       }
 
-      if (selectedTypes.length === 1) {
-        query = query.ilike('type_line', `%${selectedTypes[0]}%`)
-      } else if (selectedTypes.length > 1) {
-        if (typeMode === 'and') {
-          // AND: each type must appear in type_line (e.g. "Artifact Creature")
-          for (const t of selectedTypes) {
+      if (filters.selectedTypes.length === 1) {
+        query = query.ilike('type_line', `%${filters.selectedTypes[0]}%`)
+      } else if (filters.selectedTypes.length > 1) {
+        if (filters.typeMode === 'and') {
+          for (const t of filters.selectedTypes) {
             query = query.ilike('type_line', `%${t}%`)
           }
         } else {
-          // OR: any of the types
-          query = query.or(selectedTypes.map(t => `type_line.ilike.%${t}%`).join(','))
+          query = query.or(filters.selectedTypes.map(t => `type_line.ilike.%${t}%`).join(','))
         }
       }
 
-      if (selectedRarity) query = query.eq('rarity', selectedRarity)
-      if (cmcMin !== '') query = query.gte('cmc', Number(cmcMin))
-      if (cmcMax !== '') query = query.lte('cmc', Number(cmcMax))
-      if (selectedSet) query = query.eq('set_code', selectedSet)
+      if (filters.selectedRarity) query = query.eq('rarity', filters.selectedRarity)
+      if (filters.cmcMin !== '') query = query.gte('cmc', Number(filters.cmcMin))
+      if (filters.cmcMax !== '') query = query.lte('cmc', Number(filters.cmcMax))
+      if (filters.selectedSet) query = query.eq('set_code', filters.selectedSet)
 
-      if (debouncedCreatureType.trim()) {
-        query = query.ilike('type_line', `%${debouncedCreatureType.trim()}%`)
+      if (filters.debouncedCreatureType.trim()) {
+        query = query.ilike('type_line', `%${filters.debouncedCreatureType.trim()}%`)
       }
 
-      if (debouncedKeyword.trim()) {
-        // % is the SQL LIKE wildcard. The pattern is implicitly wrapped:
-        // "creature%less to cast" → "%creature%less to cast%"
-        // Escape only _ (single-char wildcard) since % is intentional.
-        const pattern = debouncedKeyword.trim()
+      if (filters.debouncedKeyword.trim()) {
+        const pattern = filters.debouncedKeyword.trim()
           .replace(/_/g, '\\_')
         query = query.ilike('oracle_text', `%${pattern}%`)
       }
 
       return query
     },
-    [supabase, isDefaultSort, debouncedSearch, searchLang, selectedColors, colorMode, commanderIdentity, selectedTypes, typeMode, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy]
+    [supabase, isDefaultSort, debouncedSearch, searchLang]
   )
 
   useEffect(() => {
