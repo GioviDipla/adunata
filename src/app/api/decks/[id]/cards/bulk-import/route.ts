@@ -454,12 +454,13 @@ export async function POST(
       }
     }
 
-    // Updates must be one-by-one (Supabase has no batch update by id)
-    for (const u of updates) {
-      const { error: updateErr } = await supabase
-        .from('deck_cards')
-        .update({ quantity: u.quantity })
-        .eq('id', u.id)
+    // Batch update quantities via RPC
+    if (updates.length > 0) {
+      const admin = await createAdminClient()
+      const { error: updateErr } = await admin.rpc(
+        'batch_update_deck_card_quantities',
+        { p_updates: updates },
+      )
       if (updateErr) {
         return NextResponse.json({ error: updateErr.message }, { status: 500 })
       }

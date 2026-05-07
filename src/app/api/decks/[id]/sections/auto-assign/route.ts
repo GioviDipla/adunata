@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { categorize } from '@/lib/deck/categorize'
 
 interface DeckCardWithCard {
@@ -107,14 +108,17 @@ export async function POST(
       skipped++
       continue
     }
-    const { error } = await supabase
-      .from('deck_cards')
-      .update({ section_id: targetSectionId })
-      .eq('id', dc.id)
-    if (error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
     assigned++
     updates.push({ id: dc.id, section_id: targetSectionId })
+  }
+
+  if (updates.length > 0) {
+    const admin = await createAdminClient()
+    const { error } = await admin.rpc('batch_update_deck_card_sections', {
+      p_updates: updates,
+    })
+    if (error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   revalidatePath(`/decks/${deckId}`)

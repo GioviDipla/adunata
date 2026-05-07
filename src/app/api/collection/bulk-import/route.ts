@@ -118,48 +118,73 @@ export async function POST(req: Request) {
     return cardByLowerName.get(nameKey(row.name)) ?? null
   }
 
-  // --- 3. Upsert into `user_cards`, merging on
+  // --- 3. Batch upsert into `user_cards`, merging on
   // (user, card, foil, language, condition).
-  let inserted = 0
+  const resolved: Array<{ row: CollectionImportRow; card: CardRow }> = []
   let skipped = 0
   for (const r of rows) {
     const card = resolve(r)
-    if (!card) {
-      skipped++
-      continue
-    }
-    const { data: existing } = await supabase
+    if (!card) { skipped++; continue }
+    resolved.push({ row: r, card })
+  }
+
+  // Batch-check existing rows in a single query
+  const allCardIds = resolved.map((r) => r.card.id)
+  const existingMap = new Map<string, { id: string; quantity: number }>()
+  if (allCardIds.length > 0) {
+    const { data: existingRows } = await supabase
       .from('user_cards')
-      .select('id, quantity')
+      .select('id, card_id, quantity, foil, language, condition')
       .eq('user_id', user.id)
-      .eq('card_id', card.id)
-      .eq('foil', r.foil)
-      .eq('language', r.language)
-      .eq('condition', r.condition)
-      .maybeSingle()
+      .in('card_id', allCardIds)
+    for (const ex of existingRows ?? []) {
+      const key = `${ex.card_id}|${ex.foil}|${ex.language}|${ex.condition}`
+      existingMap.set(key, { id: ex.id, quantity: ex.quantity })
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toInsert: Array<any> = []
+  const toUpdate: Array<{ id: string; quantity: number }> = []
+
+  for (const { row, card } of resolved) {
+    const key = `${card.id}|${row.foil}|${row.language}|${row.condition}`
+    const existing = existingMap.get(key)
     if (existing) {
-      const { error: upErr } = await supabase
-        .from('user_cards')
-        .update({ quantity: existing.quantity + r.quantity })
-        .eq('id', existing.id)
-      if (upErr) {
-        return NextResponse.json({ error: upErr.message }, { status: 500 })
-      }
+      toUpdate.push({ id: existing.id, quantity: existing.quantity + row.quantity })
     } else {
-      const { error: insErr } = await supabase.from('user_cards').insert({
+      toInsert.push({
         user_id: user.id,
         card_id: card.id,
-        quantity: r.quantity,
-        foil: r.foil,
-        language: r.language,
-        condition: r.condition,
+        quantity: row.quantity,
+        foil: row.foil,
+        language: row.language,
+        condition: row.condition,
       })
-      if (insErr) {
-        return NextResponse.json({ error: insErr.message }, { status: 500 })
-      }
     }
-    inserted++
   }
+
+  // Batch insert
+  if (toInsert.length > 0) {
+    const { error: insErr } = await supabase.from('user_cards').insert(toInsert)
+    if (insErr) {
+      return NextResponse.json({ error: insErr.message }, { status: 500 })
+    }
+  }
+
+  // Batch update quantities via RPC
+  if (toUpdate.length > 0) {
+    const adminForUpdate = createAdminClient()
+    const { error: upErr } = await adminForUpdate.rpc(
+      'batch_update_user_cards_quantity',
+      { p_updates: toUpdate },
+    )
+    if (upErr) {
+      return NextResponse.json({ error: upErr.message }, { status: 500 })
+    }
+  }
+
+  const inserted = toInsert.length + toUpdate.length
 
   revalidatePath('/collection')
   return NextResponse.json({

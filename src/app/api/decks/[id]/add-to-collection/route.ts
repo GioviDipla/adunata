@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 interface DeckCardLite {
   card_id: number
@@ -48,27 +49,31 @@ export async function POST(
     else aggregated.set(key, { card_id: dc.card_id, foil: !!dc.is_foil, quantity: dc.quantity })
   }
 
-  let inserted = 0
-  let skipped = 0
-  for (const row of aggregated.values()) {
-    const { data: existing } = await supabase
-      .from('user_cards')
-      .select('id, quantity')
-      .eq('user_id', user.id)
-      .eq('card_id', row.card_id)
-      .eq('foil', row.foil)
-      .eq('language', 'en')
-      .eq('condition', 'NM')
-      .maybeSingle()
+  // Batch-check existing rows
+  const rows = Array.from(aggregated.values())
+  const cardIds = rows.map((r) => r.card_id)
+  const existingMap = new Map<string, { id: string; quantity: number }>()
+  const { data: existingRows } = await supabase
+    .from('user_cards')
+    .select('id, card_id, quantity, foil')
+    .eq('user_id', user.id)
+    .in('card_id', cardIds)
+  for (const ex of existingRows ?? []) {
+    const key = `${ex.card_id}::${ex.foil ? 1 : 0}`
+    existingMap.set(key, { id: ex.id, quantity: ex.quantity })
+  }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toInsert: Array<any> = []
+  const toUpdate: Array<{ id: string; quantity: number }> = []
+
+  for (const row of rows) {
+    const key = `${row.card_id}::${row.foil ? 1 : 0}`
+    const existing = existingMap.get(key)
     if (existing) {
-      const { error } = await supabase
-        .from('user_cards')
-        .update({ quantity: existing.quantity + row.quantity })
-        .eq('id', existing.id)
-      if (error) { skipped++; continue }
+      toUpdate.push({ id: existing.id, quantity: existing.quantity + row.quantity })
     } else {
-      const { error } = await supabase.from('user_cards').insert({
+      toInsert.push({
         user_id: user.id,
         card_id: row.card_id,
         quantity: row.quantity,
@@ -76,10 +81,25 @@ export async function POST(
         language: 'en',
         condition: 'NM',
       })
-      if (error) { skipped++; continue }
     }
-    inserted += row.quantity
   }
+
+  if (toInsert.length > 0) {
+    const { error: insErr } = await supabase.from('user_cards').insert(toInsert)
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+  }
+
+  let skipped = 0
+  if (toUpdate.length > 0) {
+    const admin = await createAdminClient()
+    const { error: upErr } = await admin.rpc(
+      'batch_update_user_cards_quantity',
+      { p_updates: toUpdate },
+    )
+    if (upErr) { skipped = toUpdate.length }
+  }
+
+  const inserted = rows.reduce((sum, r) => sum + r.quantity, 0) - skipped
 
   revalidatePath('/collection')
   return NextResponse.json({

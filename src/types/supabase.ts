@@ -798,6 +798,18 @@ export interface Database {
         }
         Returns: Json
       }
+      batch_update_deck_card_sections: {
+        Args: { p_updates: Json }
+        Returns: void
+      }
+      batch_update_user_cards_quantity: {
+        Args: { p_updates: Json }
+        Returns: void
+      }
+      batch_update_deck_card_quantities: {
+        Args: { p_updates: Json }
+        Returns: void
+      }
     }
     Enums: {
       [_ in never]: never
