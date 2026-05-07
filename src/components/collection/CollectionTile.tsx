@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import { formatPreferredPrice } from '@/lib/utils/price'
 import ManaCost from '@/components/cards/ManaCost'
@@ -10,8 +9,6 @@ import type { CollectionItem, CollectionCard } from './CollectionView'
 
 interface Props {
   item: CollectionItem
-  onQuantity: (id: string, nextQty: number) => void
-  onRemove: (id: string) => void
   /** Tap → context menu (Add to deck / Like / Share). Mirrors CardItem. */
   onContextAction?: (card: CollectionCard, x: number, y: number) => void
   /** Long-press / right-click / double-click → CardDetail modal. */
@@ -26,13 +23,10 @@ interface Props {
  */
 export default function CollectionTile({
   item,
-  onQuantity,
-  onRemove,
   onContextAction,
   onSelectCard,
   liked,
 }: Props) {
-  const [busy, setBusy] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -56,18 +50,6 @@ export default function CollectionTile({
       if (onSelectCard) onSelectCard(item.card)
     },
   })
-
-  async function delta(step: number) {
-    const next = Math.max(0, item.quantity + step)
-    if (next === item.quantity) return
-    setBusy(true)
-    try {
-      if (next === 0) await onRemove(item.id)
-      else await onQuantity(item.id, next)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const price = formatPreferredPrice(item.card)
 
@@ -157,49 +139,6 @@ export default function CollectionTile({
           )}
         </div>
 
-        {/* Remove — top-right, slid down so it doesn't collide with the price.
-            Only visible on hover (group-hover). */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove(item.id)
-          }}
-          disabled={busy}
-          className="absolute right-1.5 top-9 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-font-secondary opacity-0 backdrop-blur-sm transition-opacity hover:text-bg-red group-hover:opacity-100 disabled:opacity-40"
-          aria-label="Remove from collection"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
-
-        {/* +/- bar — bottom. stopPropagation so it doesn't trigger the
-            tile's gesture handlers. */}
-        <div
-          className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between gap-1 rounded-md bg-black/70 px-1.5 py-1 text-font-primary opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
-          onClick={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-          onContextMenu={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={() => delta(-1)}
-            disabled={busy}
-            className="flex h-5 w-5 items-center justify-center rounded bg-bg-cell/80 transition-colors hover:bg-bg-hover disabled:opacity-40"
-            aria-label="Decrease quantity"
-          >
-            <Minus className="h-2.5 w-2.5" />
-          </button>
-          <span className="text-[11px] tabular-nums">{item.quantity}</span>
-          <button
-            type="button"
-            onClick={() => delta(1)}
-            disabled={busy}
-            className="flex h-5 w-5 items-center justify-center rounded bg-bg-cell/80 transition-colors hover:bg-bg-hover disabled:opacity-40"
-            aria-label="Increase quantity"
-          >
-            <Plus className="h-2.5 w-2.5" />
-          </button>
-        </div>
       </div>
 
       {/* Card info — name + mana cost row + type, like CardItem */}

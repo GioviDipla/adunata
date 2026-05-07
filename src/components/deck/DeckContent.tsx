@@ -170,9 +170,15 @@ export default function DeckContent({
   )
   // Re-sync when the section list changes identity (e.g. preset apply).
   useEffect(() => {
-    setCollapsedSections(
-      new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
-    )
+    const next = new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id))
+    queueMicrotask(() => {
+      setCollapsedSections((prev) => {
+        if (prev.size === next.size && [...prev].every((id) => next.has(id))) {
+          return prev
+        }
+        return next
+      })
+    })
   }, [sections])
 
   const toggleSectionCollapsed = useCallback(

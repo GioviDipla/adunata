@@ -254,27 +254,6 @@ export default function DeckGridView({
                       +
                     </button>
                   )}
-                  {onRemove && (
-                    <button
-                      onClick={() => onRemove(entry.card.id, entry.board)}
-                      className="flex h-6 flex-1 items-center justify-center rounded bg-bg-red/30 text-xs font-medium text-bg-red hover:bg-bg-red/50"
-                    >
-                      Del
-                    </button>
-                  )}
-                  {onToggleCommander && (
-                    <button
-                      onClick={() => onToggleCommander(entry.card.id, entry.board)}
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded ${
-                        commander
-                          ? 'bg-bg-yellow/30 text-bg-yellow'
-                          : 'bg-bg-cell/80 text-font-muted hover:text-bg-yellow'
-                      }`}
-                      title={commander ? 'Remove Commander' : 'Set as Commander'}
-                    >
-                      <Crown className="h-3 w-3" />
-                    </button>
-                  )}
                 </div>
               </div>
             )}

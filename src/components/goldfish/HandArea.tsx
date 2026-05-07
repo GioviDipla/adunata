@@ -1,5 +1,8 @@
 'use client'
 
+/* eslint-disable react-hooks/refs -- @dnd-kit exposes setNodeRef, listeners,
+   attributes, transform, and isDragging as render-time hook output. */
+
 import { useCallback } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'

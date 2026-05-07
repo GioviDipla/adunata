@@ -103,9 +103,10 @@ export default function CardZoneViewer({
   const [filter, setFilter] = useState<string>('All')
 
   const filteredCards = useMemo(() => {
+    if (!groupByType) return cards
     if (filter === 'All') return cards
     return cards.filter((e) => getCardTypeCategory(e.card.type_line) === filter)
-  }, [cards, filter])
+  }, [cards, filter, groupByType])
 
   const activeFilters = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -148,7 +149,7 @@ export default function CardZoneViewer({
         {/* Scrollable area: sticky filters + card list */}
         <div className="isolate flex-1 overflow-y-auto">
           {/* Type filters — sticky within scroll container */}
-          {cards.length > 0 && (
+          {groupByType && cards.length > 0 && (
             <div className="sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-border bg-bg-surface px-3 py-2 shadow-sm">
               {TYPE_FILTERS.map((f) => {
                 const count = f === 'All' ? cards.length : (activeFilters[f] || 0)

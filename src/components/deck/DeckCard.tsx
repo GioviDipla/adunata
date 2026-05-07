@@ -2,7 +2,7 @@
 
 import { memo, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
-import { Crown, Minus, Plus, RotateCcw, X } from 'lucide-react'
+import { Minus, Plus, RotateCcw } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
@@ -279,22 +279,6 @@ function DeckCardImpl({
         </div>
       )}
 
-      {/* Commander toggle button */}
-      {onToggleCommander && (
-        <button
-          onClick={() => onToggleCommander(card.id, board)}
-          className={`flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded transition-all shrink-0 ${
-            isCommander
-              ? 'text-bg-yellow hover:bg-bg-yellow/20'
-              : 'text-font-muted opacity-0 hover:bg-bg-yellow/20 hover:text-bg-yellow group-hover:opacity-100'
-          }`}
-          aria-label={isCommander ? 'Remove Commander' : 'Set as Commander'}
-          title={isCommander ? 'Remove Commander' : 'Set as Commander'}
-        >
-          <Crown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-        </button>
-      )}
-
       {/* Restore button — only on the Removed board, when editing is wired */}
       {board === 'removed' && onMoveToBoard && (
         <button
@@ -305,17 +289,6 @@ function DeckCardImpl({
         >
           <RotateCcw className="h-3 w-3" />
           <span className="hidden sm:inline">Restore</span>
-        </button>
-      )}
-
-      {/* Remove button */}
-      {onRemove && (
-        <button
-          onClick={() => onRemove(card.id, board)}
-          className="flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded text-font-muted opacity-0 transition-all hover:bg-bg-red/20 hover:text-bg-red group-hover:opacity-100"
-          aria-label="Remove card"
-        >
-          <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
         </button>
       )}
 

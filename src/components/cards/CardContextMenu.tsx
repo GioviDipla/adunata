@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Heart, Share2, Loader2, Check, ChevronLeft } from 'lucide-react'
+import { Plus, Heart, Share2, Loader2, Check, ChevronLeft, Minus, Trash2 } from 'lucide-react'
 
 interface DeckSummary {
   id: string
@@ -19,6 +19,9 @@ interface CardContextMenuProps {
   liked: boolean
   userDecks: DeckSummary[]
   onToggleLike: () => Promise<void> | void
+  quantity?: number
+  onQuantityChange?: (nextQty: number) => Promise<void> | void
+  onRemove?: () => Promise<void> | void
   onClose: () => void
 }
 
@@ -39,6 +42,9 @@ export default function CardContextMenu({
   liked,
   userDecks,
   onToggleLike,
+  quantity,
+  onQuantityChange,
+  onRemove,
   onClose,
 }: CardContextMenuProps) {
   const ref = useRef<HTMLDivElement | null>(null)
@@ -47,6 +53,8 @@ export default function CardContextMenu({
   const [mode, setMode] = useState<'menu' | 'decks'>('menu')
   const [addingToDeckId, setAddingToDeckId] = useState<string | null>(null)
   const [addedToDeckId, setAddedToDeckId] = useState<string | null>(null)
+  const [quantityBusy, setQuantityBusy] = useState(false)
+  const [removeBusy, setRemoveBusy] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -80,7 +88,8 @@ export default function CardContextMenu({
   // Clamp position so the menu fits inside the viewport. The deck picker
   // reserves more vertical space so long deck lists don't get clipped.
   const MENU_W = 240
-  const MENU_H = mode === 'decks' ? 280 : 160
+  const hasCollectionActions = quantity != null && (onQuantityChange != null || onRemove != null)
+  const MENU_H = mode === 'decks' ? 280 : hasCollectionActions ? 260 : 160
   const pad = 8
   const viewW = typeof window !== 'undefined' ? window.innerWidth : 0
   const viewH = typeof window !== 'undefined' ? window.innerHeight : 0
@@ -94,6 +103,33 @@ export default function CardContextMenu({
       await onToggleLike()
     } finally {
       setLikeBusy(false)
+    }
+  }
+
+  const updateQuantity = async (nextQty: number) => {
+    if (!onQuantityChange || quantityBusy) return
+    const clamped = Math.max(0, nextQty)
+    setQuantityBusy(true)
+    try {
+      if (clamped === 0 && onRemove) {
+        await onRemove()
+        onClose()
+      } else {
+        await onQuantityChange(clamped)
+      }
+    } finally {
+      setQuantityBusy(false)
+    }
+  }
+
+  const removeFromCollection = async () => {
+    if (!onRemove || removeBusy) return
+    setRemoveBusy(true)
+    try {
+      await onRemove()
+      onClose()
+    } finally {
+      setRemoveBusy(false)
     }
   }
 
@@ -177,6 +213,42 @@ export default function CardContextMenu({
       >
         {mode === 'menu' && (
           <>
+            {hasCollectionActions && (
+              <>
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-font-muted">
+                  Copies
+                </div>
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => updateQuantity((quantity ?? 0) - 1)}
+                    disabled={!onQuantityChange || quantityBusy}
+                    aria-label="Decrease copies"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary active:bg-bg-hover disabled:opacity-40"
+                  >
+                    {quantityBusy
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Minus className="h-3.5 w-3.5" />}
+                  </button>
+                  <span className="min-w-[2rem] text-center text-base font-semibold tabular-nums text-font-primary">
+                    {quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => updateQuantity((quantity ?? 0) + 1)}
+                    disabled={!onQuantityChange || quantityBusy}
+                    aria-label="Increase copies"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary active:bg-bg-hover disabled:opacity-40"
+                  >
+                    {quantityBusy
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Plus className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                <div className="mx-2 my-1 border-t border-border" />
+              </>
+            )}
+
             <button
               type="button"
               onClick={() => setMode('decks')}
@@ -211,6 +283,23 @@ export default function CardContextMenu({
                 : <Share2 size={18} className="shrink-0 text-font-muted" />}
               {shareFeedback === 'copied' ? 'Link copied' : 'Share'}
             </button>
+
+            {onRemove && (
+              <>
+                <div className="mx-2 my-1 border-t border-border" />
+                <button
+                  type="button"
+                  onClick={removeFromCollection}
+                  disabled={removeBusy}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-bg-red transition-colors hover:bg-bg-red/10 active:bg-bg-red/10 disabled:opacity-60"
+                >
+                  {removeBusy
+                    ? <Loader2 size={18} className="shrink-0 animate-spin" />
+                    : <Trash2 size={18} className="shrink-0" />}
+                  Remove from Collection
+                </button>
+              </>
+            )}
           </>
         )}
 

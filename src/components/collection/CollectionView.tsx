@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -19,6 +20,12 @@ import {
   Loader2,
   Search,
   ArrowUpDown,
+  Gem,
+  Layers3,
+  Palette,
+  Package,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react'
 import CollectionTile from './CollectionTile'
 import CardContextMenu from '@/components/cards/CardContextMenu'
@@ -149,7 +156,7 @@ export default function CollectionView({
 
   // Detail modal + context menu state — mirrors CardBrowser.
   const [selectedCard, setSelectedCard] = useState<FullCard | null>(null)
-  const [contextMenu, setContextMenu] = useState<{ card: CollectionCard; x: number; y: number } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ item: CollectionItem; x: number; y: number } | null>(null)
   const [likedIds, setLikedIds] = useState<Set<string>>(() => new Set(initialLikedIds))
 
   // ---- Filters (same primitive set as CardBrowser).
@@ -367,8 +374,13 @@ export default function CollectionView({
   // ---- Stats from full dataset.
   const stats = useMemo(() => {
     let totalCards = 0
+    let foilCards = 0
     let totalEur = 0
     let totalUsd = 0
+    let cmcWeighted = 0
+    let pricedCards = 0
+    let premiumCards = 0
+    let topCard: { name: string; eur: number; quantity: number } | null = null
     const bySet = new Map<string, { count: number; eur: number; usd: number }>()
     const byType = new Map<string, number>()
     const byRarity = new Map<string, number>()
@@ -376,10 +388,17 @@ export default function CollectionView({
     for (const it of items) {
       const qty = it.quantity
       totalCards += qty
+      if (it.foil) foilCards += qty
       const eur = (it.card.prices_eur ?? 0) * qty
       const usd = (it.card.prices_usd ?? 0) * qty
       totalEur += eur
       totalUsd += usd
+      cmcWeighted += (it.card.cmc ?? 0) * qty
+      if (it.card.prices_eur != null || it.card.prices_usd != null) pricedCards += qty
+      if (it.card.rarity === 'rare' || it.card.rarity === 'mythic') premiumCards += qty
+      if (eur > 0 && (!topCard || eur > topCard.eur)) {
+        topCard = { name: it.card.name, eur, quantity: qty }
+      }
       const setCode = it.card.set_code ?? '—'
       const setRow = bySet.get(setCode) ?? { count: 0, eur: 0, usd: 0 }
       setRow.count += qty
@@ -390,15 +409,30 @@ export default function CollectionView({
       byType.set(cat, (byType.get(cat) ?? 0) + qty)
       const rarity = it.card.rarity ?? 'unknown'
       byRarity.set(rarity, (byRarity.get(rarity) ?? 0) + qty)
-      for (const col of it.card.color_identity ?? []) {
+      const colors = it.card.color_identity ?? []
+      if (colors.length === 0) {
+        byColor.set('C', (byColor.get('C') ?? 0) + qty)
+      }
+      for (const col of colors) {
         byColor.set(col, (byColor.get(col) ?? 0) + qty)
       }
     }
+    const sortedSets = Array.from(bySet.entries()).sort((a, b) => b[1].count - a[1].count)
+    const valueBySet = [...sortedSets].sort((a, b) => b[1].eur - a[1].eur)
     return {
       totalCards,
+      uniqueCards: items.length,
+      foilCards,
       totalEur,
       totalUsd,
-      bySet: Array.from(bySet.entries()).sort((a, b) => b[1].count - a[1].count),
+      avgEur: totalCards > 0 ? totalEur / totalCards : 0,
+      avgCmc: totalCards > 0 ? cmcWeighted / totalCards : 0,
+      pricedCoverage: totalCards > 0 ? (pricedCards / totalCards) * 100 : 0,
+      premiumCards,
+      topSet: sortedSets[0] ?? null,
+      topValueSet: valueBySet[0] ?? null,
+      topCard,
+      bySet: sortedSets,
       byType: Array.from(byType.entries()).sort((a, b) => b[1] - a[1]),
       byRarity: Array.from(byRarity.entries()).sort((a, b) => b[1] - a[1]),
       byColor: Array.from(byColor.entries()).sort((a, b) => b[1] - a[1]),
@@ -448,8 +482,8 @@ export default function CollectionView({
   // Tap on a tile → context menu (Add to Deck / Like / Share). Mirrors
   // CardBrowser's `handleContextAction`.
   const handleContextAction = useCallback(
-    (card: CollectionCard, x: number, y: number) => {
-      setContextMenu({ card, x, y })
+    (item: CollectionItem, x: number, y: number) => {
+      setContextMenu({ item, x, y })
     },
     [],
   )
@@ -1052,9 +1086,7 @@ export default function CollectionView({
             itemContent={(_, item) => (
               <CollectionTile
                 item={item}
-                onQuantity={handleQuantity}
-                onRemove={handleRemove}
-                onContextAction={handleContextAction}
+                onContextAction={(card, x, y) => handleContextAction(item, x, y)}
                 onSelectCard={handleSelectCard}
                 liked={likedIds.has(String(item.card.id))}
               />
@@ -1082,18 +1114,28 @@ export default function CollectionView({
 
       {contextMenu && (
         <CardContextMenu
-          cardId={contextMenu.card.id}
-          cardName={contextMenu.card.name}
+          cardId={contextMenu.item.card.id}
+          cardName={contextMenu.item.card.name}
           shareUrl={
             typeof window !== 'undefined'
-              ? `${window.location.origin}/cards?open=${contextMenu.card.id}`
-              : `/cards?open=${contextMenu.card.id}`
+              ? `${window.location.origin}/cards?open=${contextMenu.item.card.id}`
+              : `/cards?open=${contextMenu.item.card.id}`
           }
           x={contextMenu.x}
           y={contextMenu.y}
-          liked={likedIds.has(String(contextMenu.card.id))}
+          liked={likedIds.has(String(contextMenu.item.card.id))}
           userDecks={userDecks}
-          onToggleLike={() => toggleLike(contextMenu.card)}
+          onToggleLike={() => toggleLike(contextMenu.item.card)}
+          quantity={contextMenu.item.quantity}
+          onQuantityChange={async (nextQty) => {
+            await handleQuantity(contextMenu.item.id, nextQty)
+            setContextMenu((prev) =>
+              prev && prev.item.id === contextMenu.item.id
+                ? { ...prev, item: { ...prev.item, quantity: nextQty } }
+                : prev,
+            )
+          }}
+          onRemove={() => handleRemove(contextMenu.item.id)}
           onClose={() => setContextMenu(null)}
         />
       )}
@@ -1141,8 +1183,17 @@ function StatsPanel({
 }: {
   stats: {
     totalCards: number
+    uniqueCards: number
+    foilCards: number
     totalEur: number
     totalUsd: number
+    avgEur: number
+    avgCmc: number
+    pricedCoverage: number
+    premiumCards: number
+    topSet: [string, { count: number; eur: number; usd: number }] | null
+    topValueSet: [string, { count: number; eur: number; usd: number }] | null
+    topCard: { name: string; eur: number; quantity: number } | null
     bySet: [string, { count: number; eur: number; usd: number }][]
     byType: [string, number][]
     byRarity: [string, number][]
@@ -1150,46 +1201,98 @@ function StatsPanel({
   }
   loading: boolean
 }) {
+  const rareShare = stats.totalCards > 0 ? Math.round((stats.premiumCards / stats.totalCards) * 100) : 0
+  const foilShare = stats.totalCards > 0 ? Math.round((stats.foilCards / stats.totalCards) * 100) : 0
+
   return (
-    <section className="rounded-xl border border-border bg-bg-surface p-3 sm:p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-font-primary">
-          Statistiche collezione
-        </h2>
+    <section className="overflow-hidden rounded-xl border border-border bg-bg-surface">
+      <div className="border-b border-border bg-bg-card px-3 py-3 sm:px-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-font-primary">
+              <BarChart3 className="h-4 w-4 text-font-accent" />
+              Statistiche collezione
+            </h2>
+            <p className="mt-0.5 text-[11px] text-font-muted">
+              Valore, composizione e concentrazione della tua raccolta.
+            </p>
+          </div>
         {loading && (
           <span className="inline-flex items-center gap-1 text-[11px] text-font-muted">
             <Loader2 className="h-3 w-3 animate-spin" />
             Calcolo su intero dataset…
           </span>
         )}
+        </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-3 gap-2">
-        <Tile label="Carte" value={stats.totalCards.toString()} />
+      <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-4">
         <Tile
-          label="Valore Cardmarket"
+          icon={<Layers3 className="h-4 w-4" />}
+          label="Carte totali"
+          value={stats.totalCards.toLocaleString('it-IT')}
+          detail={`${stats.uniqueCards.toLocaleString('it-IT')} uniche`}
+        />
+        <Tile
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Valore stimato"
           value={`€${stats.totalEur.toFixed(2)}`}
+          detail={`media €${stats.avgEur.toFixed(2)} / carta`}
           accent="text-bg-green"
         />
         <Tile
-          label="Valore TCGPlayer"
-          value={`$${stats.totalUsd.toFixed(2)}`}
+          icon={<Gem className="h-4 w-4" />}
+          label="Rare e mitiche"
+          value={`${stats.premiumCards.toLocaleString('it-IT')}`}
+          detail={`${rareShare}% della collezione`}
+          accent="text-bg-yellow"
+        />
+        <Tile
+          icon={<Sparkles className="h-4 w-4" />}
+          label="Foil"
+          value={stats.foilCards.toLocaleString('it-IT')}
+          detail={`${foilShare}% foil`}
           accent="text-font-accent"
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Breakdown title="Per tipo" rows={stats.byType} />
-        <Breakdown title="Per rarità" rows={stats.byRarity} />
-        <Breakdown title="Per identità di colore" rows={stats.byColor} />
+      <div className="grid gap-3 px-3 pb-3 sm:grid-cols-3 sm:px-4 sm:pb-4">
+        <Insight
+          label="Top espansione"
+          value={stats.topSet ? stats.topSet[0].toUpperCase() : '—'}
+          detail={stats.topSet ? `${stats.topSet[1].count} carte` : 'Nessun dato'}
+        />
+        <Insight
+          label="Set più prezioso"
+          value={stats.topValueSet ? stats.topValueSet[0].toUpperCase() : '—'}
+          detail={stats.topValueSet ? `€${stats.topValueSet[1].eur.toFixed(2)}` : 'Nessun dato'}
+        />
+        <Insight
+          label="Carta più pesante"
+          value={stats.topCard?.name ?? '—'}
+          detail={stats.topCard ? `${stats.topCard.quantity}x · €${stats.topCard.eur.toFixed(2)}` : 'Nessun prezzo'}
+        />
+      </div>
+
+      <div className="grid gap-3 px-3 pb-3 sm:grid-cols-2 sm:px-4 sm:pb-4">
+        <Breakdown title="Tipi" rows={stats.byType} icon={<Package className="h-3.5 w-3.5" />} />
+        <Breakdown title="Rarità" rows={stats.byRarity} icon={<Gem className="h-3.5 w-3.5" />} />
+        <Breakdown title="Color identity" rows={stats.byColor} icon={<Palette className="h-3.5 w-3.5" />} colorRows />
         <Breakdown
-          title="Per espansione"
+          title="Espansioni"
           rows={stats.bySet.map(([code, v]) => [
             `${code.toUpperCase()} · €${v.eur.toFixed(2)}`,
             v.count,
           ])}
+          icon={<BarChart3 className="h-3.5 w-3.5" />}
           maxRows={20}
         />
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border px-3 py-2 text-[11px] text-font-muted sm:px-4">
+        <span>TCGPlayer fallback: ${stats.totalUsd.toFixed(2)}</span>
+        <span>CMC medio: {stats.avgCmc.toFixed(2)}</span>
+        <span>Copertura prezzi: {Math.round(stats.pricedCoverage)}%</span>
       </div>
     </section>
   )
@@ -1198,20 +1301,50 @@ function StatsPanel({
 function Tile({
   label,
   value,
+  detail,
+  icon,
   accent,
 }: {
   label: string
   value: string
+  detail: string
+  icon: ReactNode
   accent?: string
 }) {
   return (
-    <div className="rounded-lg bg-bg-cell px-3 py-2">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-font-muted">
-        {label}
+    <div className="rounded-lg border border-border bg-bg-cell/60 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-font-muted">
+          {label}
+        </div>
+        <span className="text-font-muted">{icon}</span>
       </div>
-      <div className={`text-base font-bold ${accent ?? 'text-font-primary'}`}>
+      <div className={`text-xl font-bold tabular-nums ${accent ?? 'text-font-primary'}`}>
         {value}
       </div>
+      <div className="mt-1 truncate text-[11px] text-font-muted">{detail}</div>
+    </div>
+  )
+}
+
+function Insight({
+  label,
+  value,
+  detail,
+}: {
+  label: string
+  value: string
+  detail: string
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-bg-card px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-font-muted">
+        {label}
+      </div>
+      <div className="mt-1 truncate text-sm font-semibold text-font-primary" title={value}>
+        {value}
+      </div>
+      <div className="mt-0.5 text-[11px] text-font-muted">{detail}</div>
     </div>
   )
 }
@@ -1219,36 +1352,44 @@ function Tile({
 function Breakdown({
   title,
   rows,
+  icon,
   maxRows = 10,
+  colorRows = false,
 }: {
   title: string
   rows: [string, number][]
+  icon: ReactNode
   maxRows?: number
+  colorRows?: boolean
 }) {
   const total = rows.reduce((s, [, n]) => s + n, 0) || 1
   const visible = rows.slice(0, maxRows)
   return (
-    <div className="rounded-lg bg-bg-cell/50 p-2">
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-font-muted">
+    <div className="rounded-lg border border-border bg-bg-cell/40 p-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-font-muted">
+        {icon}
         {title}
       </div>
       {visible.length === 0 ? (
         <p className="text-[11px] text-font-muted">Nessun dato</p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {visible.map(([k, n]) => {
             const pct = (n / total) * 100
             return (
               <li key={k} className="flex items-center gap-2 text-[11px]">
-                <span className="w-28 truncate text-font-secondary">{k}</span>
-                <div className="relative h-1.5 flex-1 overflow-hidden rounded bg-bg-dark">
+                <span className="flex w-28 items-center gap-1.5 truncate text-font-secondary">
+                  {colorRows && <ColorDot code={k} />}
+                  <span className="truncate">{labelForStat(k)}</span>
+                </span>
+                <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-bg-dark">
                   <div
-                    className="absolute inset-y-0 left-0 bg-bg-accent"
+                    className="absolute inset-y-0 left-0 rounded-full bg-bg-accent"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
                 <span className="w-10 text-right font-semibold tabular-nums text-font-primary">
-                  {n}
+                  {Math.round(pct)}%
                 </span>
               </li>
             )
@@ -1261,5 +1402,26 @@ function Breakdown({
         </ul>
       )}
     </div>
+  )
+}
+
+function labelForStat(value: string) {
+  if (value === 'C') return 'Colorless'
+  return value
+}
+
+function ColorDot({ code }: { code: string }) {
+  const color =
+    code === 'W' ? '#F5F0E1'
+    : code === 'U' ? '#0E7FC0'
+    : code === 'B' ? '#3D3229'
+    : code === 'R' ? '#D32029'
+    : code === 'G' ? '#00733E'
+    : '#94A3B8'
+  return (
+    <span
+      className="h-2.5 w-2.5 shrink-0 rounded-full border border-font-white/20"
+      style={{ backgroundColor: color }}
+    />
   )
 }
