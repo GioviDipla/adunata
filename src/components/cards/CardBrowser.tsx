@@ -288,12 +288,11 @@ export default function CardBrowser({
       }
 
       if (debouncedKeyword.trim()) {
-        // * acts as a wildcard (converted to SQL %). Escape literal % and _
-        // that the user might have typed, then turn * into %.
+        // % is the SQL LIKE wildcard. The pattern is implicitly wrapped:
+        // "creature%less to cast" → "%creature%less to cast%"
+        // Escape only _ (single-char wildcard) since % is intentional.
         const pattern = debouncedKeyword.trim()
-          .replace(/%/g, '\\%')
           .replace(/_/g, '\\_')
-          .replace(/\*/g, '%')
         query = query.ilike('oracle_text', `%${pattern}%`)
       }
 
@@ -856,7 +855,7 @@ export default function CardBrowser({
                 Rules Text <span className="text-font-muted">(searches oracle text)</span>
               </label>
               <div className="relative">
-                <input type="text" placeholder='e.g. "draw a card", "deals damage". Use * as wildcard (creature*cast*less to cast)' value={selectedKeyword} onChange={(e) => setSelectedKeyword(e.target.value)}
+                <input type="text" placeholder='e.g. "draw a card", "deals damage". Use % as wildcard (creature%less to cast)' value={selectedKeyword} onChange={(e) => setSelectedKeyword(e.target.value)}
                   className="w-full bg-bg-card border border-border text-font-primary rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-bg-accent placeholder:text-font-muted" />
                 {selectedKeyword && (
                   <button onClick={() => setSelectedKeyword('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-font-muted hover:text-font-primary">
