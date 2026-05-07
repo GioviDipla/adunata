@@ -108,4 +108,27 @@ Nessuno bloccante. Vedi `DECISIONS.md` per il log delle lezioni apprese.
 
 ---
 
+## 2026-05-06 — Mobile DnD + zone redesign + perf (COMPLETATO)
+
+Branch: `claude/distracted-engelbart-8784db` (tracks origin/dev)
+Plan: `docs/superpowers/plans/2026-05-06-mobile-dnd-and-perf.md`
+
+### Implementato
+- [x] Hook `useDndSensors` condiviso (Pointer 12px + Touch delay 220 tolerance 8)
+- [x] Mano scrollabile su mobile (touch-action pan-x)
+- [x] Handle drag visibile su mobile in SidebarCards
+- [x] Drop target su graveyard / exile / library / hand
+- [x] handleDragEnd dispatcha tutti i from→to via createMoveZone
+- [x] ZoneStack widget card-sized 56×78 con preview top card
+- [x] Battlefield cards draggabili out
+- [x] Section right padding asimmetrico
+- [x] Expand/Collapse-all sezioni (PATCH bulk endpoint + toolbar button)
+- [x] CardBrowser loadMore stabilizzato (cardsRef + loadMoreAbortRef)
+- [x] globals.css: drop scrollbar-gutter + body touch-action
+
+### Saltato consapevolmente
+- Drag-out da CardZoneViewer (modal copre drop target — action menu copre la stessa UX)
+- `.fixed.inset-0` selector scoping (alta churn, basso valore)
+- Library top/bottom split-drop (default top sufficiente, bottom via action menu)
+
 <!-- Claude: stato corrente — piattaforma live, iterazione continua -->
