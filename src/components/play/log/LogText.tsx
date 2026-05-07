@@ -35,6 +35,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     prices_usd_foil: null,
     prices_eur: null,
     prices_eur_foil: null,
+    price_sort: null,
     released_at: null,
     legalities: null,
     power: data.power ?? null,

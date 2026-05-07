@@ -11,6 +11,7 @@ import {
   ArrowDown,
   Crown,
   RotateCcw,
+  Copy,
 } from 'lucide-react'
 
 export type ActionMenuZone =
@@ -43,6 +44,8 @@ interface CardActionMenuProps {
   cardName?: string
   onMoveTo: (dest: ActionMenuDest) => void
   onTap?: () => void
+  /** Battlefield only: spawn a token copy of this permanent. */
+  onCopy?: () => void
   onClose: () => void
 }
 
@@ -104,6 +107,7 @@ export default function CardActionMenu({
   cardName,
   onMoveTo,
   onTap,
+  onCopy,
   onClose,
 }: CardActionMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
@@ -146,6 +150,16 @@ export default function CardActionMenu({
       label: tapped ? 'Untap' : 'Tap',
       onClick: () => { onTap(); onClose() },
       color: 'text-blue-300',
+    })
+  }
+
+  if (zone === 'battlefield' && onCopy) {
+    options.push({
+      key: 'copy',
+      icon: Copy,
+      label: 'Copy',
+      onClick: () => { onCopy(); onClose() },
+      color: 'text-purple-300',
     })
   }
 

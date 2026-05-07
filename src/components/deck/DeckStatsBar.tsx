@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { getCardTypeCategory } from '@/lib/utils/card'
 import { TYPE_ICONS } from '@/lib/utils/typeIcons'
+import { summarizePreferredPrices } from '@/lib/utils/price'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -30,8 +31,7 @@ export default function DeckStatsBar({ cards, format, expanded, onToggleExpand }
     const totalSideboard = sideboardCards.reduce((s, c) => s + c.quantity, 0)
 
     const allDeckCards = [...mainCards, ...sideboardCards]
-    const totalEur = allDeckCards.reduce((s, c) => s + (c.card.prices_eur || 0) * c.quantity, 0)
-    const totalUsd = allDeckCards.reduce((s, c) => s + (c.card.prices_usd || 0) * c.quantity, 0)
+    const priceSummary = summarizePreferredPrices(allDeckCards)
 
     const typeCounts: Record<string, number> = {}
     mainCards.forEach(({ card, quantity }) => {
@@ -39,7 +39,7 @@ export default function DeckStatsBar({ cards, format, expanded, onToggleExpand }
       typeCounts[cat] = (typeCounts[cat] || 0) + quantity
     })
 
-    return { totalMain, totalSideboard, totalEur, totalUsd, typeCounts }
+    return { totalMain, totalSideboard, priceSummary, typeCounts }
   }, [cards])
 
   return (
@@ -61,14 +61,9 @@ export default function DeckStatsBar({ cards, format, expanded, onToggleExpand }
           </span>
         )}
 
-        {(stats.totalEur > 0 || stats.totalUsd > 0) && (
+        {stats.priceSummary && (
           <span className="font-semibold text-font-accent">
-            {stats.totalEur > 0 ? `€${stats.totalEur.toFixed(2)}` : `$${stats.totalUsd.toFixed(2)}`}
-            {stats.totalEur > 0 && stats.totalUsd > 0 && (
-              <span className="ml-1.5 font-normal text-font-muted">
-                ${stats.totalUsd.toFixed(2)}
-              </span>
-            )}
+            {stats.priceSummary}
           </span>
         )}
 

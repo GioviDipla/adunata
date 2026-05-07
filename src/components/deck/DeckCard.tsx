@@ -7,6 +7,7 @@ import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
 import { useLongPress } from '@/lib/hooks/useLongPress'
+import { formatPreferredPrice } from '@/lib/utils/price'
 import type { Database } from '@/types/supabase'
 
 // Mobile action sheet only mounts after a long-press / tap-in-edit-mode
@@ -256,15 +257,11 @@ function DeckCardImpl({
       </span>
 
       {/* Price — EUR (Cardmarket) primary, USD fallback */}
-      {card.prices_eur != null ? (
+      {formatPreferredPrice(card, quantity) && (
         <span className="hidden text-xs text-font-secondary sm:inline">
-          €{(Number(card.prices_eur) * quantity).toFixed(2)}
+          {formatPreferredPrice(card, quantity)}
         </span>
-      ) : card.prices_usd != null ? (
-        <span className="hidden text-xs text-font-secondary sm:inline">
-          ${(Number(card.prices_usd) * quantity).toFixed(2)}
-        </span>
-      ) : null}
+      )}
 
       {/* Section + tags edit affordances — desktop list view only */}
       {editingEnabled && deckId && deckCardId && sections && (

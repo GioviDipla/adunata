@@ -1,10 +1,14 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Heart, Minus, Plus, Layers, Archive, Ban, SkipForward, Flag, Sparkles } from 'lucide-react'
+import { Heart, Minus, Plus, Layers, SkipForward, Flag, Sparkles } from 'lucide-react'
 import PriorityIndicator from './PriorityIndicator'
+import ZoneStack from './ZoneStack'
 import { GAME_PHASES } from '@/lib/game/phases'
 import type { GamePhase } from '@/lib/game/types'
+import type { Database } from '@/types/supabase'
+
+type CardRow = Database['public']['Tables']['cards']['Row']
 
 interface GameActionBarProps {
   mode?: 'multiplayer' | 'goldfish'
@@ -14,6 +18,8 @@ interface GameActionBarProps {
   libraryCount: number
   graveyardCount: number
   exileCount: number
+  graveyardTopCard?: CardRow | null
+  exileTopCard?: CardRow | null
   hasPriority: boolean
   isActivePlayer: boolean
   onPassPriority: () => void
@@ -30,6 +36,7 @@ interface GameActionBarProps {
 export default function GameActionBar({
   mode = 'multiplayer',
   phase, turn, life, libraryCount, graveyardCount, exileCount,
+  graveyardTopCard, exileTopCard,
   hasPriority, isActivePlayer, onPassPriority, onLifeChange, onDraw,
   onViewZone, onConcede, onConfirmUntap, autoPass, onToggleAutoPass, onSpecialActions,
 }: GameActionBarProps) {
@@ -93,19 +100,30 @@ export default function GameActionBar({
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button onClick={() => onViewZone('graveyard')} className="flex items-center gap-1 active:brightness-125" aria-label="Graveyard">
-            <Archive size={16} className="text-zinc-400" />
-            <span className="text-sm font-semibold tabular-nums text-font-primary">{graveyardCount}</span>
-          </button>
-          <button onClick={() => onViewZone('exile')} className="flex items-center gap-1 active:brightness-125" aria-label="Exile">
-            <Ban size={16} className="text-red-400" />
-            <span className="text-sm font-semibold tabular-nums text-font-primary">{exileCount}</span>
-          </button>
-          <button onClick={() => onViewZone('library')} className="flex items-center gap-1 active:brightness-125" aria-label="Library">
-            <Layers size={16} className="text-blue-400" />
-            <span className="text-sm font-semibold tabular-nums text-font-primary">{libraryCount}</span>
-          </button>
+        <div className="flex items-center gap-1.5">
+          <ZoneStack
+            kind="graveyard"
+            count={graveyardCount}
+            topCard={graveyardTopCard}
+            dropId="zone-graveyard"
+            dropTo="graveyard"
+            onTap={() => onViewZone('graveyard')}
+          />
+          <ZoneStack
+            kind="exile"
+            count={exileCount}
+            topCard={exileTopCard}
+            dropId="zone-exile"
+            dropTo="exile"
+            onTap={() => onViewZone('exile')}
+          />
+          <ZoneStack
+            kind="library"
+            count={libraryCount}
+            dropId="zone-library-top"
+            dropTo="libraryTop"
+            onTap={() => onViewZone('library')}
+          />
         </div>
       </div>
 
@@ -165,3 +183,4 @@ export default function GameActionBar({
     </div>
   )
 }
+

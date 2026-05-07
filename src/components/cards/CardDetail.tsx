@@ -333,7 +333,12 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   // filter / will-change would otherwise become the containing block and
   // carry the sheet off-screen when the page is scrolled.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={displayCard.name}
+      className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4"
+    >
       {/* Backdrop — tappable top/bottom strips are guaranteed by the sheet
        *  taking at most 85vh on mobile and sitting flush to the bottom, so
        *  there is always a visible backdrop area above the sheet to tap. */}
@@ -367,6 +372,8 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
             <ManaCost manaCost={displayCard.mana_cost} size="md" />
           </div>
           <button
+            type="button"
+            aria-label="Close card detail"
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-bg-hover text-font-muted hover:text-font-primary transition-colors"
           >

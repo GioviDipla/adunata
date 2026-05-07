@@ -5,19 +5,15 @@ import { ChevronDown, GripVertical } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { useDndSensors } from '@/lib/hooks/useDndSensors'
 import { CSS } from '@dnd-kit/utilities'
 
 export interface SidebarPanel {
@@ -79,10 +75,7 @@ export default function SidebarCards({ deckId, panels }: Props) {
     window.localStorage.setItem(KEY(deckId), JSON.stringify(payload))
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
+  const sensors = useDndSensors('sortable')
 
   function toggleCollapsed(id: string) {
     const next = { ...collapsed, [id]: !collapsed[id] }
@@ -108,6 +101,7 @@ export default function SidebarCards({ deckId, panels }: Props) {
 
   return (
     <DndContext
+      id={`deck-sidebar-${deckId}`}
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}
@@ -163,7 +157,7 @@ function SortablePanelCard({ panel, collapsed, onToggle }: SortablePanelCardProp
         <button
           {...attributes}
           {...listeners}
-          className="flex h-7 w-5 cursor-grab touch-none items-center justify-center text-font-muted opacity-0 transition-opacity hover:text-font-primary group-hover/panel:opacity-100 active:cursor-grabbing"
+          className="flex h-7 w-5 cursor-grab touch-none items-center justify-center text-font-muted opacity-100 transition-opacity hover:text-font-primary active:cursor-grabbing sm:opacity-0 sm:group-hover/panel:opacity-100"
           aria-label="Reorder panel"
           title="Drag to reorder"
         >
@@ -186,4 +180,3 @@ function SortablePanelCard({ panel, collapsed, onToggle }: SortablePanelCardProp
     </div>
   )
 }
-

@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback } from 'react'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import KeywordBadges from '@/components/play/KeywordBadges'
 import type { Database } from '@/types/supabase'
@@ -28,6 +30,9 @@ interface BattlefieldZoneProps {
   /** Current game phase — used to ring-highlight cards whose pre-computed
    *  trigger flag matches (e.g. upkeep-trigger cards during the upkeep phase). */
   phase?: GamePhase
+  /** When set, the zone container becomes a @dnd-kit droppable target
+   *  with this id. Parent reads `data: { to: 'battlefield' }` on drop. */
+  dropId?: string
 }
 
 /** Map a game phase onto the flag name whose cards deserve a highlight ring. */
@@ -61,6 +66,11 @@ function BattlefieldCardButton({
     delay: 400,
   })
 
+  const drag = useDraggable({
+    id: `bf:${bc.instanceId}`,
+    data: { from: 'battlefield', instanceId: bc.instanceId, cardId: bc.card.id },
+  })
+
   // Lands tap = tap/untap (mana). Other cards tap = action menu when wired.
   // Right-click / long-press always opens preview.
   const isLand = (bc.card.type_line ?? '').toLowerCase().includes('land')
@@ -76,20 +86,29 @@ function BattlefieldCardButton({
   const triggerKey = phaseTriggerKey(phase)
   const triggersNow = triggerKey ? Boolean(bc.card[triggerKey]) : false
 
+  const dragStyle = drag.transform
+    ? { transform: CSS.Translate.toString(drag.transform), zIndex: 999 }
+    : {}
+
   return (
     <button
+      ref={drag.setNodeRef}
       onClick={handleClick}
       onContextMenu={(e) => {
         e.preventDefault()
         onCardPreview?.(bc.card, bc.instanceId, bc.tapped)
       }}
-      {...longPress}
+      {...longPress.handlers}
+      {...drag.attributes}
+      {...drag.listeners}
       className={`relative overflow-hidden rounded-lg border transition-transform select-none ${
         bc.tapped
           ? 'rotate-90 border-font-muted'
           : 'border-border hover:border-bg-accent'
-      } ${triggersNow ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-bg-dark' : ''}`}
-      style={{ width: CARD_W, height: CARD_H, touchAction: 'manipulation' }}
+      } ${triggersNow ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-bg-dark' : ''} ${
+        drag.isDragging ? 'opacity-40' : ''
+      }`}
+      style={{ width: CARD_W, height: CARD_H, touchAction: 'none', ...dragStyle }}
       title={`${bc.card.name}${bc.tapped ? ' (tapped)' : ''}${triggersNow ? ' — triggers this phase' : ''} — tap for actions, hold to preview`}
     >
       {bc.card.image_small ? (
@@ -144,13 +163,24 @@ export default function BattlefieldZone({
   onCardPreview,
   onCardAction,
   phase,
+  dropId,
 }: BattlefieldZoneProps) {
+  const drop = useDroppable({
+    id: dropId ?? `battlefield-noop-${title}`,
+    data: { to: 'battlefield' },
+    disabled: !dropId,
+  })
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-[9px] font-semibold tracking-wider text-font-muted">
         {title} ({cards.length})
       </span>
-      <div className="flex flex-wrap gap-1.5">
+      <div
+        ref={dropId ? drop.setNodeRef : undefined}
+        className={`flex flex-wrap gap-1.5 rounded-lg transition-colors ${
+          dropId && drop.isOver ? 'bg-bg-accent/15 ring-2 ring-bg-accent/60' : ''
+        }`}
+      >
         {cards.map((bc) => (
           <BattlefieldCardButton
             key={bc.instanceId}

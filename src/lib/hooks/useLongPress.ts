@@ -60,7 +60,7 @@ export function useLongPress({ onLongPress, delay = 350 }: UseLongPressOptions) 
     return v
   }, [])
 
-  return {
+  const handlers = {
     onPointerDown: start,
     onPointerUp: cancel,
     onPointerLeave: cancel,
@@ -68,6 +68,11 @@ export function useLongPress({ onLongPress, delay = 350 }: UseLongPressOptions) 
     onPointerMove,
     /** Allows scroll/pinch-zoom while keeping pointer events for long-press */
     style: { touchAction: 'manipulation' as const },
+  }
+
+  return {
+    ...handlers,
+    handlers,
     /** true if the long press fired — use to suppress the click. Consuming. */
     wasLongPress: consumeLongPress,
   }

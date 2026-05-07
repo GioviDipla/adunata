@@ -76,12 +76,23 @@ export default function CardBrowser({
   userDecks = [],
   initialLikedIds = [],
 }: CardBrowserProps) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [cards, setCards] = useState<Card[]>(initialCards)
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(initialCards.length === PAGE_SIZE)
+
+  // Mirror `cards` into a ref so loadMore can read the latest list without
+  // taking `cards` as a dep (which would re-create the callback on every
+  // append and race the user's next click).
+  const cardsRef = useRef<Card[]>(cards)
+  useEffect(() => { cardsRef.current = cards }, [cards])
+
+  // Dedicated abort controller for in-flight load-more requests. Kept
+  // separate from the search effect's controller so a filter change can
+  // cancel a pending load-more without the load-more cancelling itself.
+  const loadMoreAbortRef = useRef<AbortController | null>(null)
   const [selectedCard, setSelectedCard] = useState<Card | null>(null)
   const [showFilters, setShowFilters] = useState(false)
 
@@ -199,13 +210,19 @@ export default function CardBrowser({
       // Other sorts fall back to offset pagination — still fine for typical browse depth.
       if (isDefaultSort) {
         query = query
-          .limit(PAGE_SIZE)
           .order('released_at', { ascending: false, nullsFirst: false })
           .order('id', { ascending: false })
         if (after) {
-          query = query.or(
-            `released_at.lt.${after.releasedAt},and(released_at.eq.${after.releasedAt},id.lt.${after.id})`
-          )
+          query = query
+            .limit(PAGE_SIZE)
+            .or(
+              `released_at.lt.${after.releasedAt},and(released_at.eq.${after.releasedAt},id.lt.${after.id})`
+            )
+        } else {
+          // Either the very first page (offset=0) or a fallback when the
+          // last card has no released_at — in both cases use range so we
+          // actually advance instead of re-fetching the same first page.
+          query = query.range(offset, offset + PAGE_SIZE - 1)
         }
       } else {
         query = query.range(offset, offset + PAGE_SIZE - 1)
@@ -219,9 +236,9 @@ export default function CardBrowser({
           case 'cmc_desc':
             query = query.order('cmc', { ascending: false }).order('name', { ascending: true }); break
           case 'price_asc':
-            query = query.order('prices_eur', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
+            query = query.order('price_sort', { ascending: true, nullsFirst: false }).order('name', { ascending: true }); break
           case 'price_desc':
-            query = query.order('prices_eur', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
+            query = query.order('price_sort', { ascending: false, nullsFirst: false }).order('name', { ascending: true }); break
           case 'type_asc':
             query = query.order('type_line', { ascending: true }).order('name', { ascending: true }); break
         }
@@ -366,24 +383,38 @@ export default function CardBrowser({
       setLoading(false)
     }
 
-    return () => { cancelled = true; controller?.abort() }
+    return () => { cancelled = true; controller?.abort(); loadMoreAbortRef.current?.abort() }
   }, [debouncedSearch, searchLang, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, isDefaultSort, buildQuery, initialCards])
 
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
     setLoadingMore(true)
-    const last = cards[cards.length - 1]
+    loadMoreAbortRef.current?.abort()
+    const controller = new AbortController()
+    loadMoreAbortRef.current = controller
+
+    const current = cardsRef.current
+    const last = current[current.length - 1]
     const canUseCursor = isDefaultSort && last && last.released_at
-    const { data, error } = canUseCursor
-      ? await buildQuery({ after: { releasedAt: last.released_at!, id: String(last.id) } })
-      : await buildQuery({ offset: cards.length })
-    if (error) console.error('Error loading more:', error)
-    else {
-      setCards((prev) => [...prev, ...((data || []) as unknown as Card[])])
-      setHasMore((data || []).length === PAGE_SIZE)
+    const cursor = canUseCursor
+      ? { after: { releasedAt: last.released_at!, id: String(last.id) } }
+      : { offset: current.length }
+
+    const { data, error } = await buildQuery(cursor)
+    if (controller.signal.aborted) {
+      setLoadingMore(false)
+      return
     }
+    if (error) {
+      console.error('Error loading more:', error)
+      setLoadingMore(false)
+      return
+    }
+    const newRows = (data || []) as unknown as Card[]
+    setCards((prev) => [...prev, ...newRows])
+    setHasMore(newRows.length === PAGE_SIZE)
     setLoadingMore(false)
-  }
+  }, [loadingMore, hasMore, isDefaultSort, buildQuery])
 
   const toggleColor = (color: string) =>
     setSelectedColors((prev) => prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color])

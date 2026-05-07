@@ -1,11 +1,12 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Heart } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
 import { useLongPress } from '@/lib/hooks/useLongPress'
+import { formatPreferredPrice } from '@/lib/utils/price'
 
 type Card = Database['public']['Tables']['cards']['Row']
 
@@ -19,6 +20,20 @@ interface CardItemProps {
 export default function CardItem({ card, liked, onSelect, onContextAction }: CardItemProps) {
   const [showPreview, setShowPreview] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+    }
+  }, [])
+
+  const clearPendingClick = () => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+    }
+  }
 
   // When `onContextAction` is wired, swap the gestures: tap opens the
   // context menu (Add to deck / Like / Share), long-press / right-click
@@ -37,28 +52,41 @@ export default function CardItem({ card, liked, onSelect, onContextAction }: Car
       onClick={(e) => {
         if (longPress.wasLongPress()) return
         if (onContextAction) {
-          // Anchor the menu at the click position when present, otherwise
-          // fall back to the centre of the tile (touch/synthetic events).
-          if (e.clientX || e.clientY) {
-            onContextAction(card, e.clientX, e.clientY)
-          } else {
-            const rect = rootRef.current?.getBoundingClientRect()
-            if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
-            else onContextAction(card, 0, 0)
-          }
+          const { clientX, clientY } = e
+          clearPendingClick()
+          clickTimerRef.current = setTimeout(() => {
+            clickTimerRef.current = null
+            // Anchor the menu at the click position when present, otherwise
+            // fall back to the centre of the tile (touch/synthetic events).
+            if (clientX || clientY) {
+              onContextAction(card, clientX, clientY)
+            } else {
+              const rect = rootRef.current?.getBoundingClientRect()
+              if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
+              else onContextAction(card, 0, 0)
+            }
+          }, 220)
         } else {
           onSelect(card)
         }
       }}
+      onDoubleClick={(e) => {
+        if (!onContextAction) return
+        e.preventDefault()
+        e.stopPropagation()
+        clearPendingClick()
+        onSelect(card)
+      }}
       onContextMenu={(e) => {
         if (!onContextAction) return
         e.preventDefault()
+        clearPendingClick()
         // Right-click in cards-browser mode opens detail (was: context).
         onSelect(card)
       }}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
-      {...longPress}
+      {...longPress.handlers}
     >
       {/* Card image — `image_normal` (488×680), same as DeckGridView. next/image
        *  downscales via `sizes` so the actual bytes on the wire match the rendered size. */}
@@ -87,13 +115,9 @@ export default function CardItem({ card, liked, onSelect, onContextAction }: Car
         )}
 
         {/* Price badge — EUR (Cardmarket) primary, USD fallback */}
-        {card.prices_eur != null ? (
+        {formatPreferredPrice(card) ? (
           <div className="absolute top-1.5 right-1.5 bg-black/75 backdrop-blur-sm text-font-primary text-xs font-medium px-1.5 py-0.5 rounded">
-            €{Number(card.prices_eur).toFixed(2)}
-          </div>
-        ) : card.prices_usd != null ? (
-          <div className="absolute top-1.5 right-1.5 bg-black/75 backdrop-blur-sm text-font-primary text-xs font-medium px-1.5 py-0.5 rounded">
-            ${Number(card.prices_usd).toFixed(2)}
+            {formatPreferredPrice(card)}
           </div>
         ) : null}
       </div>

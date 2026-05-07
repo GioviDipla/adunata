@@ -7,6 +7,12 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-user-drag: none;
+  /* Required: combined with body-level `user-select: none`, iOS Safari
+     drops click events on tapped `<button>` descendants without an
+     explicit `touch-action` somewhere in the ancestor chain. Cards in
+     the deck builder/viewer (DeckCard, DeckGridView) lost their tap
+     handler when this was removed in the scrollbar-gutter cleanup.
+     Drag handles opt out individually via `touch-none`. */
   touch-action: manipulation;
 }
 
@@ -38,6 +44,14 @@ img {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Opt-in: pages whose content can be shorter than the viewport (login, simple
+   modals) can apply this on their root scroll container to avoid the gutter
+   appearing/disappearing when the user navigates between short and tall
+   pages. Avoid on `html` itself — that wastes a gutter on every long page. */
+.scrollbar-stable {
+  scrollbar-gutter: stable;
 }
 
 /* Universal safe-area handling for full-screen fixed overlays.

@@ -16,19 +16,15 @@ import {
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { useDndSensors } from '@/lib/hooks/useDndSensors'
 import { CSS } from '@dnd-kit/utilities'
 import type { SectionRow } from '@/types/deck'
 
@@ -75,10 +71,7 @@ export default function DeckSectionsPanel({
   const [draftName, setDraftName] = useState('')
   const [busy, setBusy] = useState(false)
   const [autoAssignSummary, setAutoAssignSummary] = useState<string | null>(null)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
+  const sensors = useDndSensors('sortable')
 
   async function addSection() {
     const name = draftName.trim()
@@ -228,18 +221,8 @@ export default function DeckSectionsPanel({
   )
   const totalCards = totalAssigned + uncategorizedCount
 
-  const Wrapper = chromeless
-    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
-    : ({ children }: { children: React.ReactNode }) => (
-        <div className="relative overflow-hidden rounded-2xl border border-border-light/60 bg-gradient-to-br from-bg-surface via-bg-surface to-bg-cell/40 shadow-sm">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-font-accent/40 to-transparent" />
-          {children}
-        </div>
-      )
-
-  return (
-    <Wrapper>
-      <div className={`flex flex-col gap-4 ${chromeless ? '' : 'p-4'}`}>
+  const body = (
+    <div className={`flex flex-col gap-4 ${chromeless ? '' : 'p-4'}`}>
         {/* Internal header — hidden when SidebarCards already provides one */}
         {!chromeless && (
           <div className="flex items-center justify-between">
@@ -324,6 +307,7 @@ export default function DeckSectionsPanel({
         {/* Section list */}
         {sections.length > 0 && (
           <DndContext
+            id={`deck-sections-${deckId}`}
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
@@ -372,7 +356,14 @@ export default function DeckSectionsPanel({
           </button>
         </div>
       </div>
-    </Wrapper>
+  )
+
+  if (chromeless) return body
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-border-light/60 bg-gradient-to-br from-bg-surface via-bg-surface to-bg-cell/40 shadow-sm">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-font-accent/40 to-transparent" />
+      {body}
+    </div>
   )
 }
 
@@ -424,7 +415,7 @@ function SortableSectionRow({
         <button
           {...attributes}
           {...listeners}
-          className="flex h-7 w-5 shrink-0 cursor-grab touch-none items-center justify-center text-font-muted opacity-0 transition-opacity hover:text-font-primary group-hover/row:opacity-100 active:cursor-grabbing"
+          className="flex h-7 w-5 shrink-0 cursor-grab touch-none items-center justify-center text-font-muted opacity-100 transition-opacity hover:text-font-primary active:cursor-grabbing sm:opacity-0 sm:group-hover/row:opacity-100"
           aria-label="Drag to reorder"
         >
           <GripVertical className="h-3.5 w-3.5" />
@@ -463,8 +454,8 @@ function SortableSectionRow({
           </button>
         )}
 
-        {/* Action cluster — fade in on row hover */}
-        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+        {/* Action cluster — visible on mobile, fade in on hover desktop */}
+        <div className="flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100">
           {!editing && (
             <button
               onClick={() => setEditing(true)}

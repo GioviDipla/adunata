@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, ComponentType, ReactNode } from 'react'
 import Link from 'next/link'
 import {
   ChevronLeft,
@@ -11,105 +12,117 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Settings2,
   Undo2,
   Users,
 } from 'lucide-react'
 
 const STARTING_LIFE_OPTIONS = [20, 30, 40] as const
 const PLAYER_COUNT_OPTIONS = [2, 3, 4, 5] as const
+const LAYOUT_OPTIONS = [
+  { value: 'table', label: 'Table' },
+  { value: 'grid', label: 'Grid' },
+  { value: 'stack', label: 'Stack' },
+] as const
 
-// Per-player accent — ring around the panel, glow gradient, label chip,
-// plus a text token used elsewhere (e.g. commander-damage pills that show
-// where the damage came from).
 const PLAYER_ACCENTS = [
   {
-    ring: 'ring-red-500/60',
-    glow: 'from-red-600/30',
-    chip: 'bg-red-500/30 text-red-100',
+    name: 'Crimson',
+    panel: 'bg-bg-card',
+    glow: 'shadow-black/24',
+    ring: 'ring-bg-red/35',
+    rail: 'bg-bg-red',
+    chip: 'bg-bg-red/16 text-red-200 ring-bg-red/24',
+    soft: 'bg-bg-red/14 text-red-200 ring-bg-red/24',
     text: 'text-red-200',
-    bg: 'bg-red-500/25',
-    panel: 'bg-red-600/55',
-    panelRing: 'ring-red-400/70',
   },
   {
-    ring: 'ring-blue-500/60',
-    glow: 'from-blue-600/30',
-    chip: 'bg-blue-500/30 text-blue-100',
+    name: 'Azure',
+    panel: 'bg-bg-card',
+    glow: 'shadow-black/24',
+    ring: 'ring-bg-accent/35',
+    rail: 'bg-bg-accent',
+    chip: 'bg-bg-accent/16 text-blue-200 ring-bg-accent/24',
+    soft: 'bg-bg-accent/14 text-blue-200 ring-bg-accent/24',
     text: 'text-blue-200',
-    bg: 'bg-blue-500/25',
-    panel: 'bg-blue-600/55',
-    panelRing: 'ring-blue-400/70',
   },
   {
-    ring: 'ring-green-500/60',
-    glow: 'from-green-600/30',
-    chip: 'bg-green-500/30 text-green-100',
-    text: 'text-green-200',
-    bg: 'bg-green-500/25',
-    panel: 'bg-green-600/55',
-    panelRing: 'ring-green-400/70',
+    name: 'Verdant',
+    panel: 'bg-bg-card',
+    glow: 'shadow-black/24',
+    ring: 'ring-bg-green/35',
+    rail: 'bg-bg-green',
+    chip: 'bg-bg-green/16 text-emerald-200 ring-bg-green/24',
+    soft: 'bg-bg-green/14 text-emerald-200 ring-bg-green/24',
+    text: 'text-emerald-200',
   },
   {
-    ring: 'ring-amber-500/60',
-    glow: 'from-amber-600/30',
-    chip: 'bg-amber-500/30 text-amber-100',
-    text: 'text-amber-200',
-    bg: 'bg-amber-500/25',
-    panel: 'bg-amber-600/55',
-    panelRing: 'ring-amber-400/70',
+    name: 'Amber',
+    panel: 'bg-bg-card',
+    glow: 'shadow-black/24',
+    ring: 'ring-bg-yellow/35',
+    rail: 'bg-bg-yellow',
+    chip: 'bg-bg-yellow/16 text-yellow-200 ring-bg-yellow/24',
+    soft: 'bg-bg-yellow/14 text-yellow-200 ring-bg-yellow/24',
+    text: 'text-yellow-200',
   },
   {
-    ring: 'ring-fuchsia-500/60',
-    glow: 'from-fuchsia-600/30',
-    chip: 'bg-fuchsia-500/30 text-fuchsia-100',
-    text: 'text-fuchsia-200',
-    bg: 'bg-fuchsia-500/25',
-    panel: 'bg-fuchsia-600/55',
-    panelRing: 'ring-fuchsia-400/70',
+    name: 'Violet',
+    panel: 'bg-bg-card',
+    glow: 'shadow-black/24',
+    ring: 'ring-purple-500/35',
+    rail: 'bg-purple-500',
+    chip: 'bg-purple-500/16 text-purple-200 ring-purple-500/24',
+    soft: 'bg-purple-500/14 text-purple-200 ring-purple-500/24',
+    text: 'text-purple-200',
   },
 ] as const
 
 type PlayerCount = (typeof PLAYER_COUNT_OPTIONS)[number]
+type PanelOrientation = 'normal' | 'opposite' | 'left' | 'right'
+type LayoutMode = (typeof LAYOUT_OPTIONS)[number]['value']
 
 interface Player {
   id: number
   life: number
   poison: number
-  /** key = source player id, value = accumulated commander damage from that source */
   commanderDamage: Record<number, number>
 }
 
 interface DiceRoll {
   label: string
   value: string
-  /** key to force React to replay the overlay animation on repeat rolls */
   key: number
 }
 
 function makePlayers(n: number, life: number): Player[] {
   return Array.from({ length: n }, (_, i) => {
     const id = i + 1
-    const cmd: Record<number, number> = {}
-    for (let j = 1; j <= n; j++) if (j !== id) cmd[j] = 0
-    return { id, life, poison: 0, commanderDamage: cmd }
+    const commanderDamage: Record<number, number> = {}
+    for (let j = 1; j <= n; j++) {
+      if (j !== id) commanderDamage[j] = 0
+    }
+    return { id, life, poison: 0, commanderDamage }
   })
 }
 
 export default function LifeCounter() {
   const [playerCount, setPlayerCount] = useState<PlayerCount>(2)
-  const [startingLife, setStartingLife] = useState<number>(20)
+  const [startingLife, setStartingLife] = useState(20)
   const [players, setPlayers] = useState<Player[]>(() => makePlayers(2, 20))
   const [history, setHistory] = useState<Player[][]>([])
   const [hubOpen, setHubOpen] = useState(false)
   const [showPoison, setShowPoison] = useState(false)
   const [showCmdDmg, setShowCmdDmg] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>('table')
   const [dice, setDice] = useState<DiceRoll | null>(null)
 
   const hubRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!hubOpen) return
-    const close = (e: MouseEvent) => {
-      if (hubRef.current && !hubRef.current.contains(e.target as Node)) {
+    const close = (event: PointerEvent) => {
+      if (!hubRef.current?.contains(event.target as Node)) {
         setHubOpen(false)
       }
     }
@@ -118,13 +131,17 @@ export default function LifeCounter() {
   }, [hubOpen])
 
   const pushHistory = useCallback(() => {
-    setHistory((h) => [...h.slice(-30), players])
+    setHistory((current) => [...current.slice(-30), players])
   }, [players])
 
   const updateLife = useCallback(
     (id: number, delta: number) => {
       pushHistory()
-      setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, life: p.life + delta } : p)))
+      setPlayers((current) =>
+        current.map((player) =>
+          player.id === id ? { ...player, life: player.life + delta } : player,
+        ),
+      )
     },
     [pushHistory],
   )
@@ -132,9 +149,11 @@ export default function LifeCounter() {
   const updatePoison = useCallback(
     (id: number, delta: number) => {
       pushHistory()
-      setPlayers((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, poison: Math.max(0, p.poison + delta) } : p,
+      setPlayers((current) =>
+        current.map((player) =>
+          player.id === id
+            ? { ...player, poison: Math.max(0, player.poison + delta) }
+            : player,
         ),
       )
     },
@@ -144,15 +163,15 @@ export default function LifeCounter() {
   const updateCmdDmg = useCallback(
     (playerId: number, sourceId: number, delta: number) => {
       pushHistory()
-      setPlayers((prev) =>
-        prev.map((p) => {
-          if (p.id !== playerId) return p
-          const current = p.commanderDamage[sourceId] ?? 0
+      setPlayers((current) =>
+        current.map((player) => {
+          if (player.id !== playerId) return player
+          const value = player.commanderDamage[sourceId] ?? 0
           return {
-            ...p,
+            ...player,
             commanderDamage: {
-              ...p.commanderDamage,
-              [sourceId]: Math.max(0, current + delta),
+              ...player.commanderDamage,
+              [sourceId]: Math.max(0, value + delta),
             },
           }
         }),
@@ -162,11 +181,10 @@ export default function LifeCounter() {
   )
 
   const undo = useCallback(() => {
-    setHistory((h) => {
-      if (h.length === 0) return h
-      const prev = h[h.length - 1]
-      setPlayers(prev)
-      return h.slice(0, -1)
+    setHistory((current) => {
+      if (current.length === 0) return current
+      setPlayers(current[current.length - 1])
+      return current.slice(0, -1)
     })
   }, [])
 
@@ -174,7 +192,7 @@ export default function LifeCounter() {
     pushHistory()
     setPlayers(makePlayers(playerCount, startingLife))
     setHubOpen(false)
-  }, [playerCount, startingLife, pushHistory])
+  }, [playerCount, pushHistory, startingLife])
 
   const changePlayerCount = (n: PlayerCount) => {
     setPlayerCount(n)
@@ -195,33 +213,33 @@ export default function LifeCounter() {
   }
 
   const flipCoin = () => {
-    const value = Math.random() < 0.5 ? 'Heads' : 'Tails'
-    setDice({ label: 'Coin', value, key: Date.now() })
+    setDice({ label: 'Coin', value: Math.random() < 0.5 ? 'Heads' : 'Tails', key: Date.now() })
     setHubOpen(false)
   }
 
   useEffect(() => {
     if (!dice) return
-    const t = setTimeout(() => setDice(null), 2200)
-    return () => clearTimeout(t)
+    const timeout = setTimeout(() => setDice(null), 2200)
+    return () => clearTimeout(timeout)
   }, [dice])
 
-  // Keep screen awake.
   useEffect(() => {
     interface WakeLockLike {
       release: () => Promise<void>
     }
+
     let wakeLock: WakeLockLike | null = null
-    async function request() {
+    const request = async () => {
       try {
         const nav = navigator as unknown as {
           wakeLock?: { request: (type: string) => Promise<WakeLockLike> }
         }
         if (nav.wakeLock) wakeLock = await nav.wakeLock.request('screen')
       } catch {
-        /* noop */
+        /* Best effort only. */
       }
     }
+
     request()
     const onVisibility = () => {
       if (document.visibilityState === 'visible' && !wakeLock) request()
@@ -234,185 +252,206 @@ export default function LifeCounter() {
   }, [])
 
   const layoutClass = useMemo(() => {
+    if (layoutMode === 'stack') return 'grid grid-rows-[repeat(var(--players),minmax(0,1fr))]'
+    if (layoutMode === 'grid') {
+      if (playerCount <= 2) return 'grid grid-rows-2'
+      if (playerCount === 3) return 'grid grid-cols-2 [grid-template-rows:1fr_1fr]'
+      if (playerCount === 4) return 'grid grid-cols-2 grid-rows-2'
+      return 'grid grid-cols-2 [grid-template-rows:1fr_1fr_1fr]'
+    }
     if (playerCount === 2) return 'grid grid-rows-2'
-    // 3-player: the "head of the table" (P1, rotated) gets a larger panel on
-    // the top row; P2 and P3 share a smaller second row as two equal tiles.
-    if (playerCount === 3) return 'grid grid-cols-2 [grid-template-rows:3fr_2fr]'
+    if (playerCount === 3) return 'grid grid-cols-2 [grid-template-rows:1.08fr_1fr]'
     if (playerCount === 4) return 'grid grid-cols-2 grid-rows-2'
-    return 'grid grid-cols-2 grid-rows-3'
-  }, [playerCount])
+    return 'grid grid-cols-2 [grid-template-rows:1fr_1.18fr_1fr]'
+  }, [layoutMode, playerCount])
 
-  const isRotated = (idx: number) => {
-    if (playerCount === 2) return idx === 0
-    if (playerCount === 3) return idx === 0
-    if (playerCount === 5) return idx < 3
-    return idx < 2
+  const orientationFor = (index: number): PanelOrientation => {
+    if (layoutMode === 'stack') return index % 2 === 0 ? 'opposite' : 'normal'
+    if (layoutMode === 'grid') {
+      if (playerCount === 2) return index === 0 ? 'opposite' : 'normal'
+      if (playerCount === 3) return index === 0 ? 'opposite' : 'normal'
+      if (playerCount === 4) return index < 2 ? 'opposite' : 'normal'
+      return index < 2 ? 'opposite' : 'normal'
+    }
+    if (playerCount === 2 || playerCount === 3) return index === 0 ? 'opposite' : 'normal'
+    if (playerCount === 4) return index < 2 ? 'opposite' : 'normal'
+    if (index === 0) return 'opposite'
+    if (index === 1) return 'left'
+    if (index === 2) return 'right'
+    return 'normal'
   }
 
-  // When a layout has a "head of table" tile, it spans both columns of its row.
-  const panelClassFor = (idx: number) => {
-    if (playerCount === 3 && idx === 0) return 'col-span-2'
-    if (playerCount === 5 && idx === 0) return 'col-span-2'
+  const panelClassFor = (index: number) => {
+    if (layoutMode === 'stack') return ''
+    if (layoutMode === 'grid') {
+      if (playerCount === 3 && index === 0) return 'col-span-2'
+      if (playerCount === 5 && index === 4) return 'col-span-2'
+      return ''
+    }
+    if ((playerCount === 3 || playerCount === 5) && index === 0) return 'col-span-2'
     return ''
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-bg-dark">
-      {/* Minimal top bar: Back + title + Undo. All game controls live in the hub. */}
-      <div
-        className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-bg-surface/80 px-3 pb-2 backdrop-blur-md"
+    <main className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark text-font-primary">
+      <header
+        className="z-30 flex shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-black/72 px-3 pb-2 backdrop-blur-xl"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 0.5rem)' }}
       >
         <Link
           href="/play"
-          className="flex min-h-11 min-w-11 items-center gap-1.5 rounded-md px-3 py-2.5 text-sm font-medium text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary active:bg-bg-hover"
+          className="flex min-h-11 min-w-11 items-center gap-1 rounded-md px-2.5 py-2 text-sm font-semibold text-white/74 transition-colors hover:bg-white/10 hover:text-white"
           aria-label="Torna al menu Play"
         >
           <ChevronLeft size={22} />
-          <span>Indietro</span>
+          <span className="hidden sm:inline">Indietro</span>
         </Link>
-        <div className="text-xs font-medium uppercase tracking-widest text-font-muted">
-          Life Counter
+
+        <div className="flex items-center gap-2 rounded-full bg-white/7 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-white/72 ring-1 ring-white/10">
+          <span>{playerCount}P</span>
+          <span className="h-1 w-1 rounded-full bg-white/36" />
+          <span>{startingLife} life</span>
         </div>
+
         <button
           onClick={undo}
           disabled={history.length === 0}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2.5 text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary disabled:opacity-30"
-          aria-label="Undo"
-          title="Undo"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-md p-2.5 text-white/74 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
+          aria-label="Annulla ultima modifica"
+          title="Annulla"
         >
           <Undo2 size={20} />
         </button>
-      </div>
+      </header>
 
-      {/* Player panels */}
-      <div className="relative flex-1">
-        <div className={`absolute inset-0 gap-1 p-1 ${layoutClass}`}>
-          {players.map((p, idx) => (
+      <section className="relative min-h-0 flex-1">
+        <div
+          className={`absolute inset-0 gap-2 p-2 ${layoutClass}`}
+          style={{ '--players': playerCount } as CSSProperties}
+        >
+          {players.map((player, index) => (
             <PlayerPanel
-              key={p.id}
-              index={idx}
-              player={p}
+              key={player.id}
+              index={index}
+              player={player}
               allPlayers={players}
-              rotated={isRotated(idx)}
+              orientation={orientationFor(index)}
               showPoison={showPoison}
               showCmdDmg={showCmdDmg}
-              panelClassName={panelClassFor(idx)}
-              onLife={(delta) => updateLife(p.id, delta)}
-              onPoison={(delta) => updatePoison(p.id, delta)}
-              onCmdDmg={(sourceId, delta) => updateCmdDmg(p.id, sourceId, delta)}
+              panelClassName={panelClassFor(index)}
+              onLife={(delta) => updateLife(player.id, delta)}
+              onPoison={(delta) => updatePoison(player.id, delta)}
+              onCmdDmg={(sourceId, delta) => updateCmdDmg(player.id, sourceId, delta)}
             />
           ))}
         </div>
 
-        {/* Central hub button + expanded menu */}
         <div
           ref={hubRef}
-          className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
+          className="absolute left-1/2 top-1/2 z-40 -translate-x-1/2 -translate-y-1/2"
         >
           <button
-            onClick={() => setHubOpen((v) => !v)}
-            aria-label="Game tools"
-            className={`flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-bg-accent to-purple-600 text-font-white shadow-2xl ring-2 transition-all ${
-              hubOpen
-                ? 'scale-110 ring-font-white/40'
-                : 'ring-font-white/10 hover:scale-105 hover:ring-font-white/20'
+            onClick={() => setHubOpen((open) => !open)}
+            aria-label="Strumenti partita"
+            className={`flex h-16 w-16 items-center justify-center rounded-full bg-zinc-950 text-white shadow-2xl ring-1 ring-white/20 transition-all active:scale-95 ${
+              hubOpen ? 'scale-105 bg-white text-zinc-950' : 'hover:bg-zinc-900'
             }`}
           >
-            <Dices className="h-7 w-7" />
+            <Settings2 className="h-7 w-7" />
           </button>
 
           {hubOpen && (
-            <div className="absolute left-1/2 top-full z-30 mt-4 w-72 -translate-x-1/2 rounded-2xl border border-border bg-bg-surface/95 p-3 shadow-2xl backdrop-blur-md">
-              {/* Random */}
+            <div className="absolute left-1/2 top-full mt-3 w-[min(21rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-white/12 bg-zinc-950/96 p-3 shadow-2xl backdrop-blur-xl">
               <HubSection label="Random">
                 <div className="grid grid-cols-3 gap-2">
-                  <HubTile icon={Dices} label="1d6" onClick={() => rollDie(6)} />
-                  <HubTile icon={Dices} label="1d20" onClick={() => rollDie(20)} />
+                  <HubTile icon={Dices} label="d6" onClick={() => rollDie(6)} />
+                  <HubTile icon={Dices} label="d20" onClick={() => rollDie(20)} />
                   <HubTile icon={Coins} label="Coin" onClick={flipCoin} />
                 </div>
               </HubSection>
 
-              {/* Setup */}
               <HubSection label="Setup" icon={Users}>
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="w-16 text-xs text-font-muted">Giocatori</span>
+                <FieldRow label="Giocatori">
                   <SegmentedControl
                     options={PLAYER_COUNT_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
                     value={playerCount}
-                    onChange={(v) => changePlayerCount(v as PlayerCount)}
+                    onChange={(value) => changePlayerCount(value as PlayerCount)}
                   />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-16 text-xs text-font-muted">Vita</span>
+                </FieldRow>
+                <FieldRow label="Vita">
                   <SegmentedControl
                     options={STARTING_LIFE_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
                     value={startingLife}
-                    onChange={(v) => changeStartingLife(v as number)}
+                    onChange={(value) => changeStartingLife(value as number)}
                   />
-                </div>
+                </FieldRow>
+                <FieldRow label="Layout">
+                  <SegmentedControl
+                    options={LAYOUT_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    value={layoutMode}
+                    onChange={(value) => setLayoutMode(value as LayoutMode)}
+                  />
+                </FieldRow>
               </HubSection>
 
-              {/* Modes */}
               <HubSection label="Moduli">
                 <div className="grid grid-cols-2 gap-2">
                   <HubToggle
                     icon={Droplet}
                     label="Poison"
                     active={showPoison}
-                    onToggle={() => setShowPoison((v) => !v)}
-                    activeClass="bg-bg-green/25 text-bg-green ring-bg-green/40"
+                    onToggle={() => setShowPoison((value) => !value)}
+                    activeClass="bg-emerald-500/22 text-emerald-100 ring-emerald-200/30"
                   />
                   <HubToggle
                     icon={Crown}
                     label="Commander"
                     active={showCmdDmg}
-                    onToggle={() => setShowCmdDmg((v) => !v)}
-                    activeClass="bg-amber-500/25 text-amber-300 ring-amber-500/40"
+                    onToggle={() => setShowCmdDmg((value) => !value)}
+                    activeClass="bg-amber-500/22 text-amber-100 ring-amber-200/30"
                   />
                 </div>
               </HubSection>
 
-              {/* Actions */}
-              <div className="mt-2 flex gap-2 border-t border-border pt-2">
+              <div className="mt-2 flex gap-2 border-t border-white/10 pt-2">
                 <button
                   onClick={undo}
                   disabled={history.length === 0}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-bg-card px-3 py-2 text-sm text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary disabled:opacity-40"
+                  className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-white/8 px-3 text-sm font-semibold text-white/78 transition-colors hover:bg-white/12 hover:text-white disabled:opacity-40"
                 >
-                  <Undo2 size={14} /> Undo
+                  <Undo2 size={16} />
+                  Undo
                 </button>
                 <button
                   onClick={reset}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-bg-red/20 px-3 py-2 text-sm font-medium text-bg-red transition-colors hover:bg-bg-red/30"
+                  className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-red-500/18 px-3 text-sm font-semibold text-red-100 ring-1 ring-red-200/12 transition-colors hover:bg-red-500/26"
                 >
-                  <RotateCcw size={14} /> Reset
+                  <RotateCcw size={16} />
+                  Reset
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Dice result overlay */}
         {dice && (
           <div
             key={dice.key}
-            className="pointer-events-none absolute left-1/2 top-1/2 z-40 flex -translate-x-1/2 -translate-y-[calc(50%+5rem)] flex-col items-center gap-1 rounded-2xl border border-font-white/10 bg-black/80 px-8 py-5 shadow-2xl backdrop-blur-md"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-[calc(50%+5rem)] flex-col items-center gap-1 rounded-2xl border border-white/12 bg-black/86 px-8 py-5 shadow-2xl backdrop-blur-md"
           >
-            <div className="text-xs font-medium uppercase tracking-widest text-font-muted">
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-white/48">
               {dice.label}
             </div>
-            <div className="text-5xl font-bold tabular-nums text-font-primary">
-              {dice.value}
-            </div>
+            <div className="text-5xl font-black tabular-nums text-white">{dice.value}</div>
           </div>
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }
-
-// ── Hub components ──────────────────────────────────────────────────────
 
 function HubSection({
   label,
@@ -420,15 +459,24 @@ function HubSection({
   children,
 }: {
   label: string
-  icon?: React.ComponentType<{ className?: string; size?: number }>
-  children: React.ReactNode
+  icon?: ComponentType<{ className?: string; size?: number }>
+  children: ReactNode
 }) {
   return (
-    <div className="mb-3">
-      <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-widest text-font-muted">
-        {Icon && <Icon className="h-3 w-3" />}
+    <div className="mb-3 last:mb-0">
+      <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/44">
+        {Icon && <Icon className="h-3.5 w-3.5" />}
         {label}
       </div>
+      {children}
+    </div>
+  )
+}
+
+function FieldRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center gap-2 last:mb-0">
+      <span className="w-16 shrink-0 text-xs font-medium text-white/48">{label}</span>
       {children}
     </div>
   )
@@ -439,17 +487,17 @@ function HubTile({
   label,
   onClick,
 }: {
-  icon: React.ComponentType<{ className?: string; size?: number }>
+  icon: ComponentType<{ className?: string; size?: number }>
   label: string
   onClick: () => void
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center justify-center gap-1 rounded-lg bg-bg-card px-2 py-3 text-font-secondary transition-all hover:-translate-y-0.5 hover:bg-bg-hover hover:text-font-primary active:translate-y-0"
+      className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg bg-white/8 px-2 text-white/74 ring-1 ring-white/8 transition-colors hover:bg-white/12 hover:text-white"
     >
       <Icon className="h-5 w-5" />
-      <span className="text-xs font-medium">{label}</span>
+      <span className="text-xs font-bold">{label}</span>
     </button>
   )
 }
@@ -461,7 +509,7 @@ function HubToggle({
   onToggle,
   activeClass,
 }: {
-  icon: React.ComponentType<{ className?: string; size?: number }>
+  icon: ComponentType<{ className?: string; size?: number }>
   label: string
   active: boolean
   onToggle: () => void
@@ -470,10 +518,10 @@ function HubToggle({
   return (
     <button
       onClick={onToggle}
-      className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ring-1 transition-all ${
+      className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold ring-1 transition-colors ${
         active
           ? activeClass
-          : 'bg-bg-card text-font-secondary ring-border hover:bg-bg-hover hover:text-font-primary'
+          : 'bg-white/8 text-white/66 ring-white/8 hover:bg-white/12 hover:text-white'
       }`}
     >
       <Icon className="h-4 w-4" />
@@ -492,31 +540,29 @@ function SegmentedControl<T extends string | number>({
   onChange: (v: T) => void
 }) {
   return (
-    <div className="flex flex-1 gap-1 rounded-lg bg-bg-card p-0.5">
-      {options.map((opt) => (
+    <div className="grid flex-1 grid-flow-col gap-1 rounded-lg bg-black/28 p-1 ring-1 ring-white/8">
+      {options.map((option) => (
         <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-            value === opt.value
-              ? 'bg-bg-accent text-font-white shadow-sm'
-              : 'text-font-secondary hover:text-font-primary'
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          className={`min-h-9 rounded-md px-2 text-sm font-black transition-colors ${
+            value === option.value
+              ? 'bg-white text-zinc-950 shadow-sm'
+              : 'text-white/62 hover:bg-white/10 hover:text-white'
           }`}
         >
-          {opt.label}
+          {option.label}
         </button>
       ))}
     </div>
   )
 }
 
-// ── Player panel ─────────────────────────────────────────────────────────
-
 interface PlayerPanelProps {
   index: number
   player: Player
   allPlayers: Player[]
-  rotated: boolean
+  orientation: PanelOrientation
   showPoison: boolean
   showCmdDmg: boolean
   panelClassName?: string
@@ -529,7 +575,7 @@ function PlayerPanel({
   index,
   player,
   allPlayers,
-  rotated,
+  orientation,
   showPoison,
   showCmdDmg,
   panelClassName = '',
@@ -538,205 +584,245 @@ function PlayerPanel({
   onCmdDmg,
 }: PlayerPanelProps) {
   const accent = PLAYER_ACCENTS[index % PLAYER_ACCENTS.length]
-
+  const others = allPlayers.filter((other) => other.id !== player.id)
   const maxCmdDmg = Math.max(0, ...Object.values(player.commanderDamage))
   const isDead = player.life <= 0 || player.poison >= 10 || maxCmdDmg >= 21
-  const isCritical =
-    !isDead && (player.life <= 5 || player.poison >= 7 || maxCmdDmg >= 18)
-
+  const isCritical = !isDead && (player.life <= 5 || player.poison >= 7 || maxCmdDmg >= 18)
   const [lastDelta, setLastDelta] = useState<{
     type: 'life' | 'poison' | 'cmd'
     value: number
+    anchor: 'left' | 'right'
     key: number
   } | null>(null)
+
   useEffect(() => {
     if (!lastDelta) return
-    const t = setTimeout(() => setLastDelta(null), 900)
-    return () => clearTimeout(t)
+    const timeout = setTimeout(() => setLastDelta(null), 850)
+    return () => clearTimeout(timeout)
   }, [lastDelta])
 
-  const handleLife = (delta: number) => {
-    setLastDelta((prev) =>
-      prev?.type === 'life'
-        ? { type: 'life', value: prev.value + delta, key: Date.now() }
-        : { type: 'life', value: delta, key: Date.now() },
+  const markDelta = (type: 'life' | 'poison' | 'cmd', value: number, anchor: 'left' | 'right') => {
+    setLastDelta((previous) =>
+      previous?.type === type && previous.anchor === anchor
+        ? { type, value: previous.value + value, anchor, key: Date.now() }
+        : { type, value, anchor, key: Date.now() },
     )
+  }
+
+  const handleLife = (delta: number, anchor: 'left' | 'right') => {
+    markDelta('life', delta, anchor)
     onLife(delta)
   }
 
   const handlePoison = (delta: number) => {
-    setLastDelta({ type: 'poison', value: delta, key: Date.now() })
+    markDelta('poison', delta, delta > 0 ? 'right' : 'left')
     onPoison(delta)
   }
 
   const handleCmd = (sourceId: number, delta: number) => {
-    setLastDelta({ type: 'cmd', value: delta, key: Date.now() })
+    markDelta('cmd', delta, delta > 0 ? 'right' : 'left')
     onCmdDmg(sourceId, delta)
   }
 
-  const others = allPlayers.filter((o) => o.id !== player.id)
+  const orientedContentClass =
+    orientation === 'normal'
+      ? 'absolute inset-0 grid grid-cols-[1fr_auto_1fr] items-center'
+      : orientation === 'opposite'
+        ? 'absolute inset-0 grid rotate-180 grid-cols-[1fr_auto_1fr] items-center'
+        : `absolute left-1/2 top-1/2 grid h-[min(100%,34rem)] w-[min(100%,28rem)] -translate-x-1/2 -translate-y-1/2 grid-cols-[1fr_auto_1fr] items-center ${
+            orientation === 'left' ? 'rotate-90' : '-rotate-90'
+          }`
 
-  // Every player sees "+" above the life number and "−" below it from their
-  // own point of view. The panel is rotate-180'd for rotated seats, so the
-  // DOM-top button visually lands at the bottom for that user — we flip the
-  // delta accordingly so the convention holds for everyone.
-  const topDelta = rotated ? -1 : +1
-  const bottomDelta = -topDelta
+  const counterDockClass =
+    orientation === 'normal'
+      ? 'bottom-3 right-3'
+      : orientation === 'opposite'
+        ? 'left-3 top-3 rotate-180'
+        : orientation === 'left'
+          ? 'left-3 top-1/2 -translate-y-1/2 rotate-90'
+          : 'right-3 top-1/2 -translate-y-1/2 -rotate-90'
 
   return (
-    <div
-      className={`relative flex overflow-hidden rounded-lg ${accent.panel} ring-2 ${accent.panelRing} ${
-        rotated ? 'rotate-180' : ''
-      } ${isDead ? 'grayscale opacity-70' : ''} ${panelClassName}`}
+    <article
+      className={`relative min-h-0 overflow-hidden rounded-xl border border-border ${accent.panel} shadow-xl ${accent.glow} ring-1 ${accent.ring} ${
+        isDead ? 'saturate-50 opacity-80' : ''
+      } ${panelClassName}`}
     >
-      {/* Life tap zones — top half / bottom half */}
-      <div className="relative flex flex-1 flex-col">
-        <button
-          onClick={() => handleLife(topDelta)}
-          className="group flex flex-1 items-start justify-center pt-3 transition-colors active:bg-black/25"
-          aria-label={topDelta < 0 ? 'decrement life' : 'increment life'}
-        >
-          {topDelta < 0 ? (
-            <Minus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
-          ) : (
-            <Plus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
-          )}
-        </button>
-        <button
-          onClick={() => handleLife(bottomDelta)}
-          className="group flex flex-1 items-end justify-center pb-3 transition-colors active:bg-black/25"
-          aria-label={bottomDelta < 0 ? 'decrement life' : 'increment life'}
-        >
-          {bottomDelta < 0 ? (
-            <Minus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
-          ) : (
-            <Plus className="h-7 w-7 text-white/50 transition-colors group-hover:text-white/90" />
-          )}
-        </button>
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),transparent_38%,rgba(0,0,0,0.16))]" />
+      <div className={`absolute inset-x-0 top-0 h-1.5 ${accent.rail}`} />
 
-        {/* Central life number + label (pointer-events pass-through so tap zones above work) */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center select-none">
-          <div
-            className={`text-[min(32vw,11rem)] font-black leading-none tabular-nums drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] transition-colors ${
-              isCritical ? 'text-red-200' : 'text-white'
-            }`}
-          >
-            {player.life}
-          </div>
-          <div
-            className={`mt-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-widest ${accent.chip}`}
-          >
+      <div className={orientedContentClass}>
+        <LifeZone
+          delta={-1}
+          label={`Diminuisci vita Player ${player.id}`}
+          shortcut="-5"
+          anchor="left"
+          onClick={handleLife}
+        />
+
+        <div className="pointer-events-none relative z-10 flex min-w-[7.4rem] flex-col items-center justify-center px-1 text-center select-none sm:min-w-[9rem]">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-font-muted">
             Player {player.id}
           </div>
+          <div className="mt-1 flex items-baseline justify-center gap-1">
+            <span
+              className={`text-[clamp(4.9rem,24vmin,11.5rem)] font-black leading-[0.82] tracking-normal tabular-nums ${
+                isCritical ? 'text-bg-red' : 'text-font-primary'
+              }`}
+            >
+              {player.life}
+            </span>
+          </div>
+          <div className={`mt-2 h-1 w-14 rounded-full ${accent.rail}`} />
         </div>
+
+        <LifeZone
+          delta={1}
+          label={`Aumenta vita Player ${player.id}`}
+          shortcut="+5"
+          anchor="right"
+          onClick={handleLife}
+        />
+
+        {lastDelta && (
+          <div
+            key={lastDelta.key}
+            className={`pointer-events-none absolute top-1/2 z-30 -translate-y-1/2 text-3xl font-black tabular-nums drop-shadow-[0_6px_18px_rgba(0,0,0,0.5)] animate-pulse ${
+              lastDelta.anchor === 'left' ? 'left-[18%]' : 'right-[18%]'
+            } ${
+              lastDelta.type === 'life'
+                ? lastDelta.value > 0
+                  ? 'text-emerald-200'
+                  : 'text-red-200'
+                : lastDelta.type === 'poison'
+                  ? 'text-emerald-200'
+                  : 'text-amber-200'
+            }`}
+          >
+            {lastDelta.value > 0 ? `+${lastDelta.value}` : lastDelta.value}
+          </div>
+        )}
       </div>
 
-      {/* Side pill column — poison + commander damage (always aligned to right in DOM;
-          when the panel is rotated, visually appears on the user's left, still reachable) */}
       {(showPoison || (showCmdDmg && others.length > 0)) && (
-        <div className="flex flex-col items-stretch justify-center gap-1.5 pr-1.5">
+        <aside
+          className={`absolute z-20 flex max-w-[calc(100%-1.5rem)] gap-1.5 overflow-x-auto ${counterDockClass}`}
+        >
           {showPoison && (
-            <div className="flex flex-col items-stretch overflow-hidden rounded-full bg-black/40 ring-1 ring-white/20 backdrop-blur-sm">
-              <button
-                onClick={() => handlePoison(1)}
-                className="flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none text-bg-green transition-colors active:bg-white/10"
-                aria-label="increment poison"
-              >
-                +
-              </button>
-              <div className="flex items-center justify-center gap-1 px-1 py-0.5 text-sm font-bold text-bg-green">
-                <Droplet size={12} />
-                <span className="tabular-nums">{player.poison}</span>
-              </div>
-              <button
-                onClick={() => handlePoison(-1)}
-                className="flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none text-bg-green transition-colors active:bg-white/10"
-                aria-label="decrement poison"
-              >
-                −
-              </button>
-            </div>
+            <CounterPill
+              icon={Droplet}
+              value={player.poison}
+              label="Poison"
+              className="bg-emerald-950/58 text-emerald-100 ring-emerald-100/20"
+              onIncrement={() => handlePoison(1)}
+              onDecrement={() => handlePoison(-1)}
+            />
           )}
 
           {showCmdDmg &&
             others.map((other) => {
-              const srcAccent = PLAYER_ACCENTS[(other.id - 1) % PLAYER_ACCENTS.length]
-              const dmg = player.commanderDamage[other.id] ?? 0
+              const sourceAccent = PLAYER_ACCENTS[(other.id - 1) % PLAYER_ACCENTS.length]
               return (
-                <div
+                <CounterPill
                   key={other.id}
-                  className={`flex flex-col items-stretch overflow-hidden rounded-full ${srcAccent.bg} ring-1 ring-white/25 backdrop-blur-sm`}
-                >
-                  <button
-                    onClick={() => handleCmd(other.id, 1)}
-                    className={`flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none transition-colors active:bg-white/10 ${srcAccent.text}`}
-                    aria-label={`increment commander damage from P${other.id}`}
-                  >
-                    +
-                  </button>
-                  <div
-                    className={`flex items-center justify-center gap-1 px-1 py-0.5 text-sm font-bold ${srcAccent.text}`}
-                  >
-                    <Crown size={12} />
-                    <span className="tabular-nums">{dmg}</span>
-                  </div>
-                  <button
-                    onClick={() => handleCmd(other.id, -1)}
-                    className={`flex h-8 min-w-12 items-center justify-center px-2 text-sm font-bold leading-none transition-colors active:bg-white/10 ${srcAccent.text}`}
-                    aria-label={`decrement commander damage from P${other.id}`}
-                  >
-                    −
-                  </button>
-                </div>
+                  icon={Crown}
+                  value={player.commanderDamage[other.id] ?? 0}
+                  label={`Commander damage da P${other.id}`}
+                  className={`${sourceAccent.soft} ${sourceAccent.text}`}
+                  onIncrement={() => handleCmd(other.id, 1)}
+                  onDecrement={() => handleCmd(other.id, -1)}
+                />
               )
             })}
-        </div>
-      )}
-
-      {/* Corner ±5 pills — DOM top corners = visual bottom for rotated users */}
-      <button
-        onClick={() => handleLife(topDelta * 5)}
-        className="absolute left-2 top-2 min-h-8 rounded-md bg-black/40 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm transition-colors active:bg-black/60"
-        aria-label={topDelta < 0 ? 'life −5' : 'life +5'}
-      >
-        {topDelta < 0 ? '−5' : '+5'}
-      </button>
-      <button
-        onClick={() => handleLife(bottomDelta * 5)}
-        className="absolute left-2 bottom-2 min-h-8 rounded-md bg-black/40 px-2.5 py-1 text-xs font-bold text-white backdrop-blur-sm transition-colors active:bg-black/60"
-        aria-label={bottomDelta < 0 ? 'life −5' : 'life +5'}
-      >
-        {bottomDelta < 0 ? '−5' : '+5'}
-      </button>
-
-      {/* Delta flash */}
-      {lastDelta && (
-        <div
-          key={lastDelta.key}
-          className={`pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[calc(50%+4.5rem)] text-3xl font-bold animate-pulse ${
-            lastDelta.type === 'life'
-              ? lastDelta.value > 0
-                ? 'text-green-200'
-                : 'text-red-200'
-              : lastDelta.type === 'poison'
-              ? 'text-green-200'
-              : 'text-amber-200'
-          }`}
-        >
-          {lastDelta.value > 0 ? `+${lastDelta.value}` : lastDelta.value}
-          {lastDelta.type === 'poison' && ' ☠'}
-          {lastDelta.type === 'cmd' && ' 👑'}
-        </div>
+        </aside>
       )}
 
       {isDead && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="rounded-full bg-black/80 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-red-300 ring-1 ring-red-400/40">
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-black/24">
+          <div className="rounded-full bg-black/78 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-red-100 ring-1 ring-red-100/30">
             Defeated
           </div>
         </div>
       )}
+    </article>
+  )
+}
+
+function LifeZone({
+  delta,
+  label,
+  shortcut,
+  anchor,
+  onClick,
+}: {
+  delta: number
+  label: string
+  shortcut: string
+  anchor: 'left' | 'right'
+  onClick: (delta: number, anchor: 'left' | 'right') => void
+}) {
+  const Icon = delta > 0 ? Plus : Minus
+
+  return (
+    <div className="relative z-10 flex h-full min-w-0 flex-col">
+      <button
+        onClick={() => onClick(delta, anchor)}
+        className="group flex min-h-0 flex-1 items-center justify-center transition-colors active:bg-bg-hover/55"
+        aria-label={label}
+      >
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-bg-surface text-font-secondary ring-1 ring-border-light transition-colors group-hover:text-font-primary group-active:bg-bg-cell">
+          <Icon className="h-8 w-8" strokeWidth={2.75} />
+        </span>
+      </button>
+      <button
+        onClick={() => onClick(delta * 5, anchor)}
+        className="mx-auto mb-3 flex min-h-9 min-w-14 items-center justify-center rounded-lg bg-bg-surface px-3 text-sm font-bold text-font-secondary ring-1 ring-border transition-colors hover:bg-bg-hover hover:text-font-primary active:bg-bg-cell"
+        aria-label={`${label} di 5`}
+      >
+        {shortcut}
+      </button>
     </div>
   )
 }
 
+function CounterPill({
+  icon: Icon,
+  value,
+  label,
+  className,
+  onIncrement,
+  onDecrement,
+}: {
+  icon: ComponentType<{ className?: string; size?: number }>
+  value: number
+  label: string
+  className: string
+  onIncrement: () => void
+  onDecrement: () => void
+}) {
+  return (
+    <div
+      className={`grid w-14 overflow-hidden rounded-full text-center shadow-xl ring-1 backdrop-blur-md ${className}`}
+      aria-label={label}
+    >
+      <button
+        onClick={onIncrement}
+        className="flex h-9 items-center justify-center text-sm font-black transition-colors active:bg-white/16"
+        aria-label={`${label}: aumenta`}
+      >
+        +
+      </button>
+      <div className="flex min-h-9 flex-col items-center justify-center gap-0.5 border-y border-white/10 px-1">
+        <Icon className="h-3.5 w-3.5" />
+        <span className="text-sm font-black leading-none tabular-nums">{value}</span>
+      </div>
+      <button
+        onClick={onDecrement}
+        className="flex h-9 items-center justify-center text-sm font-black transition-colors active:bg-white/16"
+        aria-label={`${label}: diminuisci`}
+      >
+        -
+      </button>
+    </div>
+  )
+}

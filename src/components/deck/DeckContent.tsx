@@ -9,11 +9,15 @@ import {
   ArrowUpDown,
   Filter,
   Layers,
+  ChevronDown,
+  ChevronsDown,
+  ChevronsUp,
 } from 'lucide-react'
 import DeckCard from './DeckCard'
 import DeckGridView from './DeckGridView'
 import DeckTextView from './DeckTextView'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
+import { getPriceSortValue, summarizePreferredPrices } from '@/lib/utils/price'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
 
@@ -122,16 +126,18 @@ export default function DeckContent({
         stored = JSON.parse(raw)
       } catch { /* ignore */ }
     }
-    if (stored?.view) setViewMode(stored.view)
-    if (stored?.group) setGroupMode(stored.group)
-    if (stored?.sort) setSortMode(stored.sort)
-    if (typeof stored?.cols === 'number') {
-      setGridCols(stored.cols)
-    } else {
-      // Pick the responsive default once. ≥sm (640px) → 5, else 3.
-      const isWide = window.matchMedia('(min-width: 640px)').matches
-      setGridCols(isWide ? 5 : 3)
-    }
+    queueMicrotask(() => {
+      if (stored?.view) setViewMode(stored.view)
+      if (stored?.group) setGroupMode(stored.group)
+      if (stored?.sort) setSortMode(stored.sort)
+      if (typeof stored?.cols === 'number') {
+        setGridCols(stored.cols)
+      } else {
+        // Pick the responsive default once. ≥sm (640px) → 5, else 3.
+        const isWide = window.matchMedia('(min-width: 640px)').matches
+        setGridCols(isWide ? 5 : 3)
+      }
+    })
   }, [deckId])
 
   useEffect(() => {
@@ -146,7 +152,7 @@ export default function DeckContent({
   // If sections appear/disappear, fix orphan group selection.
   useEffect(() => {
     if (groupMode === 'section' && (sections?.length ?? 0) === 0) {
-      setGroupMode('type')
+      queueMicrotask(() => setGroupMode('type'))
     }
   }, [groupMode, sections])
 
@@ -156,6 +162,71 @@ export default function DeckContent({
   const [sectionFilter, setSectionFilter] = useState<Set<string>>(new Set())
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set())
   const [showFilterPanel, setShowFilterPanel] = useState(false)
+
+  // Collapsed sections — initialized from server-side `is_collapsed` flag.
+  // When the user is editing the deck we also persist the toggle via PATCH.
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    () => new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+  )
+  // Re-sync when the section list changes identity (e.g. preset apply).
+  useEffect(() => {
+    setCollapsedSections(
+      new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+    )
+  }, [sections])
+
+  const toggleSectionCollapsed = useCallback(
+    (key: string) => {
+      // Empty key = uncategorized bucket — collapse only locally, no row.
+      setCollapsedSections((prev) => {
+        const next = new Set(prev)
+        const willCollapse = !next.has(key)
+        if (willCollapse) next.add(key)
+        else next.delete(key)
+        // Persist for owner-edit sessions only. Best-effort fire-and-forget.
+        if (deckId && key) {
+          void fetch(`/api/decks/${deckId}/sections/${key}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ is_collapsed: willCollapse }),
+          }).catch(() => {})
+        }
+        return next
+      })
+    },
+    [deckId],
+  )
+
+  const allCollapsed = useMemo(() => {
+    if (!sections || sections.length === 0) return false
+    return sections.every((s) => collapsedSections.has(s.id))
+  }, [sections, collapsedSections])
+
+  const toggleAllSections = useCallback(async () => {
+    if (!sections || sections.length === 0 || !deckId) return
+    const next = !allCollapsed
+    // Optimistic local toggle
+    setCollapsedSections(
+      next ? new Set(sections.map((s) => s.id)) : new Set(),
+    )
+    try {
+      const res = await fetch(`/api/decks/${deckId}/sections`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ is_collapsed: next }),
+      })
+      if (!res.ok) {
+        // Rollback on failure: re-derive from current `sections` server state.
+        setCollapsedSections(
+          new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+        )
+      }
+    } catch {
+      setCollapsedSections(
+        new Set((sections ?? []).filter((s) => s.is_collapsed).map((s) => s.id)),
+      )
+    }
+  }, [allCollapsed, sections, deckId])
 
   const visibleCards = useMemo(() => {
     const noType = typeFilter.size === 0
@@ -208,8 +279,8 @@ export default function DeckContent({
         return (a, b) => a.card.name.localeCompare(b.card.name)
       case 'price':
         return (a, b) =>
-          ((b.card.prices_eur ?? b.card.prices_usd ?? 0) as number) -
-          ((a.card.prices_eur ?? a.card.prices_usd ?? 0) as number) ||
+          getPriceSortValue(b.card) -
+          getPriceSortValue(a.card) ||
           a.card.name.localeCompare(b.card.name)
       case 'released':
         return (a, b) =>
@@ -422,6 +493,24 @@ export default function DeckContent({
           </select>
         </label>
 
+        {groupMode === 'section' && (sections?.length ?? 0) > 0 && (
+          <button
+            onClick={toggleAllSections}
+            className="flex h-10 items-center gap-1.5 rounded-lg bg-bg-cell px-3 text-xs text-font-secondary hover:text-font-primary"
+            aria-label={allCollapsed ? 'Expand all sections' : 'Collapse all sections'}
+            title={allCollapsed ? 'Expand all' : 'Collapse all'}
+          >
+            {allCollapsed ? (
+              <ChevronsDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronsUp className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">
+              {allCollapsed ? 'Expand all' : 'Collapse all'}
+            </span>
+          </button>
+        )}
+
         <button
           onClick={() => setShowFilterPanel((prev) => !prev)}
           className={`flex h-10 items-center gap-1.5 rounded-lg px-3 text-xs transition-colors ${
@@ -622,13 +711,6 @@ export default function DeckContent({
                   const section = sections?.find((x) => x.id === key)
                   headerLabel = section?.name ?? 'Uncategorized'
                   headerDot = section?.color ?? (section ? '#475569' : null)
-                  const totalEur = entries.reduce((sum, e) => {
-                    const price =
-                      (e.card.prices_eur as unknown as number | null) ??
-                      (e.card.prices_usd as unknown as number | null) ??
-                      0
-                    return sum + Number(price) * e.quantity
-                  }, 0)
                   const nonLand = entries.filter(
                     (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
                   )
@@ -639,29 +721,56 @@ export default function DeckContent({
                   const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
                   const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
                   const parts: string[] = []
-                  if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
+                  const priceSummary = summarizePreferredPrices(entries)
+                  if (priceSummary) parts.push(priceSummary)
                   if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
                   headerExtras = parts.length > 0 ? parts.join(' · ') : null
                 }
 
+                const isCollapsed = collapsedSections.has(key)
+                const accent = headerDot ?? '#475569'
                 return (
-                  <div key={key || '__uncategorized__'}>
-                    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
-                      {headerDot && (
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ background: headerDot }}
-                        />
-                      )}
-                      {headerLabel}
-                      <span className="text-xs text-font-muted">({count})</span>
-                      {headerExtras && (
-                        <span className="text-[10px] text-font-muted">
-                          {headerExtras}
-                        </span>
-                      )}
-                    </h3>
-                    <div className="flex flex-col gap-1">
+                  <div
+                    key={key || '__uncategorized__'}
+                    className="relative overflow-hidden rounded-xl border border-border-light/60 bg-bg-surface/40"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-2 left-1.5 w-0.5 rounded-full"
+                      style={{ background: accent, boxShadow: `0 0 6px ${accent}40` }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleSectionCollapsed(key)}
+                      aria-expanded={!isCollapsed}
+                      className="flex w-full items-center gap-2 py-2 pl-4 pr-3 sm:pr-4 text-left transition-colors hover:bg-bg-cell/40"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-font-muted transition-transform ${
+                          isCollapsed ? '-rotate-90' : ''
+                        }`}
+                      />
+                      <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-semibold text-font-secondary">
+                        {headerDot && (
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-full"
+                            style={{ background: headerDot }}
+                          />
+                        )}
+                        {headerLabel}
+                        <span className="text-xs text-font-muted">({count})</span>
+                        {headerExtras && (
+                          <span className="text-[10px] text-font-muted">
+                            {headerExtras}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                    <div
+                      className={`flex flex-col gap-1 pl-4 pr-3 sm:pr-4 pb-3 transition-all ${
+                        isCollapsed ? 'hidden' : ''
+                      }`}
+                    >
                       {entries.map((entry) => (
                         <DeckCard
                           key={`${entry.card.id}-${entry.board}`}
@@ -706,13 +815,6 @@ export default function DeckContent({
                 const section = sections?.find((x) => x.id === key)
                 headerLabel = section?.name ?? 'Uncategorized'
                 headerDot = section?.color ?? (section ? '#475569' : null)
-                const totalEur = entries.reduce((sum, e) => {
-                  const price =
-                    (e.card.prices_eur as unknown as number | null) ??
-                    (e.card.prices_usd as unknown as number | null) ??
-                    0
-                  return sum + Number(price) * e.quantity
-                }, 0)
                 const nonLand = entries.filter(
                   (e) => !(e.card.type_line ?? '').toLowerCase().includes('land'),
                 )
@@ -723,40 +825,67 @@ export default function DeckContent({
                 const totalNonLandQty = nonLand.reduce((sum, e) => sum + e.quantity, 0)
                 const avgCmc = totalNonLandQty > 0 ? totalCmc / totalNonLandQty : 0
                 const parts: string[] = []
-                if (totalEur > 0) parts.push(`€${totalEur.toFixed(2)}`)
+                const priceSummary = summarizePreferredPrices(entries)
+                if (priceSummary) parts.push(priceSummary)
                 if (totalNonLandQty > 0) parts.push(`avg ${avgCmc.toFixed(2)} CMC`)
                 headerExtras = parts.length > 0 ? parts.join(' · ') : null
               }
+              const isCollapsed = collapsedSections.has(key)
+              const accent = headerDot ?? '#475569'
               return (
-                <div key={key || '__uncategorized__'}>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-font-secondary">
-                    {headerDot && (
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-full"
-                        style={{ background: headerDot }}
-                      />
-                    )}
-                    {headerLabel}
-                    <span className="text-xs text-font-muted">({count})</span>
-                    {headerExtras && (
-                      <span className="text-[10px] text-font-muted">
-                        {headerExtras}
-                      </span>
-                    )}
-                  </h3>
-                  <DeckGridView
-                    cards={entries}
-                    onQuantityChange={onQuantityChange}
-                    onRemove={onRemove}
-                    isCommander={isCommander}
-                    onToggleCommander={onToggleCommander}
-                    onCardClick={onCardClick}
-                    readOnly={readOnly}
-                    onMoveToBoard={onMoveToBoard}
-                    sections={editingWired ? sectionOptions : undefined}
-                    onSectionChange={onSectionChange}
-                    cols={gridCols ?? undefined}
+                <div
+                  key={key || '__uncategorized__'}
+                  className="relative overflow-hidden rounded-xl border border-border-light/60 bg-bg-surface/40"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-2 left-1.5 w-0.5 rounded-full"
+                    style={{ background: accent, boxShadow: `0 0 6px ${accent}40` }}
                   />
+                  <button
+                    type="button"
+                    onClick={() => toggleSectionCollapsed(key)}
+                    aria-expanded={!isCollapsed}
+                    className="flex w-full items-center gap-2 py-2 pl-4 pr-3 sm:pr-4 text-left transition-colors hover:bg-bg-cell/40"
+                  >
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-font-muted transition-transform ${
+                        isCollapsed ? '-rotate-90' : ''
+                      }`}
+                    />
+                    <span className="flex flex-1 flex-wrap items-center gap-2 text-sm font-semibold text-font-secondary">
+                      {headerDot && (
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full"
+                          style={{ background: headerDot }}
+                        />
+                      )}
+                      {headerLabel}
+                      <span className="text-xs text-font-muted">({count})</span>
+                      {headerExtras && (
+                        <span className="text-[10px] text-font-muted">
+                          {headerExtras}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="pl-4 pr-3 sm:pr-4 pb-3">
+                      <DeckGridView
+                        cards={entries}
+                        onQuantityChange={onQuantityChange}
+                        onRemove={onRemove}
+                        isCommander={isCommander}
+                        onToggleCommander={onToggleCommander}
+                        onCardClick={onCardClick}
+                        readOnly={readOnly}
+                        onMoveToBoard={onMoveToBoard}
+                        sections={editingWired ? sectionOptions : undefined}
+                        onSectionChange={onSectionChange}
+                        cols={gridCols ?? undefined}
+                      />
+                    </div>
+                  )}
                 </div>
               )
             })}

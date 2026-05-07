@@ -25,17 +25,26 @@ export default function AddCardSearch({
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const searchCards = useCallback(async (searchQuery: string) => {
     if (searchQuery.length < 2) {
+      abortRef.current?.abort()
       setResults([])
       setIsOpen(false)
+      setLoading(false)
       return
     }
 
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
     setLoading(true)
     try {
-      const res = await fetch(`/api/cards/search?q=${encodeURIComponent(searchQuery)}`)
+      const res = await fetch(`/api/cards/search?q=${encodeURIComponent(searchQuery)}`, {
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return
       if (res.ok) {
         const data = await res.json()
         const cards = data.cards ?? []
@@ -45,8 +54,9 @@ export default function AddCardSearch({
       }
     } catch {
       // silently fail
+    } finally {
+      if (!controller.signal.aborted) setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -54,6 +64,7 @@ export default function AddCardSearch({
     debounceRef.current = setTimeout(() => searchCards(query), 300)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      abortRef.current?.abort()
     }
   }, [query, searchCards])
 

@@ -85,7 +85,7 @@ async function syncCards(request: NextRequest) {
     let escape = false
     let objectStart = -1
     const BATCH_SIZE = 500
-    let batch: ReturnType<typeof mapScryfallCard>[] = []
+    const batch: ReturnType<typeof mapScryfallCard>[] = []
     let totalProcessed = 0
     let totalUpserted = 0
     let errors = 0

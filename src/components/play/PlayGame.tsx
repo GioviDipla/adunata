@@ -39,6 +39,12 @@ import CommanderChoiceModal from './CommanderChoiceModal'
 import SpecialActionsMenu from './SpecialActionsMenu'
 import RevealedCardsChooser from './RevealedCardsChooser'
 import CardActionMenu, { type ActionMenuZone, type ActionMenuDest } from '@/components/game/CardActionMenu'
+import {
+  DndContext,
+  useDroppable,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { useDndSensors } from '@/lib/hooks/useDndSensors'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -67,6 +73,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     prices_usd_foil: null,
     prices_eur: null,
     prices_eur_foil: null,
+    price_sort: null,
     released_at: null,
     legalities: null,
     power: data.power ?? null,
@@ -120,7 +127,7 @@ function CommandZoneCard({
         e.preventDefault()
         if (data) onOpenPreview(toCardRow(cardId, data))
       }}
-      {...longPress}
+      {...longPress.handlers}
       className="overflow-hidden rounded-lg border border-yellow-500/50 bg-bg-card select-none"
       style={{ width: 48, height: 67, touchAction: 'manipulation' }}
       title={`${data?.name ?? '?'} — tap to cast, hold to preview`}
@@ -170,7 +177,7 @@ function PeakCardButton({
       type="button"
       onClick={handleClick}
       onContextMenu={(e) => { e.preventDefault(); onOpenPreview(card) }}
-      {...longPress}
+      {...longPress.handlers}
       className="w-24 select-none"
       style={{ touchAction: 'manipulation' }}
       title={`${card.name} — tap for actions, hold to preview`}
@@ -226,11 +233,13 @@ export default function PlayGame(props: PlayGameProps) {
   useEffect(() => {
     if (mode === 'goldfish') {
       const gProps = props as PlayGameProps & { mode: 'goldfish' }
-      setGameState(gProps.initialState)
-      setCardMap(gProps.initialCardMap)
-      setPlayerNames({ [userId]: 'You', [gProps.botId]: gProps.botConfig.name })
-      if (gProps.deckTokens) setDeckTokens(gProps.deckTokens)
-      setLoading(false)
+      queueMicrotask(() => {
+        setGameState(gProps.initialState)
+        setCardMap(gProps.initialCardMap)
+        setPlayerNames({ [userId]: 'You', [gProps.botId]: gProps.botConfig.name })
+        if (gProps.deckTokens) setDeckTokens(gProps.deckTokens)
+        setLoading(false)
+      })
       return
     }
 
@@ -261,18 +270,20 @@ export default function PlayGame(props: PlayGameProps) {
   useEffect(() => {
     if (mode !== 'goldfish') return
     const gProps = props as PlayGameProps & { mode: 'goldfish' }
-    setGameState(prev => {
-      if (!prev?.mulliganStage) return prev
-      const botDecision = prev.mulliganStage.playerDecisions[gProps.botId]
-      if (botDecision && !botDecision.decided) {
-        return applyAction(prev, {
-          type: 'keep_hand',
-          playerId: gProps.botId,
-          data: {},
-          text: '',
-        })
-      }
-      return prev
+    queueMicrotask(() => {
+      setGameState(prev => {
+        if (!prev?.mulliganStage) return prev
+        const botDecision = prev.mulliganStage.playerDecisions[gProps.botId]
+        if (botDecision && !botDecision.decided) {
+          return applyAction(prev, {
+            type: 'keep_hand',
+            playerId: gProps.botId,
+            data: {},
+            text: '',
+          })
+        }
+        return prev
+      })
     })
   }, [mode])
 
@@ -433,7 +444,9 @@ export default function PlayGame(props: PlayGameProps) {
   useEffect(() => {
     if (viewingZone === 'library' && !libraryViewLoggedRef.current) {
       libraryViewLoggedRef.current = true
-      sendAction({ type: 'library_view' as GameActionType, playerId: userId, data: {}, text: `${myName} is searching their library` })
+      queueMicrotask(() => {
+        sendAction({ type: 'library_view' as GameActionType, playerId: userId, data: {}, text: `${myName} is searching their library` })
+      })
     }
     if (viewingZone !== 'library') {
       libraryViewLoggedRef.current = false
@@ -494,6 +507,21 @@ export default function PlayGame(props: PlayGameProps) {
         return { instanceId: c.instanceId, card: toCardRow(c.cardId, data) }
       })
       .filter((x): x is { instanceId: string; card: CardRow } => x !== null)
+  }, [myState, cardMap])
+
+  // Top card of graveyard / exile for the zone-stack widgets in the action bar.
+  const graveyardTop = useMemo(() => {
+    const last = myState?.graveyard?.[myState.graveyard.length - 1]
+    if (!last) return null
+    const data = cardMap[last.instanceId] ?? cardMap[String(last.cardId)]
+    return data ? toCardRow(last.cardId, data) : null
+  }, [myState, cardMap])
+
+  const exileTop = useMemo(() => {
+    const last = myState?.exile?.[myState.exile.length - 1]
+    if (!last) return null
+    const data = cardMap[last.instanceId] ?? cardMap[String(last.cardId)]
+    return data ? toCardRow(last.cardId, data) : null
   }, [myState, cardMap])
 
   // Exile cards for zone viewer
@@ -580,13 +608,19 @@ export default function PlayGame(props: PlayGameProps) {
     } else {
       sendAction(createTap(userId, myName, instanceId, name))
     }
-  }, [myState, cardMap, sendAction, userId])
+  }, [myState, cardMap, sendAction, userId, myName])
 
   const handlePlayCard = useCallback((instanceId: string) => {
     const data = cardMap[instanceId]
     if (!data) return
     sendAction(createPlayCard(userId, myName, instanceId, data.cardId, data.name, 'hand', 'battlefield'))
-  }, [cardMap, sendAction, userId])
+  }, [cardMap, sendAction, userId, myName])
+
+  // Drag-and-drop: cards in hand are draggables, battlefield zones are
+  // droppables. Pointer activation distance keeps a tap below threshold
+  // routed to the click handler so the action menu still works.
+  const dndSensors = useDndSensors('game')
+  const { setNodeRef: setHandDropRef, isOver: isHandDropOver } = useDroppable({ id: 'zone-hand', data: { to: 'hand' } })
 
   const handleSendToGraveyard = useCallback((instanceId: string) => {
     if (!myState) return
@@ -599,7 +633,7 @@ export default function PlayGame(props: PlayGameProps) {
     if (isCmd) (action.data as Record<string, unknown>).isCommander = true
     if (isCmd) (action.data as Record<string, unknown>).cardName = data?.name ?? 'Commander'
     sendAction(action)
-  }, [myState, cardMap, sendAction, userId, isCommanderCard])
+  }, [myState, cardMap, sendAction, userId, myName, isCommanderCard])
 
   const handleExile = useCallback((instanceId: string) => {
     if (!myState) return
@@ -612,7 +646,7 @@ export default function PlayGame(props: PlayGameProps) {
     if (isCmd) (action.data as Record<string, unknown>).isCommander = true
     if (isCmd) (action.data as Record<string, unknown>).cardName = data?.name ?? 'Commander'
     sendAction(action)
-  }, [myState, cardMap, sendAction, userId, isCommanderCard])
+  }, [myState, cardMap, sendAction, userId, myName, isCommanderCard])
 
   const handleReturnToHand = useCallback((instanceId: string) => {
     if (!myState) return
@@ -620,7 +654,41 @@ export default function PlayGame(props: PlayGameProps) {
     if (!card) return
     const data = cardMap[instanceId] ?? cardMap[String(card.cardId)]
     sendAction(createMoveZone(userId, myName, instanceId, card.cardId, data?.name ?? 'card', 'battlefield', 'hand'))
-  }, [myState, cardMap, sendAction, userId])
+  }, [myState, cardMap, sendAction, userId, myName])
+
+  const handleDragEnd = useCallback((e: DragEndEvent) => {
+    const fromZone = (e.active.data.current as { from?: string } | undefined)?.from
+    const toZone = (e.over?.data.current as { to?: string } | undefined)?.to
+    const instanceId = (e.active.data.current as { instanceId?: string } | undefined)?.instanceId
+    if (!fromZone || !toZone || !instanceId) return
+
+    // hand → battlefield (existing path: play the card with mana cost UI)
+    if (fromZone === 'hand' && toZone === 'battlefield') {
+      handlePlayCard(instanceId)
+      return
+    }
+
+    // Anywhere → graveyard / exile / hand / libraryTop / libraryBottom
+    // For battlefield→graveyard/exile we already have helpers that flag
+    // commander; reuse them so commander tax/transfer logic still fires.
+    if (fromZone === 'battlefield' && toZone === 'graveyard') {
+      handleSendToGraveyard(instanceId)
+      return
+    }
+    if (fromZone === 'battlefield' && toZone === 'exile') {
+      handleExile(instanceId)
+      return
+    }
+    if (fromZone === 'battlefield' && toZone === 'hand') {
+      handleReturnToHand(instanceId)
+      return
+    }
+
+    // Generic path for the remaining combinations.
+    const data = cardMap[instanceId]
+    if (!data) return
+    sendAction(createMoveZone(userId, myName, instanceId, data.cardId, data.name, fromZone, toZone))
+  }, [handlePlayCard, handleSendToGraveyard, handleExile, handleReturnToHand, cardMap, sendAction, userId, myName])
 
   const handleReturnToCommandZone = useCallback((instanceId: string) => {
     if (!myState) return
@@ -885,20 +953,20 @@ export default function PlayGame(props: PlayGameProps) {
   // Combat: declare attackers
   const handleDeclareAttackers = useCallback((attackerIds: string[], attackerNames: string[]) => {
     sendAction(createDeclareAttackers(userId, myName, attackerIds, attackerNames))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   const handleSkipAttackers = useCallback(() => {
     sendAction(createDeclareAttackers(userId, myName, [], []))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   // Combat: declare blockers
   const handleDeclareBlockers = useCallback((assignments: { blockerId: string; attackerId: string; blockerName: string; attackerName: string }[]) => {
     sendAction(createDeclareBlockers(userId, myName, assignments))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   const handleSkipBlockers = useCallback(() => {
     sendAction(createDeclareBlockers(userId, myName, []))
-  }, [sendAction, userId])
+  }, [sendAction, userId, myName])
 
   // Discard to 7.
   // Must await each action sequentially: concurrent writes to game_states
@@ -981,7 +1049,9 @@ export default function PlayGame(props: PlayGameProps) {
     const { attackers, blockers } = gameState.combat
     if (attackers.length === 0) {
       // No attackers, just pass
-      sendAction(createCombatDamage(userId, 0, [], 'No combat damage'))
+      queueMicrotask(() => {
+        sendAction(createCombatDamage(userId, 0, [], 'No combat damage'))
+      })
       return
     }
 
@@ -1044,7 +1114,9 @@ export default function PlayGame(props: PlayGameProps) {
       ? `Combat: ${descParts.join('; ')}${damageToPlayer > 0 ? ` | ${damageToPlayer} to opponent` : ''}`
       : 'No combat damage'
 
-    sendAction(createCombatDamage(userId, damageToPlayer, creaturesDamaged, description))
+    queueMicrotask(() => {
+      sendAction(createCombatDamage(userId, damageToPlayer, creaturesDamaged, description))
+    })
   }, [gameState, userId, opponentId, cardMap, sendAction])
 
   // Attacker eligibility: creatures, tokens, or permanents with altered P/T
@@ -1074,7 +1146,7 @@ export default function PlayGame(props: PlayGameProps) {
     if (hasEligibleAttackers) return
     if (autoSkippedAttackersRef.current === gameState.turn) return
     autoSkippedAttackersRef.current = gameState.turn
-    handleSkipAttackers()
+    queueMicrotask(() => handleSkipAttackers())
   }, [gameState, isActivePlayer, hasPriority, hasEligibleAttackers, handleSkipAttackers])
 
   // Overlay conditions
@@ -1239,6 +1311,7 @@ export default function PlayGame(props: PlayGameProps) {
   }
 
   return (
+    <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
     <div
       className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
@@ -1352,6 +1425,7 @@ export default function PlayGame(props: PlayGameProps) {
             cards={myBattlefieldByZone.creatures}
             onTapToggle={handleTapToggle}
             phase={gameState?.phase}
+            dropId="bf-creatures"
             onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
             onCardPreview={(card, id, tapped) => {
               const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
@@ -1367,6 +1441,7 @@ export default function PlayGame(props: PlayGameProps) {
                 cards={myBattlefieldByZone.other}
                 onTapToggle={handleTapToggle}
                 phase={gameState?.phase}
+                dropId="bf-other"
                 onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
                 onCardPreview={(card, id, tapped) =>
                   setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
@@ -1383,6 +1458,7 @@ export default function PlayGame(props: PlayGameProps) {
                 cards={myBattlefieldByZone.tokens}
                 onTapToggle={handleTapToggle}
                 phase={gameState?.phase}
+                dropId="bf-tokens"
                 onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
                 onCardPreview={(card, id, tapped) => {
                   const bfCard = myState?.battlefield.find((c) => c.instanceId === id)
@@ -1399,6 +1475,7 @@ export default function PlayGame(props: PlayGameProps) {
               cards={myBattlefieldByZone.lands}
               onTapToggle={handleTapToggle}
               phase={gameState?.phase}
+              dropId="bf-lands"
               onCardAction={(card, id, tapped, x, y) => openActionMenu('battlefield', id, card, x, y, tapped)}
               onCardPreview={(card, id, tapped) =>
                 setPreview({ card, zone: 'battlefield', instanceId: id, tapped })
@@ -1424,14 +1501,20 @@ export default function PlayGame(props: PlayGameProps) {
       <div className="border-t border-border bg-bg-card px-3 py-2">
         <div className="flex gap-2">
           <div className="flex-1 min-w-0">
-            <HandArea
-              cards={myHandCards}
-              onPlayCard={handlePlayCard}
-              onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
-              onCardPreview={(card, instanceId) =>
-                setPreview({ card, zone: 'hand', instanceId })
-              }
-            />
+            <div
+              ref={setHandDropRef}
+              className={`rounded-lg transition-shadow ${isHandDropOver ? 'ring-2 ring-bg-accent' : ''}`}
+            >
+              <HandArea
+                cards={myHandCards}
+                onPlayCard={handlePlayCard}
+                draggable
+                onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
+                onCardPreview={(card, instanceId) =>
+                  setPreview({ card, zone: 'hand', instanceId })
+                }
+              />
+            </div>
           </div>
           {myState.commandZone.length > 0 && (
             <div className="flex shrink-0 flex-col gap-1">
@@ -1464,6 +1547,8 @@ export default function PlayGame(props: PlayGameProps) {
         libraryCount={myState.libraryCount}
         graveyardCount={myState.graveyard.length}
         exileCount={myState.exile.length}
+        graveyardTopCard={graveyardTop}
+        exileTopCard={exileTop}
         hasPriority={hasPriority}
         isActivePlayer={isActivePlayer}
         onPassPriority={() => sendAction(createPassPriority(userId, myName))}
@@ -1817,9 +1902,15 @@ export default function PlayGame(props: PlayGameProps) {
               ? () => handleTapToggle(actionMenu.instanceId)
               : undefined
           }
+          onCopy={
+            actionMenu.zone === 'battlefield'
+              ? () => handleCopy(actionMenu.instanceId)
+              : undefined
+          }
           onClose={closeActionMenu}
         />
       )}
     </div>
+    </DndContext>
   )
 }

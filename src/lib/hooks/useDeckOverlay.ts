@@ -35,7 +35,7 @@ export function useDeckOverlay(
 
   useEffect(() => {
     if (!enabled) {
-      setData(null)
+      queueMicrotask(() => setData(null))
       return
     }
     const ctrl = new AbortController()

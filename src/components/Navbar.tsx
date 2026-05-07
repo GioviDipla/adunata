@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Search,
@@ -11,7 +12,6 @@ import {
   User,
   Users,
   LogOut,
-  Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
   Info,
@@ -43,11 +43,6 @@ export function Navbar() {
     /\/decks\/[^/]+\/goldfish$/.test(pathname) ||
     /\/play\/[^/]+\/game$/.test(pathname);
 
-  // Close mobile drawer on route change
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -65,7 +60,7 @@ export function Navbar() {
       <aside className={`hidden md:flex ${collapsed ? 'md:w-16' : 'md:w-60'} md:flex-col md:fixed md:inset-y-0 transition-all duration-200`}>
         {/* Logo */}
         <div className={`flex h-16 items-center gap-2 ${collapsed ? 'justify-center px-2' : 'px-6'}`}>
-          <Sparkles className="h-6 w-6 shrink-0 text-font-accent" />
+          <BrandLogo size={32} />
           {!collapsed && (
             <span className="text-lg font-bold text-font-primary">
               Adunata!!!
@@ -189,7 +184,7 @@ export function Navbar() {
           }}
         >
           <div className="flex h-16 items-center gap-2 px-6">
-            <Sparkles className="h-6 w-6 shrink-0 text-font-accent" />
+            <BrandLogo size={34} />
             <span className="text-lg font-bold text-font-primary">Adunata!!!</span>
           </div>
 
@@ -201,6 +196,7 @@ export function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => setMobileOpen(false)}
                   className={`group flex items-center gap-3 text-base font-medium transition-colors ${
                     active ? "text-font-primary" : "text-font-secondary hover:text-font-primary"
                   }`}
@@ -231,6 +227,7 @@ export function Navbar() {
           <div className="mt-auto px-3 py-2">
             <Link
               href="/about"
+              onClick={() => setMobileOpen(false)}
               className={`group flex w-full items-center gap-3 text-base font-medium transition-colors ${
                 isActive("/about") ? "text-font-primary" : "text-font-secondary hover:text-font-primary"
               }`}
@@ -272,5 +269,18 @@ export function Navbar() {
         </aside>
       </div>
     </>
+  );
+}
+
+function BrandLogo({ size }: { size: number }) {
+  return (
+    <Image
+      src="/icons/icon-120.png"
+      alt="Adunata!!!"
+      width={size}
+      height={size}
+      className="shrink-0 rounded-lg ring-1 ring-white/15"
+      priority
+    />
   );
 }

@@ -23,7 +23,7 @@ export default function CardChip({
   const [hovering, setHovering] = useState(false)
   const anchorRef = useRef<HTMLSpanElement>(null)
   const longPress = useLongPress({ onLongPress: onPreview, delay: 400 })
-  const { wasLongPress, style, ...lpHandlers } = longPress
+  const { wasLongPress, handlers: lpHandlers } = longPress
 
   const handleClick = (e: React.MouseEvent) => {
     // The long-press already fired the preview — swallow the tap that follows.
@@ -50,7 +50,6 @@ export default function CardChip({
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
         {...lpHandlers}
-        style={style}
         className="cursor-pointer underline decoration-dashed decoration-font-accent/60 underline-offset-[3px] hover:decoration-font-accent"
       >
         {name}

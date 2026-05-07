@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { X, Printer, CheckSquare, Square, Mail, AlertTriangle } from 'lucide-react'
 import { generateProxyPdfWithDetails } from '@/lib/proxyPdf'
 import type { Database } from '@/types/supabase'
+import type { PaperOption, PaperPreset } from '@/lib/proxyPdf'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -19,9 +20,9 @@ interface ProxyPrintModalProps {
   onClose: () => void
 }
 
-type Paper = 'a4' | 'letter'
-type GapOption = 0 | 0.2 | 0.5 | 1.0
 type ScaleOption = 100 | 95 | 90
+type Orientation = 'portrait' | 'landscape'
+type GridPreset = '3x3' | '4x2' | '5x2' | 'custom'
 
 const SECTIONS: { key: string; label: string }[] = [
   { key: 'main', label: 'Maindeck' },
@@ -29,6 +30,19 @@ const SECTIONS: { key: string; label: string }[] = [
   { key: 'maybeboard', label: 'Maybeboard' },
   { key: 'tokens', label: 'Tokens' },
 ]
+
+const PAPER_SIZES: Record<Exclude<PaperPreset, 'custom'>, { width: number; height: number }> = {
+  a4: { width: 210, height: 297 },
+  a5: { width: 148, height: 210 },
+  a6: { width: 105, height: 148 },
+  letter: { width: 215.9, height: 279.4 },
+}
+
+const GRID_PRESETS: Record<Exclude<GridPreset, 'custom'>, { cols: number; rows: number }> = {
+  '3x3': { cols: 3, rows: 3 },
+  '4x2': { cols: 4, rows: 2 },
+  '5x2': { cols: 5, rows: 2 },
+}
 
 function isBasicLand(card: CardRow): boolean {
   return (card.type_line ?? '').includes('Basic Land')
@@ -38,15 +52,55 @@ function cardKey(entry: CardEntry): string {
   return `${entry.card.id}-${entry.board}`
 }
 
+function imageUriFromFaces(card: CardRow, key: 'png' | 'large' | 'normal'): string | null {
+  if (!Array.isArray(card.card_faces)) return null
+  const frontFace = card.card_faces[0]
+  if (!frontFace || typeof frontFace !== 'object' || Array.isArray(frontFace)) return null
+  const imageUris = frontFace.image_uris
+  if (!imageUris || typeof imageUris !== 'object' || Array.isArray(imageUris)) return null
+  const value = imageUris[key]
+  return typeof value === 'string' ? value : null
+}
+
+function deriveScryfallImageUrls(card: CardRow): string[] {
+  const urls: string[] = []
+  const facePng = imageUriFromFaces(card, 'png')
+  const faceLarge = imageUriFromFaces(card, 'large')
+  const faceNormal = imageUriFromFaces(card, 'normal')
+  if (facePng) urls.push(facePng)
+  if (faceLarge) urls.push(faceLarge)
+  const id = card.scryfall_id
+  if (id.length >= 2) {
+    urls.push(`https://cards.scryfall.io/png/front/${id[0]}/${id[1]}/${id}.png`)
+    urls.push(`https://cards.scryfall.io/large/front/${id[0]}/${id[1]}/${id}.jpg`)
+  }
+  if (faceNormal) urls.push(faceNormal)
+  if (card.image_normal) {
+    urls.push(card.image_normal)
+  }
+  return [...new Set(urls)]
+}
+
 export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
-  const [paper, setPaper] = useState<Paper>('a4')
-  const [gap, setGap] = useState<GapOption>(0)
+  const [paperPreset, setPaperPreset] = useState<PaperPreset>('a4')
+  const [customWidth, setCustomWidth] = useState(210)
+  const [customHeight, setCustomHeight] = useState(297)
+  const [orientation, setOrientation] = useState<Orientation>('portrait')
+  const [gridPreset, setGridPreset] = useState<GridPreset>('3x3')
+  const [customCols, setCustomCols] = useState(3)
+  const [customRows, setCustomRows] = useState(3)
+  const [gapX, setGapX] = useState(4)
+  const [gapY, setGapY] = useState(5)
   const [scale, setScale] = useState<ScaleOption>(100)
+  const [bleed, setBleed] = useState(1)
+  const [cutGuides, setCutGuides] = useState(true)
+  const [debugLayout, setDebugLayout] = useState(false)
   const [deselected, setDeselected] = useState<Set<string>>(() => {
     const set = new Set<string>()
     for (const entry of cards) {
-      if (isBasicLand(entry.card)) set.add(cardKey(entry))
+      const isDeckCard = entry.board === 'main' || entry.board === 'commander'
+      if (!isDeckCard || isBasicLand(entry.card)) set.add(cardKey(entry))
     }
     return set
   })
@@ -133,28 +187,49 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     return selectedCards.reduce((sum, e) => sum + e.quantity, 0)
   }, [selectedCards])
 
-  const buildPdfBlob = useCallback(async (): Promise<Blob | null> => {
+  const paper = useMemo<PaperOption>(() => {
+    if (paperPreset === 'custom') {
+      return {
+        preset: 'custom',
+        width: Math.max(1, customWidth),
+        height: Math.max(1, customHeight),
+      }
+    }
+    return { preset: paperPreset, ...PAPER_SIZES[paperPreset] }
+  }, [paperPreset, customWidth, customHeight])
+
+  const grid = useMemo(() => {
+    if (gridPreset !== 'custom') return GRID_PRESETS[gridPreset]
+    return {
+      cols: Math.max(1, Math.min(8, Math.floor(customCols))),
+      rows: Math.max(1, Math.min(8, Math.floor(customRows))),
+    }
+  }, [gridPreset, customCols, customRows])
+
+  const gapWarning = gapX <= 2 * bleed || gapY <= 2 * bleed
+
+  const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
     const cardsWithImages = selectedCards
-      .filter((e) => e.card.image_normal)
-      .map((e) => ({ imageUrl: e.card.image_normal!, quantity: e.quantity }))
+      .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
+      .filter((e) => e.imageUrls.length > 0)
     if (cardsWithImages.length === 0) return null
 
     const { blob, skippedUrls } = await generateProxyPdfWithDetails({
       paper,
-      gap,
+      orientation,
       scale: scale / 100,
+      bleed,
+      gapX,
+      gapY,
+      grid,
+      cutGuides,
+      debugLayout,
       cards: cardsWithImages,
       onProgress: (done, total) => setProgress({ done, total }),
     })
     setSkipWarning(skippedUrls.length)
-    return blob
-  }, [selectedCards, paper, gap, scale])
-
-  // Close only after a clean run; keep the modal open with a warning when
-  // any images failed to fetch so the user can retry.
-  const closeIfClean = useCallback(() => {
-    if (skipWarning === 0) onClose()
-  }, [skipWarning, onClose])
+    return { blob, skippedCount: skippedUrls.length }
+  }, [selectedCards, paper, orientation, scale, bleed, gapX, gapY, grid, cutGuides, debugLayout])
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true)
@@ -163,19 +238,19 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     try {
       const blob = await buildPdfBlob()
       if (!blob) return
-      const url = URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob.blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `${deckName}-proxies.pdf`
       a.click()
       URL.revokeObjectURL(url)
-      closeIfClean()
+      if (blob.skippedCount === 0) onClose()
     } catch (err) {
       console.error('[proxy-generate]', err)
     } finally {
       setGenerating(false)
     }
-  }, [buildPdfBlob, deckName, closeIfClean])
+  }, [buildPdfBlob, deckName, onClose])
 
   const handleShare = useCallback(async () => {
     setGenerating(true)
@@ -184,23 +259,23 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     try {
       const blob = await buildPdfBlob()
       if (!blob) return
-      const file = new File([blob], `${deckName}-proxies.pdf`, { type: 'application/pdf' })
+      const file = new File([blob.blob], `${deckName}-proxies.pdf`, { type: 'application/pdf' })
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
           title: `${deckName} — proxies`,
           text: `Proxies for ${deckName}`,
         })
-        closeIfClean()
+        if (blob.skippedCount === 0) onClose()
       } else {
         // Share API disappeared between detection and click — fall back to download.
-        const url = URL.createObjectURL(blob)
+        const url = URL.createObjectURL(blob.blob)
         const a = document.createElement('a')
         a.href = url
         a.download = `${deckName}-proxies.pdf`
         a.click()
         URL.revokeObjectURL(url)
-        closeIfClean()
+        if (blob.skippedCount === 0) onClose()
       }
     } catch (err) {
       // AbortError = user cancelled the share sheet. Don't surface it.
@@ -210,9 +285,9 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     } finally {
       setGenerating(false)
     }
-  }, [buildPdfBlob, deckName, closeIfClean])
+  }, [buildPdfBlob, deckName, onClose])
 
-  const pages = Math.ceil(totalCards / 9)
+  const pages = Math.ceil(totalCards / (grid.cols * grid.rows))
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-bg-dark/80" onClick={onClose}>
@@ -338,28 +413,124 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
             <label className="flex items-center gap-1.5 text-xs text-font-secondary">
               Paper
               <select
-                value={paper}
-                onChange={(e) => setPaper(e.target.value as Paper)}
+                value={paperPreset}
+                onChange={(e) => setPaperPreset(e.target.value as PaperPreset)}
                 className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
               >
                 <option value="a4">A4</option>
+                <option value="a5">A5</option>
+                <option value="a6">A6</option>
                 <option value="letter">Letter</option>
+                <option value="custom">Custom</option>
               </select>
             </label>
 
-            {/* Gap */}
             <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Gap
+              Orientation
               <select
-                value={gap}
-                onChange={(e) => setGap(Number(e.target.value) as GapOption)}
+                value={orientation}
+                onChange={(e) => setOrientation(e.target.value as Orientation)}
                 className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
               >
-                <option value={0}>0.0mm</option>
-                <option value={0.2}>0.2mm</option>
-                <option value={0.5}>0.5mm</option>
-                <option value={1.0}>1.0mm</option>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
               </select>
+            </label>
+
+            {paperPreset === 'custom' && (
+              <>
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  W
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={customWidth}
+                    onChange={(e) => setCustomWidth(Number(e.target.value))}
+                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  H
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={customHeight}
+                    onChange={(e) => setCustomHeight(Number(e.target.value))}
+                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                </label>
+              </>
+            )}
+
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Grid
+              <select
+                value={gridPreset}
+                onChange={(e) => setGridPreset(e.target.value as GridPreset)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                <option value="3x3">3x3</option>
+                <option value="4x2">4x2</option>
+                <option value="5x2">5x2</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+
+            {gridPreset === 'custom' && (
+              <>
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Cols
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={customCols}
+                    onChange={(e) => setCustomCols(Number(e.target.value))}
+                    className="w-14 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Rows
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={customRows}
+                    onChange={(e) => setCustomRows(Number(e.target.value))}
+                    className="w-14 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                </label>
+              </>
+            )}
+
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Gap X
+              <input
+                type="number"
+                min={0}
+                max={20}
+                step={0.5}
+                value={gapX}
+                onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}
+                className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              />
+              mm
+            </label>
+
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Gap Y
+              <input
+                type="number"
+                min={0}
+                max={20}
+                step={0.5}
+                value={gapY}
+                onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}
+                className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              />
+              mm
             </label>
 
             {/* Scale */}
@@ -375,7 +546,48 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
                 <option value={90}>90%</option>
               </select>
             </label>
+
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Bleed
+              <input
+                type="number"
+                min={0}
+                max={5}
+                step={0.5}
+                value={bleed}
+                onChange={(e) => setBleed(Math.max(0, Number(e.target.value)))}
+                className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              />
+              mm
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={cutGuides}
+                onChange={(e) => setCutGuides(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
+              />
+              Cut guides
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={debugLayout}
+                onChange={(e) => setDebugLayout(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
+              />
+              Debug layout
+            </label>
           </div>
+
+          {gapWarning && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>Gap too small for selected bleed: bleed areas may overlap.</span>
+            </div>
+          )}
 
           {skipWarning > 0 && (
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">

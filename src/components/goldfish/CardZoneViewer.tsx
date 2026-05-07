@@ -65,7 +65,7 @@ function ZoneCard({
       <button
         onClick={handleClick}
         onContextMenu={handleContextMenu}
-        {...longPress}
+        {...longPress.handlers}
         className="w-full overflow-hidden rounded-lg border border-border select-none"
         style={{ touchAction: 'manipulation' }}
       >
