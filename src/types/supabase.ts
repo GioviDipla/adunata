@@ -700,6 +700,166 @@ export interface Database {
         }
         Relationships: []
       }
+      mtg_rules: {
+        Row: {
+          id: string
+          rule_number: string
+          parent_rule_number: string | null
+          section_title: string | null
+          text: string
+          source_version: string
+          keywords: string[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          rule_number: string
+          parent_rule_number?: string | null
+          section_title?: string | null
+          text: string
+          source_version: string
+          keywords?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          rule_number?: string
+          parent_rule_number?: string | null
+          section_title?: string | null
+          text?: string
+          source_version?: string
+          keywords?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      card_rulings: {
+        Row: {
+          id: string
+          card_id: number
+          scryfall_oracle_id: string | null
+          ruling_date: string | null
+          text: string
+          source: string
+          keywords: string[]
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          card_id: number
+          scryfall_oracle_id?: string | null
+          ruling_date?: string | null
+          text: string
+          source?: string
+          keywords?: string[]
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          card_id?: number
+          scryfall_oracle_id?: string | null
+          ruling_date?: string | null
+          text?: string
+          source?: string
+          keywords?: string[]
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_rulings_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      goblinai_conversations: {
+        Row: {
+          id: string
+          user_id: string
+          title: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      goblinai_messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          user_id: string
+          role: 'user' | 'assistant' | 'system'
+          content: string
+          mentioned_card_ids: number[]
+          interaction_keywords: string[]
+          retrieved_rule_numbers: string[]
+          retrieved_ruling_ids: string[]
+          restatement_status: 'none' | 'pending_confirmation' | 'confirmed'
+          model: string | null
+          prompt_tokens: number | null
+          completion_tokens: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          user_id: string
+          role: 'user' | 'assistant' | 'system'
+          content: string
+          mentioned_card_ids?: number[]
+          interaction_keywords?: string[]
+          retrieved_rule_numbers?: string[]
+          retrieved_ruling_ids?: string[]
+          restatement_status?: 'none' | 'pending_confirmation' | 'confirmed'
+          model?: string | null
+          prompt_tokens?: number | null
+          completion_tokens?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          user_id?: string
+          role?: 'user' | 'assistant' | 'system'
+          content?: string
+          mentioned_card_ids?: number[]
+          interaction_keywords?: string[]
+          retrieved_rule_numbers?: string[]
+          retrieved_ruling_ids?: string[]
+          restatement_status?: 'none' | 'pending_confirmation' | 'confirmed'
+          model?: string | null
+          prompt_tokens?: number | null
+          completion_tokens?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goblinai_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "goblinai_conversations"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

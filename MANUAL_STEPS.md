@@ -27,6 +27,27 @@ Dove mettere chiave: Supabase Dashboard → Authentication → SMTP Settings, no
 
 ---
 
+---
+
+## [SUPABASE] — Apply GoblinAI rules migration (MCP re-auth needed)
+
+**Se MCP Supabase da errore "token expired":**
+Applica migration via Supabase Dashboard SQL Editor:
+
+1. Vai su https://supabase.com/dashboard/project/wyujskkzqeexvmrwudup/sql/new
+2. Incolla contenuto `supabase/migrations/20260508090000_goblinai_rules_assistant.sql`
+3. Esegui
+4. Verifica con:
+```sql
+select column_name, data_type from information_schema.columns
+  where table_schema = 'public'
+    and table_name in ('mtg_rules','card_rulings','goblinai_conversations','goblinai_messages')
+  order by table_name, ordinal_position;
+```
+Tabella `card_rulings` FK referenzia `cards(id)` — se non popolata ancora, ok (FK funziona comunque).
+
+---
+
 ## [APPLE] — Apple OAuth (opzionale)
 
 Quando: se vuoi login con Apple ID.
