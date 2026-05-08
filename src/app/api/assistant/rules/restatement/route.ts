@@ -15,7 +15,7 @@ const RESTATEMENT_REQUEST_SCHEMA = {
     for (const m of b.mentions) {
       if (!m || typeof m !== 'object') return false
       const mention = m as Record<string, unknown>
-      if (typeof mention.id !== 'number' || typeof mention.name !== 'string') return false
+      if (typeof mention.id !== 'string' || typeof mention.name !== 'string') return false
     }
     return true
   },
