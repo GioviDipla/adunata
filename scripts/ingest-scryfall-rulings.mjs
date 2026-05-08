@@ -61,16 +61,16 @@ async function main() {
       continue
     }
 
-    for (const entry of ruling.comments || []) {
-      rows.push({
-        card_id: cardId,
-        scryfall_oracle_id: ruling.oracle_id,
-        ruling_date: entry.date,
-        text: entry.text,
-        source: 'scryfall',
-        keywords: deriveRulingKeywords(entry.text),
-      })
-    }
+    if (!ruling.comment) continue
+
+    rows.push({
+      card_id: cardId,
+      scryfall_oracle_id: ruling.oracle_id,
+      ruling_date: ruling.published_at ?? null,
+      text: ruling.comment,
+      source: ruling.source ?? 'scryfall',
+      keywords: deriveRulingKeywords(ruling.comment),
+    })
   }
 
   const batchSize = 100
