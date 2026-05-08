@@ -41,12 +41,12 @@ async function main() {
 
   const { data: cards } = await supabase
     .from('cards')
-    .select('id, scryfall_id')
+    .select('id, oracle_id')
 
   const cardIdByOracleId = new Map()
   for (const card of cards) {
-    if (card.scryfall_id) {
-      cardIdByOracleId.set(card.scryfall_id, card.id)
+    if (card.oracle_id) {
+      cardIdByOracleId.set(card.oracle_id, card.id)
     }
   }
 
