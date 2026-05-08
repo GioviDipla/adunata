@@ -174,6 +174,8 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
     onSend(trimmed, mentions)
     setText('')
     setMentions([])
+    setShowMentionDropdown(false)
+    setMentionResults([])
   }
 
   useEffect(() => {
@@ -237,6 +239,7 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onBlur={() => setTimeout(() => setShowMentionDropdown(false), 150)}
           placeholder={placeholder ?? 'Chiedi una regola... (@ per citare carte)'}
           disabled={disabled}
           rows={2}
