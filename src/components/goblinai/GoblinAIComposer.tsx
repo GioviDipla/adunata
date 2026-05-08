@@ -16,16 +16,34 @@ interface CardResult {
   type_line: string
 }
 
+// Match @ followed by any non-@ chars (including spaces) from cursor position back.
+// This lets users type "@sol ring" and search for "sol ring" as one query.
+const AT_MENTION_RE = /@([^@]*)$/
+
+// Detect an unresolved @mention — any @ that's not immediately followed by a known card name.
+// Used on submit to warn the user.
+function hasUnresolvedMention(text: string, mentions: MentionedCardRef[]): boolean {
+  const atPattern = /@(\S+)/g
+  let match
+  while ((match = atPattern.exec(text)) !== null) {
+    const name = match[1].replace(/[.,;:!?]$/, '') // strip trailing punctuation
+    if (!mentions.some((m) => m.name.startsWith(name) || name.startsWith(m.name))) {
+      return true
+    }
+  }
+  return false
+}
+
 export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComposerProps) {
   const [text, setText] = useState('')
   const [mentions, setMentions] = useState<MentionedCardRef[]>([])
-  const [mentionSearch, setMentionSearch] = useState('')
   const [mentionResults, setMentionResults] = useState<CardResult[]>([])
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionCursorIdx, setMentionCursorIdx] = useState(0)
   const [cursorPos, setCursorPos] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -35,29 +53,45 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
       setCursorPos(pos)
 
       const beforeCursor = value.slice(0, pos)
-      const atMatch = beforeCursor.match(/@(\S*)$/)
+      const atMatch = beforeCursor.match(AT_MENTION_RE)
 
       if (atMatch) {
-        const search = atMatch[1]
-        setMentionSearch(search)
+        const search = atMatch[1].trimEnd()
 
+        // Cancel any in-flight search
+        if (abortRef.current) abortRef.current.abort()
         if (searchRef.current) clearTimeout(searchRef.current)
+
         searchRef.current = setTimeout(async () => {
-          if (search.length < 2) {
+          if (search.length === 0) {
+            // Just typed "@" — show empty state, wait for typing
+            setMentionResults([])
+            setShowMentionDropdown(true)
+            return
+          }
+          if (search.length < 1) {
             setMentionResults([])
             setShowMentionDropdown(false)
             return
           }
+
+          const controller = new AbortController()
+          abortRef.current = controller
+
           try {
-            const res = await fetch(`/api/cards/search?q=${encodeURIComponent(search)}&lang=en`)
+            const res = await fetch(
+              `/api/cards/search?q=${encodeURIComponent(search)}&lang=en`,
+              { signal: controller.signal },
+            )
+            if (controller.signal.aborted) return
             const data = await res.json()
             setMentionResults(data.cards?.slice(0, 5) ?? [])
             setShowMentionDropdown(true)
             setMentionCursorIdx(0)
           } catch {
-            setMentionResults([])
+            if (!controller.signal.aborted) setMentionResults([])
           }
-        }, 200)
+        }, 150)
       } else {
         setShowMentionDropdown(false)
         setMentionResults([])
@@ -70,15 +104,21 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
     const pos = cursorPos
     const beforeCursor = text.slice(0, pos)
     const afterCursor = text.slice(pos)
-    const atMatch = beforeCursor.match(/@(\S*)$/)
+    const atMatch = beforeCursor.match(AT_MENTION_RE)
 
     if (atMatch) {
       const atStart = pos - atMatch[0].length
+      // Replace the entire "@searchterm" with "@Full Card Name "
       const newText = beforeCursor.slice(0, atStart) + `@${card.name} ` + afterCursor
       setText(newText)
-      setMentions((prev) => [...prev, { id: card.id, name: card.name }])
+      setMentions((prev) => {
+        // Avoid duplicates
+        if (prev.some((m) => m.id === card.id)) return prev
+        return [...prev, { id: card.id, name: card.name }]
+      })
     }
     setShowMentionDropdown(false)
+    // Focus back on textarea after click
     textareaRef.current?.focus()
   }
 
@@ -93,11 +133,11 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setMentionCursorIdx((prev) => (prev + 1) % mentionResults.length)
+      setMentionCursorIdx((prev) => (prev + 1) % (mentionResults.length || 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setMentionCursorIdx(
-        (prev) => (prev - 1 + mentionResults.length) % mentionResults.length,
+        (prev) => (prev - 1 + (mentionResults.length || 1)) % (mentionResults.length || 1),
       )
     } else if (e.key === 'Enter') {
       e.preventDefault()
@@ -110,21 +150,24 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
   }
 
   function removeMention(cardId: string) {
+    const card = mentions.find((m) => m.id === cardId)
+    if (card) {
+      setText((prev) =>
+        prev
+          .replace(new RegExp(`@${card.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'g'), '')
+          .replace(/\s{2,}/g, ' ')
+          .trim(),
+      )
+    }
     setMentions((prev) => prev.filter((m) => m.id !== cardId))
-    setText((prev) => prev.replace(new RegExp(`@${'\\S*'}`, 'g'), (match) => {
-      // Only remove the @mention if it matches the removed card name pattern
-      const clean = match.slice(1)
-      const card = mentions.find((m) => m.id === cardId)
-      return card && clean === card.name.split(',')[0] ? '' : match
-    }).replace(/\s{2,}/g, ' '))
   }
 
   function handleSubmit() {
     const trimmed = text.trim()
     if (!trimmed || disabled) return
 
-    const unresolvedAt = /(?<!@\S*)@\w+/.test(trimmed)
-    if (unresolvedAt && mentions.length === 0) {
+    if (mentions.length === 0 && /@\w/.test(trimmed)) {
+      // Has @mentions in text but none resolved — warn silently (don't send)
       return
     }
 
@@ -136,26 +179,35 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
   useEffect(() => {
     return () => {
       if (searchRef.current) clearTimeout(searchRef.current)
+      if (abortRef.current) abortRef.current.abort()
     }
   }, [])
 
   return (
     <div className="border-t border-white/10 p-3 relative">
       {/* Mention autocomplete dropdown */}
-      {showMentionDropdown && mentionResults.length > 0 && (
-        <div className="absolute bottom-full left-3 right-3 mb-1 rounded border border-white/20 bg-bg-dark shadow-xl max-h-40 overflow-y-auto">
-          {mentionResults.map((card, i) => (
-            <button
-              key={card.id}
-              onClick={() => selectMention(card)}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 ${
-                i === mentionCursorIdx ? 'bg-white/10' : ''
-              }`}
-            >
-              <span className="text-white">{card.name}</span>
-              <span className="text-white/40 ml-2">{card.type_line}</span>
-            </button>
-          ))}
+      {showMentionDropdown && (
+        <div className="absolute bottom-full left-3 right-3 mb-1 rounded border border-white/20 bg-bg-dark shadow-xl max-h-48 overflow-y-auto">
+          {mentionResults.length === 0 ? (
+            <div className="px-3 py-4 text-center text-xs text-white/40">
+              {text.slice(0, cursorPos).match(AT_MENTION_RE)?.[1]?.trimEnd().length === 0
+                ? 'Scrivi il nome della carta...'
+                : 'Nessuna carta trovata'}
+            </div>
+          ) : (
+            mentionResults.map((card, i) => (
+              <button
+                key={card.id}
+                onClick={() => selectMention(card)}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 ${
+                  i === mentionCursorIdx ? 'bg-white/10' : ''
+                }`}
+              >
+                <span className="text-white">{card.name}</span>
+                <span className="text-white/40 ml-2">{card.type_line}</span>
+              </button>
+            ))
+          )}
         </div>
       )}
 
