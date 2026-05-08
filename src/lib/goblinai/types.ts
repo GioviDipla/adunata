@@ -77,6 +77,7 @@ export interface AnswerRequest {
 
 export interface AnswerResponse {
   answer: string
+  messageId?: string
   interactionKeywords: InteractionKeyword[]
   mentionedCards: GoblinAICardContext[]
   usedRuleNumbers: string[]

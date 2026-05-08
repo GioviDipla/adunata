@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { Send } from 'lucide-react'
+import { Send, X } from 'lucide-react'
 import type { MentionedCardRef } from '@/lib/goblinai/types'
 
 interface GoblinAIComposerProps {
@@ -109,6 +109,16 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
     }
   }
 
+  function removeMention(cardId: string) {
+    setMentions((prev) => prev.filter((m) => m.id !== cardId))
+    setText((prev) => prev.replace(new RegExp(`@${'\\S*'}`, 'g'), (match) => {
+      // Only remove the @mention if it matches the removed card name pattern
+      const clean = match.slice(1)
+      const card = mentions.find((m) => m.id === cardId)
+      return card && clean === card.name.split(',')[0] ? '' : match
+    }).replace(/\s{2,}/g, ' '))
+  }
+
   function handleSubmit() {
     const trimmed = text.trim()
     if (!trimmed || disabled) return
@@ -131,6 +141,7 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
 
   return (
     <div className="border-t border-white/10 p-3 relative">
+      {/* Mention autocomplete dropdown */}
       {showMentionDropdown && mentionResults.length > 0 && (
         <div className="absolute bottom-full left-3 right-3 mb-1 rounded border border-white/20 bg-bg-dark shadow-xl max-h-40 overflow-y-auto">
           {mentionResults.map((card, i) => (
@@ -144,6 +155,26 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
               <span className="text-white">{card.name}</span>
               <span className="text-white/40 ml-2">{card.type_line}</span>
             </button>
+          ))}
+        </div>
+      )}
+
+      {/* Selected card chips */}
+      {mentions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {mentions.map((m) => (
+            <span
+              key={m.id}
+              className="inline-flex items-center gap-1 rounded-full bg-orange-600/30 border border-orange-500/40 px-2.5 py-1 text-xs text-orange-200"
+            >
+              @{m.name}
+              <button
+                onClick={() => removeMention(m.id)}
+                className="ml-0.5 rounded-full p-0.5 hover:bg-orange-500/30"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
           ))}
         </div>
       )}

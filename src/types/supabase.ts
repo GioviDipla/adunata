@@ -860,6 +860,47 @@ export interface Database {
           }
         ]
       }
+      goblinai_feedback: {
+        Row: {
+          id: string
+          message_id: string
+          user_id: string
+          correction: string
+          original_answer: string
+          conversation_context: string | null
+          resolved: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          user_id: string
+          correction: string
+          original_answer?: string
+          conversation_context?: string | null
+          resolved?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          user_id?: string
+          correction?: string
+          original_answer?: string
+          conversation_context?: string | null
+          resolved?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goblinai_feedback_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "goblinai_messages"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
