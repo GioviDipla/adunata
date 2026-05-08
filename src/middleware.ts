@@ -3,12 +3,11 @@ import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? ''
+  const isGoblinAI = host.startsWith('goblinai.')
 
-  // goblinai subdomain → rewrite root to /goblinai
-  if (host.startsWith('goblinai.') && request.nextUrl.pathname === '/') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/goblinai'
-    return NextResponse.rewrite(url)
+  // goblinai subdomain: rewrite root → /goblinai path for Next.js routing
+  if (isGoblinAI && request.nextUrl.pathname === '/') {
+    request.nextUrl.pathname = '/goblinai'
   }
 
   return await updateSession(request)

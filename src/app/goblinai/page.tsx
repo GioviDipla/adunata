@@ -19,7 +19,7 @@ export const viewport = {
 
 export default async function GoblinAIPage() {
   const user = await getAuthenticatedUser()
-  if (!user) redirect('/login')
+  if (!user) redirect('https://adunata.studiob35.com/login?next=https://goblinai.studiob35.com')
 
   return <GoblinAIStandalone />
 }
