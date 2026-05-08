@@ -38,7 +38,7 @@ Eseguito una prima volta manualmente. Il cron mensile (`/api/cron/sync-cards`) l
 
 Per forzare un re-sync manuale:
 ```bash
-curl -X POST "https://adunata.vercel.app/api/sync-cards?force=true" \
+curl -X POST "https://adunata.studiob35.com/api/sync-cards?force=true" \
   -H "Authorization: Bearer $CRON_SECRET"
 ```
 
@@ -63,19 +63,8 @@ Helper in `src/lib/rate-limit.ts` fa no-op se le env vars mancano (dev senza Red
 
 ## Step ancora aperti
 
-### [STEP_PERF_DECKS] — Applicare migration `decks_card_count_denorm`
-Quando: **prima del prossimo deploy Vercel** — il codice della pagina `/decks` legge già la colonna `card_count` direttamente; se la colonna non esiste nel DB, la pagina va in errore 500.
-
-Cosa fare: applicare il contenuto di `supabase/migrations/20260416240000_decks_card_count_denorm.sql` al DB (Supabase Dashboard → SQL Editor → incolla tutto → Run).
-
-Che cosa fa la migration:
-1. Aggiunge `decks.card_count integer NOT NULL DEFAULT 0`.
-2. Backfilla tutti i deck esistenti con `SUM(quantity)` sui board `main` + `commander`.
-3. Crea il trigger `sync_deck_card_count_trg` su `deck_cards` (INSERT/UPDATE/DELETE) che mantiene `card_count` in sync ad ogni modifica.
-
-Effetto: la pagina `/decks` fa una `SELECT id, name, format, card_count, updated_at FROM decks` — zero aggregate, lettura pura. Istantanea.
-
-Nota: la vecchia RPC `get_my_decks_summary` (migration precedente) rimane nel DB ma non è più chiamata dal codice. Si può droppare se fastidiosa: `DROP FUNCTION public.get_my_decks_summary(uuid);`.
+### ✅ [STEP_PERF_DECKS] — Applicare migration `decks_card_count_denorm`
+Applicata via Supabase MCP (DB migration `20260417083255`). Colonna `decks.card_count` presente, trigger `sync_deck_card_count_trg` attivo. RPC `get_my_decks_summary` già droppata.
 
 ### [STEP 10] — Apple OAuth (opzionale)
 Quando: se vuoi aggiungere il login con Apple ID.
@@ -87,27 +76,15 @@ Cosa fare:
 4. Genera una key per Sign In with Apple, scarica il `.p8`
 5. Supabase Dashboard → Authentication → Providers → Apple → abilita, compila Service ID, Team ID, Key ID e incolla il contenuto della `.p8`
 
-### [STEP 11] — Dominio custom (opzionale)
-Quando: se vuoi un dominio tuo al posto di `adunata.vercel.app`.
+### ✅ [STEP 11] — Dominio custom
+Configurato: `adunata.studiob35.com` attivo. Site URL Supabase aggiornato. Google OAuth redirect URI include dominio custom.
 
-Cosa fare:
-1. Vercel → progetto → Settings → Domains → Add
-2. Segui le istruzioni DNS (di solito un CNAME o A record)
-3. Aggiorna `Site URL` in Supabase → Authentication → URL Configuration
-4. Aggiungi il nuovo dominio alle redirect URL autorizzate su Google OAuth
-
-### [STEP 12] — Backfill nomi italiani nel DB
-Quando: dopo il deploy della feature "search per nome italiano" — va eseguito una volta per popolare `cards.name_it` su tutto il catalogo. Senza questo passo la search italiana continua a funzionare via fallback Scryfall, ma è più lenta.
-
-Cosa fare (da locale, con `.env.local` contenente `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`):
+### ✅ [STEP 13] — Backfill nomi italiani nel DB
+Eseguito. 28,323 carte su 108,210 hanno `name_it` popolato (solo carte con stampa italiana reale). RPC `apply_italian_names` presente. Script `scripts/sync-italian-names.mjs` ri-eseguibile periodicamente per nuove uscite.
 
 ```bash
 node --max-old-space-size=4096 scripts/sync-italian-names.mjs
 ```
-
-Lo script scarica il bulk `default_cards.json` di Scryfall (~500MB), estrae i `printed_name` italiani via `oracle_id`, e aggiorna `cards.name_it` via la RPC `apply_italian_names`. Attesa: ~2-5 min a seconda della rete. Idempotente — se rilanciato senza `--force` salta quando il bulk non è cambiato.
-
-Ripetibile periodicamente (es. mensilmente o quando Scryfall rilascia set nuovi) per aggiornare le nuove carte.
 
 ## ✅ [STEP] — Applicare migration `20260424130448_deck_sections.sql`
 
