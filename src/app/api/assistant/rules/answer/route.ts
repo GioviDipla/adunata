@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Original user message not found' }, { status: 404 })
   }
 
-  const mentions: MentionedCardRef[] = (userMsg.mentioned_card_ids || []).map((id: number) => ({
+  const mentions: MentionedCardRef[] = (userMsg.mentioned_card_ids || []).map((id: string) => ({
     id,
     name: '',
   }))

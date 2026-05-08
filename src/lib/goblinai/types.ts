@@ -21,12 +21,12 @@ export type InteractionKeyword =
   | 'zone_change'
 
 export interface MentionedCardRef {
-  id: number
+  id: string
   name: string
 }
 
 export interface GoblinAICardContext {
-  id: number
+  id: string
   name: string
   mana_cost: string | null
   type_line: string
@@ -45,7 +45,7 @@ export interface GoblinAIRuleContext {
 
 export interface GoblinAIRulingContext {
   id: string
-  card_id: number
+  card_id: string
   ruling_date: string | null
   text: string
   keywords: string[]

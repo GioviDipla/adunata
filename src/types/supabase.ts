@@ -739,7 +739,7 @@ export interface Database {
       card_rulings: {
         Row: {
           id: string
-          card_id: number
+          card_id: string
           scryfall_oracle_id: string | null
           ruling_date: string | null
           text: string
@@ -749,7 +749,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          card_id: number
+          card_id: string
           scryfall_oracle_id?: string | null
           ruling_date?: string | null
           text: string
@@ -759,7 +759,7 @@ export interface Database {
         }
         Update: {
           id?: string
-          card_id?: number
+          card_id?: string
           scryfall_oracle_id?: string | null
           ruling_date?: string | null
           text?: string
@@ -808,7 +808,7 @@ export interface Database {
           user_id: string
           role: 'user' | 'assistant' | 'system'
           content: string
-          mentioned_card_ids: number[]
+          mentioned_card_ids: string[]
           interaction_keywords: string[]
           retrieved_rule_numbers: string[]
           retrieved_ruling_ids: string[]
@@ -824,7 +824,7 @@ export interface Database {
           user_id: string
           role: 'user' | 'assistant' | 'system'
           content: string
-          mentioned_card_ids?: number[]
+          mentioned_card_ids?: string[]
           interaction_keywords?: string[]
           retrieved_rule_numbers?: string[]
           retrieved_ruling_ids?: string[]
@@ -840,7 +840,7 @@ export interface Database {
           user_id?: string
           role?: 'user' | 'assistant' | 'system'
           content?: string
-          mentioned_card_ids?: number[]
+          mentioned_card_ids?: string[]
           interaction_keywords?: string[]
           retrieved_rule_numbers?: string[]
           retrieved_ruling_ids?: string[]

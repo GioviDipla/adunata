@@ -10,7 +10,7 @@ import type {
   GoblinAIRulingContext,
 } from './types'
 
-export function extractMentionIds(mentions: MentionedCardRef[]): number[] {
+export function extractMentionIds(mentions: MentionedCardRef[]): string[] {
   return mentions.map((m) => m.id)
 }
 
@@ -63,13 +63,15 @@ export async function buildGoblinAIContext(input: {
     const { data } = await supabase
       .from('cards')
       .select(CARD_GOBLINAI_COLUMNS)
-      .in('id', ids)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .in('id', ids as any)
 
     if (data) {
-      const byId = new Map(data.map((c) => [c.id, c] as const))
+      const byId = new Map(data.map((c) => [String(c.id), c] as const))
       for (const m of input.mentions) {
         const card = byId.get(m.id)
-        if (card) cards.push(card)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (card) cards.push(card as any)
       }
     }
   }
@@ -120,7 +122,7 @@ export async function buildGoblinAIContext(input: {
     if (rulingData) {
       rulings = rulingData.map((r: Record<string, unknown>) => ({
         id: r.id as string,
-        card_id: r.card_id as number,
+        card_id: String(r.card_id),
         ruling_date: r.ruling_date as string | null,
         text: r.text as string,
         keywords: r.keywords as string[],

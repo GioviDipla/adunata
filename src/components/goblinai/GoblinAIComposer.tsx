@@ -11,7 +11,7 @@ interface GoblinAIComposerProps {
 }
 
 interface CardResult {
-  id: number
+  id: string
   name: string
   type_line: string
 }

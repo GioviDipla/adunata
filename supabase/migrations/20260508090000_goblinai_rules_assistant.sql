@@ -24,7 +24,7 @@ create index if not exists mtg_rules_text_trgm_idx
 
 create table if not exists public.card_rulings (
   id uuid primary key default gen_random_uuid(),
-  card_id integer not null references public.cards(id) on delete cascade,
+  card_id uuid not null references public.cards(id) on delete cascade,
   scryfall_oracle_id text,
   ruling_date date,
   text text not null,
@@ -54,7 +54,7 @@ create table if not exists public.goblinai_messages (
   user_id uuid not null references auth.users(id) on delete cascade,
   role text not null check (role in ('user', 'assistant', 'system')),
   content text not null,
-  mentioned_card_ids integer[] not null default '{}',
+  mentioned_card_ids uuid[] not null default '{}',
   interaction_keywords text[] not null default '{}',
   retrieved_rule_numbers text[] not null default '{}',
   retrieved_ruling_ids uuid[] not null default '{}',
