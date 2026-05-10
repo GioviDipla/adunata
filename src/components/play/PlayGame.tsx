@@ -39,12 +39,34 @@ import CommanderChoiceModal from './CommanderChoiceModal'
 import SpecialActionsMenu from './SpecialActionsMenu'
 import RevealedCardsChooser from './RevealedCardsChooser'
 import CardActionMenu, { type ActionMenuZone, type ActionMenuDest } from '@/components/game/CardActionMenu'
+import { GoblinAIPanel } from '@/components/goblinai/GoblinAIPanel'
 import {
   DndContext,
   useDroppable,
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { useDndSensors } from '@/lib/hooks/useDndSensors'
+
+/** Inline goblin head — duplicated from GoblinAIButton so the in-game header
+ *  can show the same mascot at small size without depending on the floating
+ *  fixed-position button (which would clash with the bottom action bar). */
+function GoblinHeadIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden>
+      <ellipse cx="16" cy="17" rx="10" ry="9" fill="#4a8c3f" />
+      <path d="M6 12 L2 6 L8 10 Z" fill="#3d7234" />
+      <path d="M26 12 L30 6 L24 10 Z" fill="#3d7234" />
+      <ellipse cx="12" cy="15" rx="3" ry="3.5" fill="#f0c040" />
+      <ellipse cx="20" cy="15" rx="3" ry="3.5" fill="#f0c040" />
+      <ellipse cx="12" cy="15" rx="1.5" ry="2.5" fill="#1a1a1a" />
+      <ellipse cx="20" cy="15" rx="1.5" ry="2.5" fill="#1a1a1a" />
+      <path d="M10 21 Q16 27 22 21" stroke="#1a1a1a" strokeWidth="1.2" fill="none" />
+      <line x1="13" y1="20" x2="13" y2="23" stroke="#fff" strokeWidth="0.8" />
+      <line x1="15.5" y1="20.5" x2="15.5" y2="24" stroke="#fff" strokeWidth="0.8" />
+      <line x1="18" y1="20.5" x2="18" y2="23.5" stroke="#fff" strokeWidth="0.8" />
+    </svg>
+  )
+}
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -227,6 +249,7 @@ export default function PlayGame(props: PlayGameProps) {
     tapped?: boolean
   } | null>(null)
   const [deckTokens, setDeckTokens] = useState<TokenDefinition[]>([])
+  const [goblinOpen, setGoblinOpen] = useState(false)
   const libraryViewLoggedRef = useRef(false)
 
   // Fetch initial state (multiplayer) or set from props (goldfish)
@@ -1316,17 +1339,30 @@ export default function PlayGame(props: PlayGameProps) {
       className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
-      {/* Back button — goldfish only */}
-      {isGoldfish && (
-        <div className="flex items-center border-b border-border/40 px-2">
-          <Link
-            href={`/decks/${(props as PlayGameProps & { mode: 'goldfish' }).deckId}`}
-            className="flex min-h-11 items-center gap-1 px-2 text-font-secondary active:text-font-primary"
-          >
-            <ChevronLeft size={20} /><span className="text-sm font-medium">Deck</span>
-          </Link>
+      {/* Top header — back link (goldfish only) + GoblinAI launcher in the
+       *  same horizontal stack. Rendered in both modes so multiplayer keeps
+       *  rules-assistant access without a fixed-position floater. */}
+      <div className="flex items-center justify-between gap-2 border-b border-border/40 px-2">
+        <div className="flex items-center">
+          {isGoldfish && (
+            <Link
+              href={`/decks/${(props as PlayGameProps & { mode: 'goldfish' }).deckId}`}
+              className="flex min-h-11 items-center gap-1 px-2 text-font-secondary active:text-font-primary"
+            >
+              <ChevronLeft size={20} /><span className="text-sm font-medium">Deck</span>
+            </Link>
+          )}
         </div>
-      )}
+        <button
+          type="button"
+          onClick={() => setGoblinOpen((v) => !v)}
+          aria-label="GoblinAI Rules Assistant"
+          className="flex min-h-9 items-center gap-1.5 rounded-full bg-orange-600 px-3 py-1.5 text-white shadow-sm transition-colors hover:bg-orange-700 active:bg-orange-700"
+        >
+          <GoblinHeadIcon className="h-5 w-5" />
+          <span className="hidden text-sm font-bold sm:inline">GoblinAI</span>
+        </button>
+      </div>
       {/* Scrollable: opponent + spacer + player battlefield */}
       <div className="flex-1 overflow-y-auto flex flex-col">
         {/* Opponent field — full in multiplayer, minimal life counter in goldfish */}
@@ -1910,6 +1946,7 @@ export default function PlayGame(props: PlayGameProps) {
           onClose={closeActionMenu}
         />
       )}
+      {goblinOpen && <GoblinAIPanel onClose={() => setGoblinOpen(false)} />}
     </div>
     </DndContext>
   )

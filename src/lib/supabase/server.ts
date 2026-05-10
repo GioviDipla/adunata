@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/supabase'
 
+const SITE_DOMAIN = process.env.NEXT_PUBLIC_SITE_URL?.includes('studiob35') ? '.studiob35.com' : undefined
+
 export async function createClient() {
   const cookieStore = await cookies()
   return createServerClient<Database>(
@@ -15,7 +17,7 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, { ...options, domain: SITE_DOMAIN })
             )
           } catch {
             // Called from Server Component — ignore

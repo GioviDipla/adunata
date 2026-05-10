@@ -38,6 +38,7 @@ function makeLimiter(limit: number, window: `${number} s` | `${number} m`, prefi
 //     while still blocking scripted loops.
 export const searchLimiter = makeLimiter(20, '10 s', 'rl:search')
 export const bulkLimiter = makeLimiter(20, '60 s', 'rl:bulk')
+export const assistantLimiter = makeLimiter(20, '60 s', 'rl:assistant')
 
 /**
  * Resolve a stable identifier for the current caller. Authenticated users are

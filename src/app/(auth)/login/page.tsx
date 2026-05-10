@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Mail, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +9,20 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
 export default function LoginPage() {
+  // useSearchParams forces the route into client-side bailout during static
+  // generation. Wrapping the consuming component in Suspense lets Next.js
+  // prerender the shell and stream the searchParams-dependent piece.
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +32,7 @@ export default function LoginPage() {
   async function handleOAuth(provider: "google" | "apple") {
     setError(null);
     setOauthLoading(provider);
+    if (next !== "/dashboard") sessionStorage.setItem("login_next", next);
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -49,7 +63,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(next);
     router.refresh();
   }
 
