@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   }
 
   const startTime = Date.now()
-  const MAX_RUNTIME = 280_000
+  const MAX_RUNTIME = 295_000
 
   // 1. Resolve latest oracle_cards bulk entry
   const bulkRes = await fetch('https://api.scryfall.com/bulk-data')
@@ -89,30 +89,31 @@ export async function GET(request: NextRequest) {
   let errors = 0
   let aborted = false
 
-  // Upsert in 2 concurrent lanes to stay within 300s timeout.
-  // Each lane processes every other batch — lane A takes even indices,
-  // lane B takes odd. This halves wall-clock upsert time while keeping
-  // individual request size under Supabase's 2MB limit.
-  async function upsertLane(startIdx: number) {
-    for (let i = startIdx; i < toUpsert.length; i += BATCH * 2) {
-      if (Date.now() - startTime >= MAX_RUNTIME || aborted) {
-        aborted = true
-        return
-      }
-      const batch = toUpsert.slice(i, i + BATCH)
-      const { error } = await admin
+  for (let i = 0; i < toUpsert.length; i += BATCH) {
+    if (Date.now() - startTime >= MAX_RUNTIME) {
+      aborted = true
+      break
+    }
+    const batch = toUpsert.slice(i, i + BATCH)
+
+    // Retry once on transient failures before counting as an error
+    let result = await admin
+      .from('cards')
+      .upsert(batch, { onConflict: 'scryfall_id' })
+    if (result.error) {
+      await new Promise((r) => setTimeout(r, 1000))
+      result = await admin
         .from('cards')
         .upsert(batch, { onConflict: 'scryfall_id' })
-      if (error) {
-        errors++
-        console.error(`daily-sync batch ${i}: ${error.message}`)
-      } else {
-        upserted += batch.length
-      }
+    }
+
+    if (result.error) {
+      errors++
+      console.error(`daily-sync batch ${i}: ${result.error.message}`)
+    } else {
+      upserted += batch.length
     }
   }
-
-  await Promise.all([upsertLane(0), upsertLane(BATCH)])
 
   // 5. Checkpoint only on clean run
   if (!aborted && errors === 0) {
