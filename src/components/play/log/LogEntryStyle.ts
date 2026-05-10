@@ -10,6 +10,8 @@ export interface LogRowStyle {
   textClass: string
   /** Optional glyph rendered before the timestamp. */
   glyph?: string
+  /** Banner icon — falls back to glyph then BANNER_ICON_DEFAULT at render time. */
+  icon?: string
 }
 
 const TONE_CLASSES: Record<NonNullable<LogRowStyle['banner']>['tone'], string> = {
@@ -37,42 +39,49 @@ export function styleForEntry(entry: LogEntry, myUserId: string): LogRowStyle {
         banner: { label: 'Game started', tone: 'pregame' },
         textClass: '',
         glyph: '✦',
+        icon: '✦',
       }
     case 'keep_hand':
       return {
         banner: { label: 'Hand kept', tone: 'pregame' },
         textClass: '',
         glyph: '✓',
+        icon: '✓',
       }
     case 'mulligan':
       return {
         banner: { label: 'Mulligan', tone: 'pregame' },
         textClass: '',
         glyph: '↻',
+        icon: '↻',
       }
     case 'bottom_cards':
       return {
         banner: { label: 'Cards bottomed', tone: 'pregame' },
         textClass: '',
         glyph: '↓',
+        icon: '↓',
       }
     case 'confirm_untap':
       return {
         banner: { label: 'Untap step', tone: 'neutral' },
         textClass: '',
         glyph: '◷',
+        icon: '◷',
       }
     case 'declare_attackers':
       return {
         banner: { label: 'Attackers declared', tone: 'combat' },
         textClass: '',
         glyph: '⚔',
+        icon: '⚔',
       }
     case 'declare_blockers':
       return {
         banner: { label: 'Blockers declared', tone: 'combat' },
         textClass: '',
         glyph: '🛡',
+        icon: '🛡',
       }
     case 'combat_damage':
     case 'resolve_combat_damage':
@@ -80,12 +89,14 @@ export function styleForEntry(entry: LogEntry, myUserId: string): LogRowStyle {
         banner: { label: 'Combat damage', tone: 'combat' },
         textClass: '',
         glyph: '✦',
+        icon: '✦',
       }
     case 'concede':
       return {
         banner: { label: 'Concede', tone: 'end' },
         textClass: '',
         glyph: '🏳',
+        icon: '🏳',
       }
     case 'chat_message':
       return {

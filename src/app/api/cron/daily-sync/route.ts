@@ -5,7 +5,7 @@ import { mapScryfallCard, type ScryfallCard } from '@/lib/scryfall'
 export const maxDuration = 300
 
 const SKIP_LAYOUTS = new Set(['token', 'double_faced_token', 'emblem', 'art_series'])
-const BATCH = 1000
+const BATCH = 500
 
 type BulkEntry = {
   type: string
@@ -89,22 +89,30 @@ export async function GET(request: NextRequest) {
   let errors = 0
   let aborted = false
 
-  for (let i = 0; i < toUpsert.length; i += BATCH) {
-    if (Date.now() - startTime >= MAX_RUNTIME) {
-      aborted = true
-      break
-    }
-    const batch = toUpsert.slice(i, i + BATCH)
-    const { error } = await admin
-      .from('cards')
-      .upsert(batch, { onConflict: 'scryfall_id' })
-    if (error) {
-      errors++
-      console.error(`daily-sync batch ${i}: ${error.message}`)
-    } else {
-      upserted += batch.length
+  // Upsert in 2 concurrent lanes to stay within 300s timeout.
+  // Each lane processes every other batch — lane A takes even indices,
+  // lane B takes odd. This halves wall-clock upsert time while keeping
+  // individual request size under Supabase's 2MB limit.
+  async function upsertLane(startIdx: number) {
+    for (let i = startIdx; i < toUpsert.length; i += BATCH * 2) {
+      if (Date.now() - startTime >= MAX_RUNTIME || aborted) {
+        aborted = true
+        return
+      }
+      const batch = toUpsert.slice(i, i + BATCH)
+      const { error } = await admin
+        .from('cards')
+        .upsert(batch, { onConflict: 'scryfall_id' })
+      if (error) {
+        errors++
+        console.error(`daily-sync batch ${i}: ${error.message}`)
+      } else {
+        upserted += batch.length
+      }
     }
   }
+
+  await Promise.all([upsertLane(0), upsertLane(BATCH)])
 
   // 5. Checkpoint only on clean run
   if (!aborted && errors === 0) {
