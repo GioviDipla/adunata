@@ -5,7 +5,7 @@ import { mapScryfallCard, type ScryfallCard } from '@/lib/scryfall'
 export const maxDuration = 300
 
 const SKIP_LAYOUTS = new Set(['token', 'double_faced_token', 'emblem', 'art_series'])
-const BATCH = 500
+const BATCH = 1000
 
 type BulkEntry = {
   type: string
