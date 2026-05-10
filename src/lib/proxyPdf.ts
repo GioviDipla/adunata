@@ -1,13 +1,19 @@
 import { jsPDF } from 'jspdf'
 import {
+  computeCardImageLayout,
   computeBleedBoxes,
   computeGridLayout,
   computeLayoutWarnings,
+  generateAdjacentGridCutGuides,
   generateCropMarks,
   paginateCards,
+  type BleedMode,
+  type ImageFitMode,
   type LayoutWarning,
   type Rect,
 } from './proxyPdfLayout'
+
+export type { BleedMode } from './proxyPdfLayout'
 
 export interface ProxyPdfOptions {
   paper: PaperOption
@@ -19,6 +25,8 @@ export interface ProxyPdfOptions {
   grid: { cols: number; rows: number }
   cutGuides: boolean
   debugLayout?: boolean
+  printRasterPreset?: PrintRasterPreset
+  bleedMode?: BleedMode
   cards: { imageUrls: string[]; quantity: number }[]
   onProgress?: (done: number, total: number) => void
 }
@@ -37,21 +45,43 @@ export interface PaperOption {
   height: number
 }
 
+export type PrintRasterPreset = 'fast' | 'standard' | 'high'
+
+export interface PrintRasterOptions {
+  bleedWmm: number
+  bleedHmm: number
+  dpi: number
+  jpegQuality: number
+  fitMode?: ImageFitMode
+  debug?: boolean
+}
+
+export const PRINT_RASTER_PRESETS: Record<PrintRasterPreset, { dpi: number; jpegQuality: number }> = {
+  fast: { dpi: 240, jpegQuality: 0.82 },
+  standard: { dpi: 300, jpegQuality: 0.88 },
+  high: { dpi: 360, jpegQuality: 0.9 },
+}
+
 const CARD_W = 63 // mm
 const CARD_H = 88 // mm
 const FETCH_CONCURRENCY = 6     // stay under browser per-origin cap
 const FETCH_RETRIES = 2         // 1 initial + 2 retries
 const FETCH_RETRY_BASE_MS = 250
-const CROP_MARK_LENGTH = 2.5
-const CROP_MARK_OFFSET = 1.2
+const CROP_MARK_LENGTH = 4
+const CROP_MARK_OFFSET = 1
+const CROP_MARK_PRINTABLE_INSET = 3
 const CROP_MARK_STROKE_PT = 0.2
 const CROP_MARK_GRAY = 140
 const PT_PER_MM = 72 / 25.4
 
 interface CachedImage {
-  dataUrl: string
-  width: number
-  height: number
+  bytes: Uint8Array
+  alias: string
+}
+
+interface CachedCardImages {
+  main: CachedImage
+  bleed?: CachedImage
 }
 
 function delay(ms: number): Promise<void> {
@@ -73,20 +103,119 @@ function toProxyUrl(url: string): string {
   return url
 }
 
-async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+function printRasterDimensions(options: PrintRasterOptions): { width: number; height: number } {
+  const rawWidth = Math.round((options.bleedWmm / 25.4) * options.dpi)
+  const rawHeight = Math.round((options.bleedHmm / 25.4) * options.dpi)
+  const maxScale = Math.min(1000 / rawWidth, 1400 / rawHeight, 1)
+  return {
+    width: Math.max(1, Math.round(rawWidth * maxScale)),
+    height: Math.max(1, Math.round(rawHeight * maxScale)),
+  }
+}
+
+function sourceByteLength(sourceImage: Blob | ArrayBuffer | HTMLImageElement): number {
+  if (sourceImage instanceof Blob) return sourceImage.size
+  if (sourceImage instanceof ArrayBuffer) return sourceImage.byteLength
+  return 0
+}
+
+function isHtmlImageElement(sourceImage: Blob | ArrayBuffer | HTMLImageElement): sourceImage is HTMLImageElement {
+  return typeof HTMLImageElement !== 'undefined' && sourceImage instanceof HTMLImageElement
+}
+
+async function blobFromCanvas(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', quality)
+  })
+  if (!blob) throw new Error('Unable to encode optimized card image')
+  return blob
+}
+
+async function decodeImageElement(sourceImage: Blob | ArrayBuffer | HTMLImageElement): Promise<{
+  image: HTMLImageElement
+  revokeUrl: (() => void) | null
+}> {
+  if (isHtmlImageElement(sourceImage)) {
+    if (sourceImage.complete && sourceImage.naturalWidth > 0) return { image: sourceImage, revokeUrl: null }
+    await sourceImage.decode()
+    return { image: sourceImage, revokeUrl: null }
+  }
+
+  const blob = sourceImage instanceof Blob ? sourceImage : new Blob([sourceImage])
+  const url = URL.createObjectURL(blob)
+  const image = new Image()
+  image.decoding = 'async'
+  image.src = url
+
+  try {
+    await image.decode()
+    return { image, revokeUrl: () => URL.revokeObjectURL(url) }
+  } catch (err) {
+    URL.revokeObjectURL(url)
+    throw err
+  }
+}
+
+export async function optimizeCardImageForPrint(
+  sourceImage: Blob | ArrayBuffer | HTMLImageElement,
+  options: PrintRasterOptions,
+): Promise<Uint8Array> {
+  const { width: optimizedWidth, height: optimizedHeight } = printRasterDimensions(options)
+  const originalBytes = sourceByteLength(sourceImage)
+  const { image, revokeUrl } = await decodeImageElement(sourceImage)
+  const originalWidth = image.naturalWidth || image.width
+  const originalHeight = image.naturalHeight || image.height
+
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = optimizedWidth
+    canvas.height = optimizedHeight
+    const ctx = canvas.getContext('2d', { alpha: false })
+    if (!ctx) throw new Error('Unable to create card image raster context')
+
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, optimizedWidth, optimizedHeight)
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+
+    const imageRatio = originalWidth / originalHeight
+    const targetRatio = optimizedWidth / optimizedHeight
+    const fitMode = options.fitMode ?? 'cover'
+    const useWidthBound = fitMode === 'contain'
+      ? imageRatio > targetRatio
+      : imageRatio <= targetRatio
+    const drawW = useWidthBound ? optimizedWidth : optimizedHeight * imageRatio
+    const drawH = useWidthBound ? optimizedWidth / imageRatio : optimizedHeight
+    const drawX = (optimizedWidth - drawW) / 2
+    const drawY = (optimizedHeight - drawH) / 2
+    ctx.drawImage(image, drawX, drawY, drawW, drawH)
+
+    const jpegBlob = await blobFromCanvas(canvas, options.jpegQuality)
+    const optimizedBytes = jpegBlob.size
+    if (options.debug && process.env.NODE_ENV !== 'production') {
+      console.log({
+        originalWidth,
+        originalHeight,
+        optimizedWidth,
+        optimizedHeight,
+        originalBytes,
+        optimizedBytes,
+      })
+    }
+
+    return new Uint8Array(await jpegBlob.arrayBuffer())
+  } finally {
+    revokeUrl?.()
+  }
+}
+
+async function fetchImageBlob(url: string): Promise<Blob | null> {
   const target = toProxyUrl(url)
   for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
     try {
       const res = await fetch(target, { cache: 'force-cache' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const blob = await res.blob()
-      const dataUrl = await new Promise<string | null>((resolve) => {
-        const reader = new FileReader()
-        reader.onloadend = () => resolve(reader.result as string)
-        reader.onerror = () => resolve(null)
-        reader.readAsDataURL(blob)
-      })
-      if (dataUrl) return dataUrl
+      return await res.blob()
     } catch {
       // fall through to retry
     }
@@ -95,18 +224,23 @@ async function fetchImageAsDataUrl(url: string): Promise<string | null> {
   return null
 }
 
-async function fetchBestImage(urls: string[]): Promise<CachedImage | null> {
+async function fetchBestCardImages(
+  urls: string[],
+  variants: { main: PrintRasterOptions; bleed?: PrintRasterOptions },
+  alias: string,
+): Promise<CachedCardImages | null> {
   for (const url of urls) {
-    const dataUrl = await fetchImageAsDataUrl(url)
-    if (dataUrl) {
-      return { dataUrl, ...imageSize(dataUrl) }
+    const blob = await fetchImageBlob(url)
+    if (blob) {
+      const mainBytes = await optimizeCardImageForPrint(blob, variants.main)
+      const bleedBytes = variants.bleed ? await optimizeCardImageForPrint(blob, variants.bleed) : null
+      return {
+        main: { bytes: mainBytes, alias: `${alias}-main` },
+        bleed: bleedBytes ? { bytes: bleedBytes, alias: `${alias}-bleed` } : undefined,
+      }
     }
   }
   return null
-}
-
-function imageFormat(dataUrl: string): 'PNG' | 'JPEG' {
-  return dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG'
 }
 
 function pageSize(paper: PaperOption, orientation: ProxyPdfOptions['orientation']): { w: number; h: number } {
@@ -117,57 +251,8 @@ function pageSize(paper: PaperOption, orientation: ProxyPdfOptions['orientation'
   return orientation === 'landscape' ? { w: long, h: short } : { w: short, h: long }
 }
 
-function readUint32(bytes: Uint8Array, offset: number): number {
-  return (
-    bytes[offset] * 0x1000000 +
-    bytes[offset + 1] * 0x10000 +
-    bytes[offset + 2] * 0x100 +
-    bytes[offset + 3]
-  )
-}
-
-function base64Bytes(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
-function imageSize(dataUrl: string): { width: number; height: number } {
-  const bytes = base64Bytes(dataUrl)
-  if (dataUrl.startsWith('data:image/png')) {
-    return { width: readUint32(bytes, 16), height: readUint32(bytes, 20) }
-  }
-
-  for (let i = 2; i < bytes.length - 9;) {
-    if (bytes[i] !== 0xff) {
-      i++
-      continue
-    }
-    const marker = bytes[i + 1]
-    const length = bytes[i + 2] * 256 + bytes[i + 3]
-    if (marker >= 0xc0 && marker <= 0xc3) {
-      return {
-        height: bytes[i + 5] * 256 + bytes[i + 6],
-        width: bytes[i + 7] * 256 + bytes[i + 8],
-      }
-    }
-    i += 2 + length
-  }
-
-  return { width: 745, height: 1040 }
-}
-
-function drawImageCover(doc: jsPDF, image: CachedImage, box: Rect): void {
-  const imageRatio = image.width / image.height
-  const boxRatio = box.w / box.h
-  const drawW = imageRatio > boxRatio ? box.h * imageRatio : box.w
-  const drawH = imageRatio > boxRatio ? box.h : box.w / imageRatio
-  const drawX = box.x - (drawW - box.w) / 2
-  const drawY = box.y - (drawH - box.h) / 2
-
-  doc.addImage(image.dataUrl, imageFormat(image.dataUrl), drawX, drawY, drawW, drawH)
+function drawImageInBox(doc: jsPDF, image: CachedImage, box: Rect): void {
+  doc.addImage(image.bytes, 'JPEG', box.x, box.y, box.w, box.h, image.alias, 'FAST')
 }
 
 function drawDebugLayout(doc: jsPDF, trimBox: Rect, bleedBox: Rect): void {
@@ -206,7 +291,21 @@ export async function generateProxyPdf(options: ProxyPdfOptions): Promise<Blob> 
 export async function generateProxyPdfWithDetails(
   options: ProxyPdfOptions,
 ): Promise<ProxyPdfResult> {
-  const { paper, orientation, scale, bleed, gapX, gapY, grid, cutGuides, debugLayout = false, cards, onProgress } = options
+  const {
+    paper,
+    orientation,
+    scale,
+    bleed,
+    gapX,
+    gapY,
+    grid,
+    cutGuides,
+    debugLayout = false,
+    printRasterPreset = 'standard',
+    bleedMode = 'preserve',
+    cards,
+    onProgress,
+  } = options
   const page = pageSize(paper, orientation)
   const cardW = CARD_W * scale
   const cardH = CARD_H * scale
@@ -223,10 +322,34 @@ export async function generateProxyPdfWithDetails(
     gapY,
   }
   const trimBoxes = computeGridLayout(layoutOptions)
-  const bleedBoxes = computeBleedBoxes(trimBoxes, bleed)
+  const effectiveBleed = bleedMode === 'none' ? 0 : bleed
+  const bleedBoxes = computeBleedBoxes(trimBoxes, effectiveBleed)
+  const sampleImageLayout = computeCardImageLayout(trimBoxes[0], effectiveBleed, bleedMode)
+  const rasterPreset = PRINT_RASTER_PRESETS[printRasterPreset] ?? PRINT_RASTER_PRESETS.standard
+  const rasterDpi = Math.min(rasterPreset.dpi, 360)
+  const rasterVariants: { main: PrintRasterOptions; bleed?: PrintRasterOptions } = {
+    main: {
+      bleedWmm: sampleImageLayout.mainImageDrawBox.w,
+      bleedHmm: sampleImageLayout.mainImageDrawBox.h,
+      dpi: rasterDpi,
+      jpegQuality: rasterPreset.jpegQuality,
+      fitMode: sampleImageLayout.mainFitMode,
+      debug: debugLayout,
+    },
+  }
+  if (sampleImageLayout.bleedImageDrawBox && sampleImageLayout.bleedFitMode) {
+    rasterVariants.bleed = {
+      bleedWmm: sampleImageLayout.bleedImageDrawBox.w,
+      bleedHmm: sampleImageLayout.bleedImageDrawBox.h,
+      dpi: rasterDpi,
+      jpegQuality: Math.min(rasterPreset.jpegQuality, 0.82),
+      fitMode: sampleImageLayout.bleedFitMode,
+      debug: debugLayout,
+    }
+  }
   const layoutWarnings = computeLayoutWarnings({
     ...layoutOptions,
-    bleed,
+    bleed: effectiveBleed,
     cropMarkLength: CROP_MARK_LENGTH,
     cropMarkOffset: CROP_MARK_OFFSET,
   })
@@ -247,12 +370,12 @@ export async function generateProxyPdfWithDetails(
   // Deduplicate candidate sets for fetching. Each set is ordered by quality,
   // so one card can try PNG first, then large JPG, then normal JPG.
   const uniqueKeys = [...imageGroups.keys()]
-  const imageCache = new Map<string, CachedImage>()
+  const imageCache = new Map<string, CachedCardImages>()
   let fetched = 0
   const total = uniqueKeys.length
 
   await mapWithLimit(uniqueKeys, FETCH_CONCURRENCY, async (key) => {
-    const image = await fetchBestImage(imageGroups.get(key) ?? [])
+    const image = await fetchBestCardImages(imageGroups.get(key) ?? [], rasterVariants, `proxy-card-${uniqueKeys.indexOf(key)}`)
     if (image) imageCache.set(key, image)
     fetched++
     onProgress?.(fetched, total)
@@ -281,8 +404,12 @@ export async function generateProxyPdfWithDetails(
     for (let slotIndex = 0; slotIndex < pageCards.length; slotIndex++) {
       const trimBox = trimBoxes[slotIndex]
       const bleedBox = bleedBoxes[slotIndex]
-      const image = imageCache.get(pageCards[slotIndex])!
-      drawImageCover(doc, image, bleedBox)
+      const imageLayout = computeCardImageLayout(trimBox, effectiveBleed, bleedMode)
+      const images = imageCache.get(pageCards[slotIndex])!
+      if (images.bleed && imageLayout.bleedImageDrawBox) {
+        drawImageInBox(doc, images.bleed, imageLayout.bleedImageDrawBox)
+      }
+      drawImageInBox(doc, images.main, imageLayout.mainImageDrawBox)
       if (debugLayout) {
         drawDebugLayout(doc, trimBox, bleedBox)
       }
@@ -290,11 +417,16 @@ export async function generateProxyPdfWithDetails(
 
     if (cutGuides) {
       const occupiedTrimBoxes = trimBoxes.slice(0, pageCards.length)
-      const cropMarks = generateCropMarks(occupiedTrimBoxes, layoutOptions, {
-        length: CROP_MARK_LENGTH,
-        offset: CROP_MARK_OFFSET,
-        extendOuterToPageEdge: true,
-      })
+      const cropMarks = layoutOptions.gapX <= 0 && layoutOptions.gapY <= 0
+        ? generateAdjacentGridCutGuides(occupiedTrimBoxes, layoutOptions, {
+          offset: CROP_MARK_OFFSET,
+          printableInset: CROP_MARK_PRINTABLE_INSET,
+        })
+        : generateCropMarks(occupiedTrimBoxes, layoutOptions, {
+          length: CROP_MARK_LENGTH,
+          offset: CROP_MARK_OFFSET,
+          printableInset: CROP_MARK_PRINTABLE_INSET,
+        })
       doc.setDrawColor(CROP_MARK_GRAY)
       doc.setLineWidth(CROP_MARK_STROKE_PT / PT_PER_MM)
       for (const mark of cropMarks) {

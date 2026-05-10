@@ -74,35 +74,80 @@ test('computeBleedBoxes expands around trim boxes', () => {
   ])
 })
 
-test('generateCropMarks emits short deduplicated segments only', () => {
-  const marks = layout.generateCropMarks(layout.computeGridLayout(a4Portrait3x3), a4Portrait3x3, {
-    length: 2.5,
-    offset: 1.2,
-  })
-  const keys = marks.map((mark) => `${mark.x1}:${mark.y1}:${mark.x2}:${mark.y2}`)
-  assert.equal(new Set(keys).size, marks.length)
-  for (const mark of marks) {
-    const length = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1)
-    assert.ok(length <= 2.51)
-    assert.ok(length > 0)
-    assert.ok(mark.x1 === mark.x2 || mark.y1 === mark.y2)
-  }
+test('computeCardImageLayout keeps image in trim box for none mode', () => {
+  const trimBox = { x: 10, y: 10, w: 63, h: 88 }
+  const imageLayout = layout.computeCardImageLayout(trimBox, 1, 'none')
+  assert.deepEqual(plain(imageLayout.imageDrawBox), { x: 10, y: 10, w: 63, h: 88 })
+  assert.deepEqual(plain(imageLayout.mainImageDrawBox), { x: 10, y: 10, w: 63, h: 88 })
+  assert.equal(imageLayout.mainFitMode, 'contain')
+  assert.equal(imageLayout.bleedImageDrawBox, undefined)
 })
 
-test('generateCropMarks can extend outer marks to page edge without duplicating internals', () => {
+test('computeCardImageLayout expands image into bleed box for crop mode', () => {
+  const trimBox = { x: 10, y: 10, w: 63, h: 88 }
+  const imageLayout = layout.computeCardImageLayout(trimBox, 1, 'crop')
+  assert.deepEqual(plain(imageLayout.imageDrawBox), { x: 9, y: 9, w: 65, h: 90 })
+  assert.deepEqual(plain(imageLayout.mainImageDrawBox), { x: 9, y: 9, w: 65, h: 90 })
+  assert.equal(imageLayout.mainFitMode, 'cover')
+})
+
+test('computeCardImageLayout preserves main image in trim box for preserve mode', () => {
+  const trimBox = { x: 10, y: 10, w: 63, h: 88 }
+  const imageLayout = layout.computeCardImageLayout(trimBox, 1, 'preserve')
+  assert.deepEqual(plain(imageLayout.mainImageDrawBox), { x: 10, y: 10, w: 63, h: 88 })
+  assert.deepEqual(plain(imageLayout.imageDrawBox), { x: 10, y: 10, w: 63, h: 88 })
+  assert.deepEqual(plain(imageLayout.bleedImageDrawBox), { x: 9, y: 9, w: 65, h: 90 })
+  assert.equal(imageLayout.mainFitMode, 'contain')
+  assert.equal(imageLayout.bleedFitMode, 'cover')
+})
+
+test('generateCropMarks emits short deduplicated segments only', () => {
   const marks = layout.generateCropMarks(layout.computeGridLayout(a4Portrait3x3), a4Portrait3x3, {
-    length: 2.5,
-    offset: 1.2,
-    extendOuterToPageEdge: true,
+    length: 4,
+    offset: 1,
+    printableInset: 3,
   })
   const keys = marks.map((mark) => `${mark.x1}:${mark.y1}:${mark.x2}:${mark.y2}`)
   assert.equal(new Set(keys).size, marks.length)
-  assert.equal(marks.some((mark) => mark.x1 === 0 || mark.y1 === 0 || mark.x2 === 210 || mark.y2 === 297), true)
+  for (const mark of marks) {
+    const length = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1)
+    assert.ok(length > 0)
+    assert.ok(mark.x1 === mark.x2 || mark.y1 === mark.y2)
+    assert.notEqual(mark.x1, 0)
+    assert.notEqual(mark.x2, 0)
+    assert.notEqual(mark.y1, 0)
+    assert.notEqual(mark.y2, 0)
+    assert.notEqual(mark.x1, a4Portrait3x3.pageW)
+    assert.notEqual(mark.x2, a4Portrait3x3.pageW)
+    assert.notEqual(mark.y1, a4Portrait3x3.pageH)
+    assert.notEqual(mark.y2, a4Portrait3x3.pageH)
+  }
+  assert.equal(marks.some((mark) => Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1) > 4), true)
+})
+
+test('generateAdjacentGridCutGuides emits only outer grid ticks', () => {
+  const adjacent = { ...a4Portrait3x3, gapX: 0, gapY: 0 }
+  const boxes = layout.computeGridLayout(adjacent)
+  const marks = layout.generateAdjacentGridCutGuides(boxes, adjacent, {
+    offset: 1,
+    printableInset: 3,
+  })
+  const keys = marks.map((mark) => `${mark.x1}:${mark.y1}:${mark.x2}:${mark.y2}`)
+  assert.equal(new Set(keys).size, marks.length)
+  assert.equal(marks.length, 16)
 
   for (const mark of marks) {
-    const touchesPageEdge = mark.x1 === 0 || mark.y1 === 0 || mark.x2 === 210 || mark.y2 === 297
     const length = Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1)
-    if (!touchesPageEdge) assert.ok(length <= 2.51)
+    assert.ok(length > 4)
+    assert.ok(mark.x1 === mark.x2 || mark.y1 === mark.y2)
+    assert.notEqual(mark.x1, 0)
+    assert.notEqual(mark.x2, 0)
+    assert.notEqual(mark.y1, 0)
+    assert.notEqual(mark.y2, 0)
+    assert.notEqual(mark.x1, adjacent.pageW)
+    assert.notEqual(mark.x2, adjacent.pageW)
+    assert.notEqual(mark.y1, adjacent.pageH)
+    assert.notEqual(mark.y2, adjacent.pageH)
   }
 })
 
@@ -112,8 +157,8 @@ test('computeLayoutWarnings reports bleed overlap risk', () => {
     gapX: 2,
     gapY: 5,
     bleed: 1,
-    cropMarkLength: 2.5,
-    cropMarkOffset: 1.2,
+    cropMarkLength: 4,
+    cropMarkOffset: 1,
   })
   assert.equal(warnings.some((warning) => warning.code === 'gap-too-small'), true)
 })
@@ -124,8 +169,8 @@ test('computeLayoutWarnings reports page overflow', () => {
     pageW: 148,
     pageH: 210,
     bleed: 1,
-    cropMarkLength: 2.5,
-    cropMarkOffset: 1.2,
+    cropMarkLength: 4,
+    cropMarkOffset: 1,
   })
   assert.equal(warnings.some((warning) => warning.code === 'layout-overflow'), true)
 })
@@ -134,8 +179,8 @@ test('default A4 3x3 layout does not overflow', () => {
   const warnings = layout.computeLayoutWarnings({
     ...a4Portrait3x3,
     bleed: 1,
-    cropMarkLength: 2.5,
-    cropMarkOffset: 1.2,
+    cropMarkLength: 4,
+    cropMarkOffset: 1,
   })
   assert.deepEqual(plain(warnings), [])
 })
