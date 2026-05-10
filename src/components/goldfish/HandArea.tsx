@@ -79,6 +79,20 @@ function HandCardButton({
     }
   }, [longPress, selectable, onToggleSelect, onCardAction, onPlayCard, hc.card, hc.instanceId])
 
+  // Compose long-press + drag pointerdown so both fire from the same press.
+  // Spreading drag.listeners last would shadow longPress.handlers.onPointerDown
+  // and silently disable the preview gesture.
+  const dragActive = draggable && !selectable
+  const composedPointerDown = useCallback((e: React.PointerEvent) => {
+    longPress.handlers.onPointerDown(e)
+    if (dragActive) {
+      const dragOnPointerDown = drag.listeners?.onPointerDown as
+        | ((event: React.PointerEvent) => void)
+        | undefined
+      dragOnPointerDown?.(e)
+    }
+  }, [longPress.handlers, drag.listeners, dragActive])
+
   return (
     <button
       ref={drag.setNodeRef}
@@ -88,7 +102,8 @@ function HandCardButton({
         onCardPreview?.(hc.card, hc.instanceId)
       }}
       {...longPress.handlers}
-      {...(draggable && !selectable ? { ...drag.attributes, ...drag.listeners } : {})}
+      {...(dragActive ? drag.attributes : {})}
+      onPointerDown={composedPointerDown}
       className={`relative shrink-0 overflow-hidden rounded-lg border transition-all hover:-translate-y-1 select-none ${
         isSelected
           ? 'border-bg-red ring-2 ring-bg-red/40'
@@ -99,7 +114,9 @@ function HandCardButton({
         height: 100,
         marginLeft: index > 0 ? -8 : 0,
         zIndex: drag.isDragging ? 999 : index,
-        touchAction: draggable && !selectable ? 'pan-x' : 'manipulation',
+        // pan-x lets the hand strip scroll horizontally; vertical movement
+        // (drag-onto-battlefield) reaches PointerSensor.
+        touchAction: dragActive ? 'pan-x' : 'manipulation',
         transform: drag.transform ? CSS.Translate.toString(drag.transform) : undefined,
       }}
       title={`${hc.card.name} — tap for ${selectable ? 'select' : 'actions'}, hold to preview`}
