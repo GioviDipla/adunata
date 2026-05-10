@@ -1530,6 +1530,7 @@ export default function PlayGame(props: PlayGameProps) {
           playerNames={playerNames}
           onSendChat={handleSendChat}
           onCardPreview={(card) => setPreview({ card })}
+          mode="side"
         />
       )}
 
