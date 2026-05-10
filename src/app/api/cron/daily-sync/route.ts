@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { mapScryfallCard, type ScryfallCard } from '@/lib/scryfall'
 
-export const maxDuration = 300 // 5 min — the Vercel Pro ceiling for crons
-// Memory = 3008 MB is configured in vercel.json (`functions` block). Needed
-// because parsing the ~512MB default_cards bulk peaks at ~1.5-2GB of heap.
+export const maxDuration = 300
+// Memory = 2048 MB configured in vercel.json.
 
 const SKIP_LAYOUTS = new Set(['token', 'double_faced_token', 'emblem', 'art_series'])
 const BATCH = 500
@@ -17,14 +16,8 @@ type BulkEntry = {
 
 /**
  * Daily unified sync: downloads Scryfall's `default_cards` bulk data and
- * upserts the whole catalog in one pass. This covers both "new cards"
- * (inserts) and "fresh prices" (updates) in a single run, replacing the
- * older rolling /cards/collection strategy.
- *
- * The bulk is ~150MB compressed / ~512MB parsed JSON (~100k printings).
- * Memory peaks at ~1.5-2GB during parse + map — inside Vercel Pro's 3GB
- * function budget but would OOM on Hobby (1GB). If we ever demote the
- * project to Hobby, stream-parse the JSON with a chunked reader instead.
+ * upserts the whole catalog in one pass. Uses streaming JSON parsing to
+ * avoid Node.js string-length limit (0x1fffffe8 ≈ 512MB) on the bulk payload.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -61,61 +54,117 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // 3. Download + parse the bulk
+  // 3. Stream-download & parse. Avoid Response.json() — the bulk JSON can
+  //    exceed Node's max string length (~512MB) since mid-2026.
   const dlRes = await fetch(entry.download_uri)
-  if (!dlRes.ok) {
+  if (!dlRes.ok || !dlRes.body) {
     return NextResponse.json({ error: 'download failed' }, { status: 502 })
   }
-  const allCards = (await dlRes.json()) as ScryfallCard[]
 
-  // 4. Map to DB rows. Stamp last_price_update so the rolling stale-first
-  //    sort on cards.last_price_update stays monotonic.
   const stampNow = new Date().toISOString()
-  const toUpsert = allCards
-    .filter((c) => !SKIP_LAYOUTS.has(c.layout ?? ''))
-    .map((c) => ({
-      ...mapScryfallCard(c),
-      last_price_update: stampNow,
-    }))
-
-  // 5. Batch upsert — 500 rows per call keeps the payload well under
-  //    Supabase's 2MB request limit while staying under 100 calls total.
-  let upserted = 0
+  const reader = dlRes.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let total = 0
+  let upsertedTotal = 0
   let errors = 0
   let aborted = false
 
-  for (let i = 0; i < toUpsert.length; i += BATCH) {
+  // Streaming JSON-array state machine
+  let depth = 0
+  let inString = false
+  let escape = false
+  let objectStart = -1
+
+  const batch: ReturnType<typeof mapScryfallCard>[] = []
+
+  async function flushBatch() {
+    if (batch.length === 0) return
+    const toUpsert = batch.splice(0)
+    const { error } = await admin
+      .from('cards')
+      .upsert(toUpsert, { onConflict: 'scryfall_id' })
+    if (error) {
+      errors++
+      console.error(`daily-sync batch ~${total}: ${error.message}`)
+    } else {
+      upsertedTotal += toUpsert.length
+    }
+  }
+
+  while (true) {
     if (Date.now() - startTime >= MAX_RUNTIME) {
       aborted = true
       break
     }
-    const batch = toUpsert.slice(i, i + BATCH)
-    const { error } = await admin
-      .from('cards')
-      .upsert(batch, { onConflict: 'scryfall_id' })
-    if (error) {
-      errors++
-      console.error(`daily-sync batch ${i}: ${error.message}`)
+
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+
+    for (let i = 0; i < buffer.length; i++) {
+      const ch = buffer[i]
+
+      if (escape) { escape = false; continue }
+      if (ch === '\\' && inString) { escape = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+
+      if (ch === '{') {
+        if (depth === 0) objectStart = i
+        depth++
+      } else if (ch === '}') {
+        depth--
+        if (depth === 0 && objectStart !== -1) {
+          const jsonStr = buffer.slice(objectStart, i + 1)
+          objectStart = -1
+
+          try {
+            const card = JSON.parse(jsonStr) as ScryfallCard
+            if (!SKIP_LAYOUTS.has(card.layout ?? '')) {
+              batch.push({
+                ...mapScryfallCard(card),
+                last_price_update: stampNow,
+              })
+              total++
+            }
+            if (batch.length >= BATCH) await flushBatch()
+          } catch {
+            errors++
+          }
+        }
+      }
+    }
+
+    // Keep the trailing fragment (incomplete object) for the next chunk
+    if (objectStart !== -1) {
+      buffer = buffer.slice(objectStart)
+      objectStart = 0
     } else {
-      upserted += batch.length
+      // Discard everything after the last complete object
+      const lastBracket = Math.max(buffer.lastIndexOf(','), buffer.lastIndexOf(']'))
+      if (lastBracket !== -1) {
+        buffer = buffer.slice(lastBracket + 1)
+      }
     }
   }
 
-  // 6. Mark this bulk version done only if we finished cleanly
+  // Flush any remaining objects
+  await flushBatch()
+
+  // 4. Save checkpoint only on clean run
   if (!aborted && errors === 0) {
     await admin.from('sync_metadata').upsert(
       { key: 'daily_bulk_sync', value: entry.updated_at },
       { onConflict: 'key' },
     )
-
-    // 7. Refresh the distinct-sets materialized view so the cards page
-    // dropdown picks up new sets without a full GROUP BY at request time.
     await admin.rpc('refresh_mv_cards_sets' as never)
   }
 
   return NextResponse.json({
-    upserted,
-    total: toUpsert.length,
+    total,
+    upserted: upsertedTotal,
     errors,
     aborted,
     durationMs: Date.now() - startTime,

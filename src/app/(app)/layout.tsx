@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/supabase/get-user";
 import { Navbar } from "@/components/Navbar";
 import { SidebarProvider } from "@/lib/contexts/SidebarContext";
 import { MainContent } from "@/components/MainContent";
+import { GoblinAIButton } from "@/components/goblinai/GoblinAIButton";
 
 export default async function AppLayout({
   children,
@@ -20,6 +21,7 @@ export default async function AppLayout({
         <Navbar />
         <MainContent>{children}</MainContent>
       </div>
+      <GoblinAIButton />
     </SidebarProvider>
   );
 }

@@ -1,7 +1,15 @@
-import { type NextRequest } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
+  const host = request.headers.get('host') ?? ''
+  const isGoblinAI = host.startsWith('goblinai.')
+
+  // goblinai subdomain: rewrite root → /goblinai path for Next.js routing
+  if (isGoblinAI && request.nextUrl.pathname === '/') {
+    request.nextUrl.pathname = '/goblinai'
+  }
+
   return await updateSession(request)
 }
 

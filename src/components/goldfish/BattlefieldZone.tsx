@@ -93,6 +93,17 @@ function BattlefieldCardButton({
     ? { transform: CSS.Translate.toString(drag.transform), zIndex: 999 }
     : {}
 
+  // Compose long-press + drag pointerdown so both fire from the same press.
+  // Spreading drag.listeners last would shadow longPress.handlers.onPointerDown
+  // and silently disable the preview gesture.
+  const composedPointerDown = useCallback((e: React.PointerEvent) => {
+    longPress.handlers.onPointerDown(e)
+    const dragOnPointerDown = drag.listeners?.onPointerDown as
+      | ((event: React.PointerEvent) => void)
+      | undefined
+    dragOnPointerDown?.(e)
+  }, [longPress.handlers, drag.listeners])
+
   return (
     <button
       ref={drag.setNodeRef}
@@ -103,7 +114,7 @@ function BattlefieldCardButton({
       }}
       {...longPress.handlers}
       {...drag.attributes}
-      {...drag.listeners}
+      onPointerDown={composedPointerDown}
       className={`relative overflow-hidden rounded-lg border transition-transform select-none ${
         bc.tapped
           ? 'rotate-90 border-font-muted'

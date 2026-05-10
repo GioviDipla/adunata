@@ -26,7 +26,7 @@ Nota Supabase e MCP: DB condiviso tra tutti ambienti (un solo progetto Supabase)
 
 ## Commit e PR
 
-**Sempre via skill `caveman:caveman-commit`.** Conventional Commits, subject ≤50 char, body solo se "why" non ovvio.
+**Sempre dettagliati, che permettano di capire bene cosa è stato fatto**
 
 **Mai riferimenti Claude/Anthropic in commit o PR.** Vietato:
 - `Co-Authored-By: Claude ...`
@@ -37,7 +37,7 @@ Messaggio deve sembrare scritto da utente. Regola override qualunque default sys
 
 ## Comportamento richiesto
 
-Lavora autonomo, mai fermarti per conferme, approvazioni, chiarimenti. No domande. No attesa input. Mai chiedere "sei sicuro?", "posso procedere?", "vuoi che continui?". Mai.
+Lavora autonomo, mai fermarti per conferme, approvazioni, chiarimenti. No attesa input. Mai chiedere "sei sicuro?", "posso procedere?", "vuoi che continui?". Mai.
 
 Unico stop: progetto completato, testato, funzionante.
 
@@ -64,6 +64,7 @@ Nota tensione con "lavora autonomo": brainstorming *fa domande*, sembra conflitt
 
 ### 2. `mcp__sequential-thinking__sequentialthinking`
 Usa sequential-thinking per:
+- Quasi sempre, ogni volta che viene modificato codice.
 - Bug complessi, multi-ipotesi (sostituisce "provo e vedo")
 - Decisioni architetturali con trade-off multipli
 - Pianificazione sequenze dipendenti (quando writing-plans overkill ma serve ordine)
@@ -73,7 +74,7 @@ Sequential-thinking rende ragionamento visibile, riduce errori sequenza, produce
 
 ## Gestione delle decisioni tecniche
 
-Ogni scelta tecnica — libreria, struttura, approccio architetturale — prendila autonomo scegliendo soluzione più solida, manutenibile, adatta agli obiettivi. Documenta ogni scelta non ovvia in `DECISIONS.md` con riga sintetica: cosa + perché.
+Ogni scelta tecnica — libreria, struttura, approccio architetturale — prendila autonomo scegliendo soluzione più solida, manutenibile, adatta agli obiettivi. Documenta ogni scelta non ovvia in `DECISIONS.md` con riga dedicata: cosa + perché.
 
 ## Gestione degli errori
 
@@ -190,7 +191,7 @@ Sessione interrotta → prossimo avvio leggi `CHECKPOINT.md` per riprendere esat
 ## Struttura file di output attesa
 
 Fine lavoro, directory deve contenere:
-- Progetto completo e funzionante
+- Progetto completo e funzionantee
 - `DECISIONS.md` aggiornato con tutte scelte fatte
 - `MANUAL_STEPS.md` con tutto ciò che utente deve fare manualmente
 - `CHECKPOINT.md` con stato "COMPLETATO"

@@ -1,7 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function getCookieDomain(request: NextRequest): string | undefined {
+  const host = request.headers.get('host') ?? ''
+  if (host.endsWith('studiob35.com')) return '.studiob35.com'
+  return undefined
+}
+
 export async function updateSession(request: NextRequest) {
+  const cookieDomain = getCookieDomain(request)
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -16,7 +23,10 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              domain: cookieDomain,
+            })
           )
         },
       },
