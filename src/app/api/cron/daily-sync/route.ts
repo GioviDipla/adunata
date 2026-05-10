@@ -15,9 +15,12 @@ type BulkEntry = {
 }
 
 /**
- * Daily unified sync: downloads Scryfall's `default_cards` bulk data and
- * upserts the whole catalog in one pass. Uses streaming JSON parsing to
- * avoid Node.js string-length limit (0x1fffffe8 ≈ 512MB) on the bulk payload.
+ * Daily unified sync: downloads Scryfall's `oracle_cards` bulk (~50MB,
+ * ~35k unique cards) and upserts the catalog in one pass. Uses streaming
+ * JSON parsing to avoid memory issues.
+ *
+ * Switched from default_cards (100k printings, 150MB+) — too large to
+ * download + parse within Vercel's 300s function timeout.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -34,17 +37,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'bulk-data list failed' }, { status: 502 })
   }
   const bulkList = ((await bulkRes.json()).data ?? []) as BulkEntry[]
-  const entry = bulkList.find((d) => d.type === 'default_cards')
+  const entry = bulkList.find((d) => d.type === 'oracle_cards')
   if (!entry) {
-    return NextResponse.json({ error: 'default_cards entry not found' }, { status: 500 })
+    return NextResponse.json({ error: 'oracle_cards entry not found' }, { status: 500 })
   }
 
   // 2. Short-circuit if we already processed this bulk version
   const admin = createAdminClient()
+  const META_KEY = 'daily_bulk_sync_oracle'
   const { data: meta } = await admin
     .from('sync_metadata')
     .select('value')
-    .eq('key', 'daily_bulk_sync')
+    .eq('key', META_KEY)
     .maybeSingle()
   if (meta?.value === entry.updated_at) {
     return NextResponse.json({
@@ -156,7 +160,7 @@ export async function GET(request: NextRequest) {
   // 4. Save checkpoint only on clean run
   if (!aborted && errors === 0) {
     await admin.from('sync_metadata').upsert(
-      { key: 'daily_bulk_sync', value: entry.updated_at },
+      { key: META_KEY, value: entry.updated_at },
       { onConflict: 'key' },
     )
     await admin.rpc('refresh_mv_cards_sets' as never)
