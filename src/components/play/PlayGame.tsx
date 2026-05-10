@@ -1357,10 +1357,10 @@ export default function PlayGame(props: PlayGameProps) {
           type="button"
           onClick={() => setGoblinOpen((v) => !v)}
           aria-label="GoblinAI Rules Assistant"
-          className="flex min-h-11 items-center gap-1.5 rounded-md px-2 text-font-secondary active:text-font-primary"
+          className="flex min-h-9 items-center gap-1.5 rounded-full bg-orange-600 px-3 py-1.5 text-white shadow-sm transition-colors hover:bg-orange-700 active:bg-orange-700"
         >
-          <GoblinHeadIcon className="h-6 w-6" />
-          <span className="hidden text-sm font-medium sm:inline">GoblinAI</span>
+          <GoblinHeadIcon className="h-5 w-5" />
+          <span className="hidden text-sm font-bold sm:inline">GoblinAI</span>
         </button>
       </div>
       {/* Scrollable: opponent + spacer + player battlefield */}

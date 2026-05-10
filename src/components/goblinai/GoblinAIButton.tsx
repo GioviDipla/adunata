@@ -1,7 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { GoblinAIPanel } from './GoblinAIPanel'
+
+// Routes that mount their own in-header GoblinAI launcher (goldfish + the
+// multiplayer game view). On those pages, the floating button would clash
+// with the bottom action bar and duplicate the header entry.
+const HIDE_FLOATING_PATTERNS = [
+  /^\/decks\/[^/]+\/goldfish(?:\/|$)/,
+  /^\/play\/[^/]+\/game(?:\/|$)/,
+]
 
 function GoblinIcon({ className }: { className?: string }) {
   return (
@@ -32,6 +41,11 @@ function GoblinIcon({ className }: { className?: string }) {
 
 export function GoblinAIButton() {
   const [open, setOpen] = useState(false)
+  const pathname = usePathname()
+
+  if (pathname && HIDE_FLOATING_PATTERNS.some((re) => re.test(pathname))) {
+    return null
+  }
 
   return (
     <>
