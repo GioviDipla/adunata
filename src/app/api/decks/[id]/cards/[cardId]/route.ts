@@ -33,6 +33,7 @@ export async function PATCH(
         : null
   }
   if ('tags' in body) patch.tags = sanitizeTags(body.tags)
+  if ('is_foil' in body) patch.is_foil = !!body.is_foil
   if (
     'position_in_section' in body &&
     (typeof body.position_in_section === 'number' ||

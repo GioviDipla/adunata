@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Check, Trash2 } from 'lucide-react'
+import { X, Check, Trash2, Sparkles } from 'lucide-react'
 import TagEditor from './TagEditor'
 import type { SectionOption } from './SectionPicker'
 
@@ -20,6 +20,8 @@ interface Props {
   onTagsChange?: (deckCardId: string, tags: string[]) => void
   onMoveToBoard?: (toBoard: string) => void
   onRemove?: () => void
+  isFoil?: boolean
+  onToggleFoil?: () => void
 }
 
 const BOARD_LABELS: Record<string, string> = {
@@ -50,6 +52,8 @@ export default function DeckCardActionSheet({
   onTagsChange,
   onMoveToBoard,
   onRemove,
+  isFoil,
+  onToggleFoil,
 }: Props) {
   const [sectionId, setSectionId] = useState<string | null>(currentSectionId)
 
@@ -150,6 +154,26 @@ export default function DeckCardActionSheet({
               ))}
             </ul>
           </section>
+
+          {/* Foil toggle */}
+          {onToggleFoil && (
+            <section className="mb-4">
+              <button
+                onClick={() => {
+                  onToggleFoil()
+                  onClose()
+                }}
+                className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                  isFoil
+                    ? 'border-bg-yellow/40 bg-bg-yellow/10 text-bg-yellow'
+                    : 'border-border bg-bg-cell text-font-primary hover:bg-bg-hover'
+                }`}
+              >
+                <Sparkles className={`h-4 w-4 ${isFoil ? 'text-bg-yellow' : 'text-font-muted'}`} />
+                {isFoil ? 'Foil' : 'Mark as Foil'}
+              </button>
+            </section>
+          )}
 
           {/* Tag editor */}
           <section className="mb-4">

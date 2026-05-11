@@ -84,6 +84,7 @@ interface DeckContentProps {
   onSectionChange?: (deckCardId: string, sectionId: string | null) => void
   /** Called after tag changes are persisted (owner edit only). */
   onTagsChange?: (deckCardId: string, tags: string[]) => void
+  onToggleFoil?: (cardId: number, board: string) => void
 
   /** Per-card owned/missing map keyed by `cards.id`. When present the
    *  DeckCard list-view tiles render an owned/missing chip. Grid/text
@@ -104,6 +105,7 @@ export default function DeckContent({
   onMoveToBoard,
   onSectionChange,
   onTagsChange,
+  onToggleFoil,
   overlayByCardId,
 }: DeckContentProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -662,6 +664,7 @@ export default function DeckContent({
               onMoveToBoard={onMoveToBoard}
               sections={editingWired ? sectionOptions : undefined}
               onSectionChange={onSectionChange}
+              onToggleFoil={editingWired ? onToggleFoil : undefined}
               cols={gridCols ?? undefined}
             />
           ) : viewMode === 'text' ? (
@@ -675,6 +678,7 @@ export default function DeckContent({
               onRemove={onRemove}
               sections={editingWired ? sectionOptions : undefined}
               onSectionChange={onSectionChange}
+              onToggleFoil={editingWired ? onToggleFoil : undefined}
             />
           ) : (
             <div className="flex flex-col gap-1">
@@ -691,6 +695,8 @@ export default function DeckContent({
                   onCardClick={onCardClick}
                   onMoveToBoard={onMoveToBoard}
                   overlay={overlayByCardId?.get(entry.card.id)}
+                  isFoil={entry.isFoil}
+                  onToggleFoil={editingWired ? onToggleFoil : undefined}
                 />
               ))}
             </div>
@@ -798,6 +804,8 @@ export default function DeckContent({
                           onSectionChange={onSectionChange}
                           onTagsChange={onTagsChange}
                           overlay={overlayByCardId?.get(entry.card.id)}
+                          isFoil={entry.isFoil}
+                          onToggleFoil={editingWired ? onToggleFoil : undefined}
                         />
                       ))}
                     </div>
@@ -888,6 +896,7 @@ export default function DeckContent({
                         onMoveToBoard={onMoveToBoard}
                         sections={editingWired ? sectionOptions : undefined}
                         onSectionChange={onSectionChange}
+                        onToggleFoil={editingWired ? onToggleFoil : undefined}
                         cols={gridCols ?? undefined}
                       />
                     </div>
@@ -908,6 +917,7 @@ export default function DeckContent({
             onMoveToBoard={onMoveToBoard}
             sections={editingWired ? sectionOptions : undefined}
             onSectionChange={onSectionChange}
+            onToggleFoil={editingWired ? onToggleFoil : undefined}
             cols={gridCols ?? undefined}
           />
         )
@@ -925,6 +935,7 @@ export default function DeckContent({
           onRemove={onRemove}
           sections={editingWired ? sectionOptions : undefined}
           onSectionChange={onSectionChange}
+          onToggleFoil={editingWired ? onToggleFoil : undefined}
         />
       )}
     </div>

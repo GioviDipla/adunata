@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Crown, RotateCcw } from 'lucide-react'
+import { Crown, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
@@ -14,6 +14,7 @@ interface DeckCardEntry {
   quantity: number
   board: string
   section_id?: string | null
+  isFoil?: boolean
 }
 
 interface SectionOption {
@@ -34,6 +35,7 @@ interface DeckTextViewProps {
   onRemove?: (cardId: number, board: string) => void
   sections?: SectionOption[]
   onSectionChange?: (deckCardId: string, sectionId: string | null) => void
+  onToggleFoil?: (cardId: number, board: string) => void
 }
 
 export default function DeckTextView({
@@ -47,6 +49,7 @@ export default function DeckTextView({
   onRemove,
   sections,
   onSectionChange,
+  onToggleFoil,
 }: DeckTextViewProps) {
   const [hoverCard, setHoverCard] = useState<{ card: CardRow; x: number; y: number } | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
@@ -178,6 +181,9 @@ export default function DeckTextView({
                       >
                         {entry.card.name}
                       </button>
+                      {entry.isFoil && (
+                        <Sparkles className="h-3 w-3 shrink-0 text-bg-yellow" aria-label="Foil" />
+                      )}
                       {commander && (
                         <Crown className="h-3 w-3 text-bg-yellow" />
                       )}
@@ -256,6 +262,12 @@ export default function DeckTextView({
             onToggleCommander={
               onToggleCommander
                 ? () => onToggleCommander(contextMenu.cardId, contextMenu.board)
+                : undefined
+            }
+            isFoil={entry?.isFoil}
+            onToggleFoil={
+              onToggleFoil
+                ? () => onToggleFoil(contextMenu.cardId, contextMenu.board)
                 : undefined
             }
             onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}

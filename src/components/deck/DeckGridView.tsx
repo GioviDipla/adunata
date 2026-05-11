@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Crown, RotateCcw } from 'lucide-react'
+import { Crown, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import type { Database } from '@/types/supabase'
 
@@ -16,6 +16,7 @@ interface DeckCardEntry {
   quantity: number
   board: string
   section_id?: string | null
+  isFoil?: boolean
 }
 
 interface SectionOption {
@@ -35,6 +36,7 @@ interface DeckGridViewProps {
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
   sections?: SectionOption[]
   onSectionChange?: (deckCardId: string, sectionId: string | null) => void
+  onToggleFoil?: (cardId: number, board: string) => void
   /** Override the responsive grid with a fixed column count (2-6). When omitted,
    *  the grid uses the default Tailwind breakpoints. */
   cols?: number
@@ -63,6 +65,7 @@ export default function DeckGridView({
   onMoveToBoard,
   sections,
   onSectionChange,
+  onToggleFoil,
   cols,
 }: DeckGridViewProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
@@ -164,14 +167,15 @@ export default function DeckGridView({
           >
             {/* Card image */}
             {entry.card.image_normal ? (
-              <img
-                src={entry.card.image_normal}
-                alt={entry.card.name}
-                className="w-full h-auto cursor-pointer select-none"
-                loading="lazy"
-                draggable={false}
-                onClick={(e) => {
-                  if (consumeLongPress()) return
+              <div className="relative">
+                <img
+                  src={entry.card.image_normal}
+                  alt={entry.card.name}
+                  className="w-full h-auto cursor-pointer select-none"
+                  loading="lazy"
+                  draggable={false}
+                  onClick={(e) => {
+                    if (consumeLongPress()) return
                   if (editingMode) {
                     openContext(e.clientX, e.clientY)
                   } else {
@@ -179,6 +183,12 @@ export default function DeckGridView({
                   }
                 }}
               />
+              {entry.isFoil && (
+                <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-bg-yellow/90 text-bg-dark backdrop-blur-sm">
+                  <Sparkles className="h-3 w-3" />
+                </div>
+              )}
+              </div>
             ) : (
               <div
                 className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2 cursor-pointer select-none"
@@ -279,6 +289,12 @@ export default function DeckGridView({
             onToggleCommander={
               onToggleCommander
                 ? () => onToggleCommander(contextMenu.cardId, contextMenu.board)
+                : undefined
+            }
+            isFoil={entry?.isFoil}
+            onToggleFoil={
+              onToggleFoil
+                ? () => onToggleFoil(contextMenu.cardId, contextMenu.board)
                 : undefined
             }
             onMoveToBoard={(toBoard) => onMoveToBoard(contextMenu.cardId, contextMenu.board, toBoard)}
