@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { GoblinAIMessage } from './GoblinAIMessage'
 import { GoblinAIComposer } from './GoblinAIComposer'
+import { GoblinAIHistoryDropdown } from './GoblinAIHistoryDropdown'
 import type { RestatementResponse, AnswerResponse, MentionedCardRef } from '@/lib/goblinai/types'
 
 function GoblinIcon({ className }: { className?: string }) {
@@ -36,6 +37,14 @@ interface Message {
   serverMessageId?: string
 }
 
+interface DbMessage {
+  id: string
+  role: string
+  content: string
+  restatement_status: 'none' | 'pending_confirmation' | 'confirmed'
+  created_at: string
+}
+
 export function GoblinAIStandalone() {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
@@ -45,12 +54,62 @@ export function GoblinAIStandalone() {
     restatementMessageId: string
     restatement: string
   } | null>(null)
-  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
+  const [activeConversationTitle, setActiveConversationTitle] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  function handleNewConversation() {
+    setMessages([])
+    setActiveConversationId(null)
+    setActiveConversationTitle(null)
+    setPendingRestatement(null)
+    setError(null)
+  }
+
+  async function handleSelectConversation(id: string, title: string | null) {
+    setError(null)
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/assistant/conversations/${id}/messages`)
+      if (!res.ok) throw new Error('Failed to load conversation')
+      const data: { messages: DbMessage[] } = await res.json()
+
+      const mapped: Message[] = data.messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({
+          id: crypto.randomUUID(),
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          serverMessageId: m.id,
+          pendingConfirmation: m.role === 'assistant' && m.restatement_status === 'pending_confirmation',
+        }))
+
+      setMessages(mapped)
+      setActiveConversationId(id)
+      setActiveConversationTitle(title)
+
+      const lastAssistant = [...data.messages]
+        .reverse()
+        .find((m) => m.role === 'assistant' && m.restatement_status === 'pending_confirmation')
+      if (lastAssistant) {
+        setPendingRestatement({
+          conversationId: id,
+          restatementMessageId: lastAssistant.id,
+          restatement: lastAssistant.content,
+        })
+      } else {
+        setPendingRestatement(null)
+      }
+    } catch {
+      setError('Impossibile caricare la conversazione')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleSend(message: string, mentions: MentionedCardRef[]) {
     setError(null)
@@ -63,11 +122,15 @@ export function GoblinAIStandalone() {
     }
     setMessages((prev) => [...prev, userMsg])
 
+    if (!activeConversationId) {
+      setActiveConversationTitle(message.slice(0, 50))
+    }
+
     try {
       const res = await fetch('/api/assistant/rules/restatement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, mentions, conversationId }),
+        body: JSON.stringify({ message, mentions, conversationId: activeConversationId }),
       })
 
       if (!res.ok) {
@@ -76,7 +139,7 @@ export function GoblinAIStandalone() {
       }
 
       const data: RestatementResponse = await res.json()
-      setConversationId(data.conversationId)
+      setActiveConversationId(data.conversationId)
 
       if (data.requiresConfirmation && data.restatement) {
         setPendingRestatement({
@@ -151,15 +214,22 @@ export function GoblinAIStandalone() {
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3 pt-[env(safe-area-inset-top,0px)]">
         <GoblinIcon className="h-8 w-8" />
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-white font-bold">GoblinAI</h1>
-          <p className="text-xs text-white/40">MTG Rules Assistant</p>
+          <p className="text-xs text-white/40 truncate">
+            {activeConversationTitle ?? 'MTG Rules Assistant'}
+          </p>
         </div>
+        <GoblinAIHistoryDropdown
+          activeConversationId={activeConversationId}
+          onSelectConversation={handleSelectConversation}
+          onNewConversation={handleNewConversation}
+        />
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {messages.length === 0 && (
+        {messages.length === 0 && !loading && (
           <p className="text-sm text-white/50 text-center mt-8">
             Chiedi una regola. Usa @ per citare ogni carta coinvolta.
           </p>
