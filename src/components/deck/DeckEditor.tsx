@@ -636,6 +636,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
           card: c.card,
           quantity: c.quantity,
           board: c.board,
+          isFoil: c.isFoil,
         })),
     [cards]
   )
