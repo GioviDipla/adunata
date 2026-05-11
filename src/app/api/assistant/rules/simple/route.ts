@@ -69,6 +69,13 @@ export async function POST(request: NextRequest) {
           completion_tokens: result.completionTokens,
         },
       ])
+      await adminClient
+        .from('goblinai_conversations')
+        .update({
+          title: body.message.slice(0, 50),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', convId)
     }
 
     return NextResponse.json({

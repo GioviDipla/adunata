@@ -141,6 +141,10 @@ export async function POST(request: NextRequest) {
       })
       .select('id')
       .single()
+    await adminClient
+      .from('goblinai_conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', conversationId)
 
     return NextResponse.json({
       answer: result.text,

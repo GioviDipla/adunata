@@ -128,6 +128,15 @@ export async function POST(request: NextRequest) {
           prompt_tokens: result.promptTokens,
           completion_tokens: result.completionTokens,
         })
+      await adminClient
+        .from('goblinai_conversations')
+        .update({ title: message.slice(0, 50) })
+        .eq('id', convId)
+        .is('title', null)
+      await adminClient
+        .from('goblinai_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', convId)
 
       return NextResponse.json({
         conversationId: convId,
@@ -198,6 +207,16 @@ export async function POST(request: NextRequest) {
       })
       .select('id')
       .single()
+
+    await adminClient
+      .from('goblinai_conversations')
+      .update({ title: message.slice(0, 50) })
+      .eq('id', convId)
+      .is('title', null)
+    await adminClient
+      .from('goblinai_conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', convId)
 
     return NextResponse.json({
       conversationId: convId,
