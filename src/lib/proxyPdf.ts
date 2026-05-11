@@ -45,21 +45,41 @@ export interface PaperOption {
   height: number
 }
 
-export type PrintRasterPreset = 'fast' | 'standard' | 'high'
+export type PrintRasterPreset = 'fast' | 'standard' | 'high' | 'ultra'
+
+interface PrintRasterPresetOptions {
+  dpi: number
+  jpegQuality: number
+  maxWidthPx: number
+  maxHeightPx: number
+  allowUpscale?: boolean
+  bleedJpegQuality?: number
+}
 
 export interface PrintRasterOptions {
   bleedWmm: number
   bleedHmm: number
   dpi: number
   jpegQuality: number
+  maxWidthPx?: number
+  maxHeightPx?: number
+  allowUpscale?: boolean
   fitMode?: ImageFitMode
   debug?: boolean
 }
 
-export const PRINT_RASTER_PRESETS: Record<PrintRasterPreset, { dpi: number; jpegQuality: number }> = {
-  fast: { dpi: 240, jpegQuality: 0.82 },
-  standard: { dpi: 300, jpegQuality: 0.88 },
-  high: { dpi: 360, jpegQuality: 0.9 },
+export const PRINT_RASTER_PRESETS: Record<PrintRasterPreset, PrintRasterPresetOptions> = {
+  fast: { dpi: 240, jpegQuality: 0.82, maxWidthPx: 1000, maxHeightPx: 1400 },
+  standard: { dpi: 300, jpegQuality: 0.88, maxWidthPx: 1000, maxHeightPx: 1400 },
+  high: { dpi: 360, jpegQuality: 0.9, maxWidthPx: 1000, maxHeightPx: 1400 },
+  ultra: {
+    dpi: 480,
+    jpegQuality: 0.95,
+    maxWidthPx: 1500,
+    maxHeightPx: 2100,
+    allowUpscale: false,
+    bleedJpegQuality: 0.9,
+  },
 }
 
 const CARD_W = 63 // mm
@@ -103,10 +123,19 @@ function toProxyUrl(url: string): string {
   return url
 }
 
-function printRasterDimensions(options: PrintRasterOptions): { width: number; height: number } {
+export function printRasterDimensions(
+  options: PrintRasterOptions,
+  sourceWidth?: number,
+  sourceHeight?: number,
+): { width: number; height: number } {
   const rawWidth = Math.round((options.bleedWmm / 25.4) * options.dpi)
   const rawHeight = Math.round((options.bleedHmm / 25.4) * options.dpi)
-  const maxScale = Math.min(1000 / rawWidth, 1400 / rawHeight, 1)
+  const maxWidth = options.maxWidthPx ?? 1000
+  const maxHeight = options.maxHeightPx ?? 1400
+  const sourceScale = options.allowUpscale === false && sourceWidth && sourceHeight
+    ? Math.min(sourceWidth / rawWidth, sourceHeight / rawHeight, 1)
+    : 1
+  const maxScale = Math.min(maxWidth / rawWidth, maxHeight / rawHeight, sourceScale, 1)
   return {
     width: Math.max(1, Math.round(rawWidth * maxScale)),
     height: Math.max(1, Math.round(rawHeight * maxScale)),
@@ -160,11 +189,11 @@ export async function optimizeCardImageForPrint(
   sourceImage: Blob | ArrayBuffer | HTMLImageElement,
   options: PrintRasterOptions,
 ): Promise<Uint8Array> {
-  const { width: optimizedWidth, height: optimizedHeight } = printRasterDimensions(options)
   const originalBytes = sourceByteLength(sourceImage)
   const { image, revokeUrl } = await decodeImageElement(sourceImage)
   const originalWidth = image.naturalWidth || image.width
   const originalHeight = image.naturalHeight || image.height
+  const { width: optimizedWidth, height: optimizedHeight } = printRasterDimensions(options, originalWidth, originalHeight)
 
   try {
     const canvas = document.createElement('canvas')
@@ -326,13 +355,15 @@ export async function generateProxyPdfWithDetails(
   const bleedBoxes = computeBleedBoxes(trimBoxes, effectiveBleed)
   const sampleImageLayout = computeCardImageLayout(trimBoxes[0], effectiveBleed, bleedMode)
   const rasterPreset = PRINT_RASTER_PRESETS[printRasterPreset] ?? PRINT_RASTER_PRESETS.standard
-  const rasterDpi = Math.min(rasterPreset.dpi, 360)
   const rasterVariants: { main: PrintRasterOptions; bleed?: PrintRasterOptions } = {
     main: {
       bleedWmm: sampleImageLayout.mainImageDrawBox.w,
       bleedHmm: sampleImageLayout.mainImageDrawBox.h,
-      dpi: rasterDpi,
+      dpi: rasterPreset.dpi,
       jpegQuality: rasterPreset.jpegQuality,
+      maxWidthPx: rasterPreset.maxWidthPx,
+      maxHeightPx: rasterPreset.maxHeightPx,
+      allowUpscale: rasterPreset.allowUpscale,
       fitMode: sampleImageLayout.mainFitMode,
       debug: debugLayout,
     },
@@ -341,8 +372,11 @@ export async function generateProxyPdfWithDetails(
     rasterVariants.bleed = {
       bleedWmm: sampleImageLayout.bleedImageDrawBox.w,
       bleedHmm: sampleImageLayout.bleedImageDrawBox.h,
-      dpi: rasterDpi,
-      jpegQuality: Math.min(rasterPreset.jpegQuality, 0.82),
+      dpi: rasterPreset.dpi,
+      jpegQuality: rasterPreset.bleedJpegQuality ?? Math.min(rasterPreset.jpegQuality, 0.82),
+      maxWidthPx: rasterPreset.maxWidthPx,
+      maxHeightPx: rasterPreset.maxHeightPx,
+      allowUpscale: rasterPreset.allowUpscale,
       fitMode: sampleImageLayout.bleedFitMode,
       debug: debugLayout,
     }

@@ -590,6 +590,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
                 <option value="fast">Fast</option>
                 <option value="standard">Standard</option>
                 <option value="high">High</option>
+                <option value="ultra">Ultra</option>
               </select>
             </label>
 

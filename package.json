@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:proxy-pdf": "node --test tests/proxyPdfLayout.test.mjs",
+    "test:proxy-pdf": "node --test tests/proxyPdf*.test.mjs",
     "test:goblinai": "vitest run tests/goblinai",
     "test:goblinai:watch": "vitest tests/goblinai",
     "test:game": "vitest run tests/play tests/game"
