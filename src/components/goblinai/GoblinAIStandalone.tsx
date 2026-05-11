@@ -64,56 +64,39 @@ export function GoblinAIStandalone() {
     setMessages((prev) => [...prev, userMsg])
 
     try {
-      if (mentions.length === 0) {
-        const res = await fetch('/api/assistant/rules/simple', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+      const res = await fetch('/api/assistant/rules/restatement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, mentions, conversationId }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Request failed')
+      }
+
+      const data: RestatementResponse = await res.json()
+      setConversationId(data.conversationId)
+
+      if (data.requiresConfirmation && data.restatement) {
+        setPendingRestatement({
+          conversationId: data.conversationId,
+          restatementMessageId: data.messageId ?? crypto.randomUUID(),
+          restatement: data.restatement,
         })
-
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.error || 'Request failed')
-        }
-
-        const data = await res.json()
-        setConversationId(data.conversationId)
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: data.answer }])
-      } else {
-        const res = await fetch('/api/assistant/rules/restatement', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, mentions, conversationId }),
-        })
-
-        if (!res.ok) {
-          const err = await res.json()
-          throw new Error(err.error || 'Request failed')
-        }
-
-        const data: RestatementResponse = await res.json()
-        setConversationId(data.conversationId)
-
-        if (data.requiresConfirmation && data.restatement) {
-          setPendingRestatement({
-            conversationId: data.conversationId,
-            restatementMessageId: data.messageId ?? crypto.randomUUID(),
-            restatement: data.restatement,
-          })
-          setMessages((prev) => [...prev, {
-            id: data.messageId ?? crypto.randomUUID(),
-            role: 'assistant',
-            content: data.restatement,
-            pendingConfirmation: true,
-            serverMessageId: data.messageId ?? undefined,
-          }])
-        } else if (data.answer) {
-          setMessages((prev) => [...prev, {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: data.answer!,
-          }])
-        }
+        setMessages((prev) => [...prev, {
+          id: data.messageId ?? crypto.randomUUID(),
+          role: 'assistant',
+          content: data.restatement,
+          pendingConfirmation: true,
+          serverMessageId: data.messageId ?? undefined,
+        }])
+      } else if (data.answer) {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: data.answer!,
+        }])
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')

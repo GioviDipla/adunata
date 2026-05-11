@@ -47,13 +47,6 @@ export async function POST(request: NextRequest) {
 
   const { message, mentions, conversationId } = body
 
-  if (mentions.length === 0) {
-    return NextResponse.json(
-      { error: 'Use @mention for every card involved. Per domande su carte specifiche usa @mention per ogni carta coinvolta.' },
-      { status: 400 },
-    )
-  }
-
   const ctx = await buildGoblinAIContext({ message, mentions })
 
   for (const m of mentions) {
