@@ -94,18 +94,24 @@ export function GoblinAIStandalone() {
         const data: RestatementResponse = await res.json()
         setConversationId(data.conversationId)
 
-        if (data.requiresConfirmation) {
+        if (data.requiresConfirmation && data.restatement) {
           setPendingRestatement({
             conversationId: data.conversationId,
-            restatementMessageId: data.messageId,
+            restatementMessageId: data.messageId ?? crypto.randomUUID(),
             restatement: data.restatement,
           })
           setMessages((prev) => [...prev, {
-            id: data.messageId,
+            id: data.messageId ?? crypto.randomUUID(),
             role: 'assistant',
             content: data.restatement,
             pendingConfirmation: true,
-            serverMessageId: data.messageId,
+            serverMessageId: data.messageId ?? undefined,
+          }])
+        } else if (data.answer) {
+          setMessages((prev) => [...prev, {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: data.answer!,
           }])
         }
       }
