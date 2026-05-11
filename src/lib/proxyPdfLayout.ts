@@ -5,6 +5,17 @@ export interface Rect {
   h: number
 }
 
+export type BleedMode = 'crop' | 'preserve' | 'none'
+export type ImageFitMode = 'cover' | 'contain'
+
+export interface CardImageLayout {
+  imageDrawBox: Rect
+  mainImageDrawBox: Rect
+  mainFitMode: ImageFitMode
+  bleedImageDrawBox?: Rect
+  bleedFitMode?: ImageFitMode
+}
+
 export interface GridLayoutOptions {
   pageW: number
   pageH: number
@@ -24,7 +35,7 @@ export interface TrimBox extends Rect {
 export interface CropMarkSettings {
   length: number
   offset: number
-  extendOuterToPageEdge?: boolean
+  printableInset?: number
 }
 
 export interface Segment {
@@ -110,6 +121,38 @@ export function computeBleedBoxes(trimBoxes: Rect[], bleedMm: number): Rect[] {
   }))
 }
 
+export function computeCardImageLayout(
+  trimBox: Rect,
+  bleedMm: number,
+  bleedMode: BleedMode,
+): CardImageLayout {
+  const bleedBox = computeBleedBoxes([trimBox], bleedMm)[0]
+
+  if (bleedMode === 'crop') {
+    return {
+      imageDrawBox: bleedBox,
+      mainImageDrawBox: bleedBox,
+      mainFitMode: 'cover',
+    }
+  }
+
+  if (bleedMode === 'preserve' && bleedMm > 0) {
+    return {
+      imageDrawBox: trimBox,
+      mainImageDrawBox: trimBox,
+      mainFitMode: 'contain',
+      bleedImageDrawBox: bleedBox,
+      bleedFitMode: 'cover',
+    }
+  }
+
+  return {
+    imageDrawBox: trimBox,
+    mainImageDrawBox: trimBox,
+    mainFitMode: 'contain',
+  }
+}
+
 export function paginateCards<T>(cards: T[], cardsPerPage: number): T[][] {
   if (cardsPerPage <= 0) return []
   const pages: T[][] = []
@@ -140,6 +183,7 @@ export function generateCropMarks(
   const rows = Math.max(1, Math.floor(layout.rows))
   const internalX = internalMarkLength(layout.gapX, settings.offset, settings.length)
   const internalY = internalMarkLength(layout.gapY, settings.offset, settings.length)
+  const inset = Math.max(0.01, settings.printableInset ?? settings.length)
 
   for (const box of trimBoxes) {
     const left = box.x
@@ -153,25 +197,76 @@ export function generateCropMarks(
     const o = settings.offset
 
     if (leftLen > 0) {
-      const x1 = settings.extendOuterToPageEdge && box.col === 0 ? 0 : left - o - leftLen
+      const x1 = box.col === 0 ? inset : left - o - leftLen
       pushUniqueSegment(segments, seen, { x1, y1: top, x2: left - o, y2: top })
       pushUniqueSegment(segments, seen, { x1, y1: bottom, x2: left - o, y2: bottom })
     }
     if (rightLen > 0) {
-      const x2 = settings.extendOuterToPageEdge && box.col === cols - 1 ? layout.pageW : right + o + rightLen
+      const x2 = box.col === cols - 1 ? layout.pageW - inset : right + o + rightLen
       pushUniqueSegment(segments, seen, { x1: right + o, y1: top, x2, y2: top })
       pushUniqueSegment(segments, seen, { x1: right + o, y1: bottom, x2, y2: bottom })
     }
     if (topLen > 0) {
-      const y1 = settings.extendOuterToPageEdge && box.row === 0 ? 0 : top - o - topLen
+      const y1 = box.row === 0 ? inset : top - o - topLen
       pushUniqueSegment(segments, seen, { x1: left, y1, x2: left, y2: top - o })
       pushUniqueSegment(segments, seen, { x1: right, y1, x2: right, y2: top - o })
     }
     if (bottomLen > 0) {
-      const y2 = settings.extendOuterToPageEdge && box.row === rows - 1 ? layout.pageH : bottom + o + bottomLen
+      const y2 = box.row === rows - 1 ? layout.pageH - inset : bottom + o + bottomLen
       pushUniqueSegment(segments, seen, { x1: left, y1: bottom + o, x2: left, y2 })
       pushUniqueSegment(segments, seen, { x1: right, y1: bottom + o, x2: right, y2 })
     }
+  }
+
+  return segments
+}
+
+export function generateAdjacentGridCutGuides(
+  trimBoxes: TrimBox[],
+  layout: Pick<GridLayoutOptions, 'pageW' | 'pageH'>,
+  settings: Pick<CropMarkSettings, 'offset' | 'printableInset'>,
+): Segment[] {
+  const segments: Segment[] = []
+  const seen = new Set<string>()
+  if (trimBoxes.length === 0) return segments
+
+  const gridLeft = Math.min(...trimBoxes.map((box) => box.x))
+  const gridTop = Math.min(...trimBoxes.map((box) => box.y))
+  const gridRight = Math.max(...trimBoxes.map((box) => box.x + box.w))
+  const gridBottom = Math.max(...trimBoxes.map((box) => box.y + box.h))
+  const cutXs = [...new Set(trimBoxes.flatMap((box) => [round2(box.x), round2(box.x + box.w)]))].sort((a, b) => a - b)
+  const cutYs = [...new Set(trimBoxes.flatMap((box) => [round2(box.y), round2(box.y + box.h)]))].sort((a, b) => a - b)
+  const o = settings.offset
+  const inset = Math.max(0.01, settings.printableInset ?? 3)
+
+  for (const cutX of cutXs) {
+    pushUniqueSegment(segments, seen, {
+      x1: cutX,
+      y1: inset,
+      x2: cutX,
+      y2: gridTop - o,
+    })
+    pushUniqueSegment(segments, seen, {
+      x1: cutX,
+      y1: gridBottom + o,
+      x2: cutX,
+      y2: layout.pageH - inset,
+    })
+  }
+
+  for (const cutY of cutYs) {
+    pushUniqueSegment(segments, seen, {
+      x1: inset,
+      y1: cutY,
+      x2: gridLeft - o,
+      y2: cutY,
+    })
+    pushUniqueSegment(segments, seen, {
+      x1: gridRight + o,
+      y1: cutY,
+      x2: layout.pageW - inset,
+      y2: cutY,
+    })
   }
 
   return segments

@@ -2,7 +2,7 @@
 
 import { memo, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
-import { Minus, Plus, RotateCcw } from 'lucide-react'
+import { Minus, Plus, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
@@ -29,6 +29,8 @@ interface DeckCardProps {
   onToggleCommander?: (cardId: number, board: string) => void
   onCardClick?: (card: CardRow) => void
   onMoveToBoard?: (cardId: number, fromBoard: string, toBoard: string) => void
+  isFoil?: boolean
+  onToggleFoil?: (cardId: number, board: string) => void
 
   // Section / tag editing — only rendered when both `deckId` + `deckCardId`
   // are provided AND an edit handler (onRemove) is also wired.
@@ -106,6 +108,8 @@ function DeckCardImpl({
   onToggleCommander,
   onCardClick,
   onMoveToBoard,
+  isFoil,
+  onToggleFoil,
   deckId,
   deckCardId,
   sections,
@@ -225,6 +229,9 @@ function DeckCardImpl({
         >
           {card.name}
         </button>
+        {isFoil && (
+          <Sparkles className="h-3 w-3 shrink-0 text-bg-yellow" aria-label="Foil" />
+        )}
         <div className="hidden sm:flex">
           <ManaCostDisplay manaCost={card.mana_cost} />
         </div>
@@ -329,6 +336,10 @@ function DeckCardImpl({
           onToggleCommander={
             onToggleCommander ? () => onToggleCommander(card.id, board) : undefined
           }
+          isFoil={isFoil}
+          onToggleFoil={
+            onToggleFoil ? () => onToggleFoil(card.id, board) : undefined
+          }
           onMoveToBoard={(toBoard) => onMoveToBoard(card.id, board, toBoard)}
           onRemove={onRemove ? () => onRemove(card.id, board) : undefined}
           sections={sections && deckCardId ? sections : undefined}
@@ -363,6 +374,10 @@ function DeckCardImpl({
             onMoveToBoard ? (toBoard) => onMoveToBoard(card.id, board, toBoard) : undefined
           }
           onRemove={onRemove ? () => onRemove(card.id, board) : undefined}
+          isFoil={isFoil}
+          onToggleFoil={
+            onToggleFoil ? () => onToggleFoil(card.id, board) : undefined
+          }
         />
       )}
     </div>

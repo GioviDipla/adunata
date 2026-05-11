@@ -512,6 +512,41 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
     [deck.id],
   )
 
+  const handleToggleFoil = useCallback(
+    async (cardId: number, board: string) => {
+      let prevFoil: boolean | undefined
+      setCards((prev) =>
+        prev.map((c) => {
+          if (c.card.id === cardId && c.board === board) {
+            prevFoil = c.isFoil ?? false
+            return { ...c, isFoil: !prevFoil }
+          }
+          return c
+        }),
+      )
+      // Find the deck_card id to call the PATCH endpoint
+      const entry = cards.find((c) => c.card.id === cardId && c.board === board)
+      if (!entry) return
+      try {
+        const res = await fetch(`/api/decks/${deck.id}/cards/${entry.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ is_foil: !prevFoil }),
+        })
+        if (!res.ok) throw new Error('failed')
+      } catch {
+        setCards((prev) =>
+          prev.map((c) =>
+            c.card.id === cardId && c.board === board
+              ? { ...c, isFoil: prevFoil ?? false }
+              : c,
+          ),
+        )
+      }
+    },
+    [deck.id, cards],
+  )
+
   const handleCardAdded = useCallback((card: CardRow, board: string) => {
     setCards((prev) => {
       const existing = prev.find(
@@ -601,6 +636,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
           card: c.card,
           quantity: c.quantity,
           board: c.board,
+          isFoil: c.isFoil,
         })),
     [cards]
   )
@@ -923,6 +959,11 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             }
             onTagsChange={
               activeTab === 'removed' ? undefined : handleTagsChange
+            }
+            onToggleFoil={
+              activeTab !== 'tokens' && activeTab !== 'removed'
+                ? handleToggleFoil
+                : undefined
             }
             overlayByCardId={overlayByCardId}
           />

@@ -1,9 +1,32 @@
 import type { GameState, GameAction, BattlefieldCardState } from './types'
 import { getNextPhase, getOpponentId } from './phases'
+import { ActionRejectedError } from './errors'
 
 export function applyAction(state: GameState, action: GameAction): GameState {
   const s = structuredClone(state)
   s.lastActionSeq++
+
+  // Priority guard — reject out-of-turn actions before any state mutation
+  const PRIORITY_EXEMPT: ReadonlySet<string> = new Set([
+    'concede', 'chat_message', 'commander_choice',
+    'mulligan', 'keep_hand', 'bottom_cards',
+    'toggle_auto_pass',
+    'pass_priority',
+    'library_view', 'peak', 'reveal_top',
+  ])
+
+  const isLifeChangeOnSelf = (
+    action.type === 'life_change'
+    && (action.data?.targetPlayerId as string | undefined) === action.playerId
+  )
+
+  if (
+    !PRIORITY_EXEMPT.has(action.type)
+    && !isLifeChangeOnSelf
+    && action.playerId !== s.priorityPlayerId
+  ) {
+    throw new ActionRejectedError('not_your_priority', { action: action.type, expected: s.priorityPlayerId, actor: action.playerId })
+  }
 
   // Block all actions while commander choice is pending (except the choice itself)
   if (s.pendingCommanderChoice && action.type !== 'commander_choice') {

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowRight, Trash2, Crown, Minus, Plus, Layers, Check } from 'lucide-react'
+import { ArrowRight, Trash2, Crown, Minus, Plus, Layers, Check, Sparkles } from 'lucide-react'
 
 interface SectionOption {
   id: string
@@ -20,6 +20,9 @@ interface CardContextMenuProps {
   /** Commander toggle — shown when `onToggleCommander` is supplied. */
   isCommander?: boolean
   onToggleCommander?: () => void
+  /** Foil toggle — shown when `onToggleFoil` is supplied. */
+  isFoil?: boolean
+  onToggleFoil?: () => void
   onMoveToBoard: (board: string) => void
   onRemove?: () => void
   /** Sections — when supplied, render a "Move to section" group. */
@@ -43,6 +46,8 @@ export default function CardContextMenu({
   onQuantityChange,
   isCommander,
   onToggleCommander,
+  isFoil,
+  onToggleFoil,
   onMoveToBoard,
   onRemove,
   sections,
@@ -83,12 +88,14 @@ export default function CardContextMenu({
   // Panel dimensions vary with which optional rows are present.
   const hasQuantity = onQuantityChange != null && quantity != null
   const hasCommander = onToggleCommander != null
+  const hasFoil = onToggleFoil != null
   const hasSections = onMoveToSection != null && Array.isArray(sections)
   const sectionItems = hasSections ? sections!.length + 1 : 0 // +1 for "Uncategorized"
   const menuWidth = hasSections ? 260 : 220
   let menuHeight = 60 // move-to header + gap
   if (hasQuantity) menuHeight += 52
   if (hasCommander) menuHeight += 44
+  if (hasFoil) menuHeight += 44
   menuHeight += BOARDS.filter((b) => b.key !== currentBoard).length * 36
   if (hasSections) menuHeight += 34 + Math.min(Math.ceil(sectionItems / 2), 4) * 42
   if (onRemove) menuHeight += 40
@@ -156,6 +163,22 @@ export default function CardContextMenu({
           >
             <Crown className={`h-3.5 w-3.5 ${isCommander ? 'text-bg-yellow' : 'text-font-muted'}`} />
             {isCommander ? 'Remove Commander' : 'Set as Commander'}
+          </button>
+          <div className="mx-2 my-1 border-t border-border" />
+        </>
+      )}
+
+      {hasFoil && (
+        <>
+          <button
+            type="button"
+            onClick={() => { onToggleFoil!(); onClose() }}
+            className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-bg-hover ${
+              isFoil ? 'text-bg-yellow' : 'text-font-primary'
+            }`}
+          >
+            <Sparkles className={`h-3.5 w-3.5 ${isFoil ? 'text-bg-yellow' : 'text-font-muted'}`} />
+            {isFoil ? 'Foil' : 'Mark as Foil'}
           </button>
           <div className="mx-2 my-1 border-t border-border" />
         </>

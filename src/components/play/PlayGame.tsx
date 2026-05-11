@@ -46,6 +46,11 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { useDndSensors } from '@/lib/hooks/useDndSensors'
+import { usePriority } from '@/lib/hooks/usePriority'
+import { useMediaQuery } from '@/lib/hooks/useMediaQuery'
+import PriorityBadge, { type PriorityBadgeHandle } from '@/components/play/log/PriorityBadge'
+import PriorityLock from '@/components/play/log/PriorityLock'
+import { ActionRejectedError } from '@/lib/game/errors'
 
 /** Inline goblin head — duplicated from GoblinAIButton so the in-game header
  *  can show the same mascot at small size without depending on the floating
@@ -405,7 +410,19 @@ export default function PlayGame(props: PlayGameProps) {
   const sendAction = useCallback(async (action: ReturnType<typeof createPassPriority>) => {
     if (mode === 'goldfish') {
       const gProps = props as PlayGameProps & { mode: 'goldfish' }
-      setGameState(prev => prev ? applyWithBotLoop(prev, action, gProps.botId, gProps.botConfig) : prev)
+      if (gameState) {
+        let nextState
+        try {
+          nextState = applyWithBotLoop(gameState, action, gProps.botId, gProps.botConfig)
+        } catch (e) {
+          if (e instanceof ActionRejectedError) {
+            badgeRef.current?.pulse()
+            return
+          }
+          throw e
+        }
+        setGameState(nextState)
+      }
       // Local log entry
       if (action.text) {
         setLog(prev => [...prev, {
@@ -427,8 +444,20 @@ export default function PlayGame(props: PlayGameProps) {
       && action.type !== 'peak'
       && action.type !== 'concede'
 
-    if (isStateMutating) {
-      setGameState(prev => prev ? applyAction(prev, action) : prev)
+    const snapshot = gameState
+
+    if (isStateMutating && gameState) {
+      let nextState
+      try {
+        nextState = applyAction(gameState, action)
+      } catch (e) {
+        if (e instanceof ActionRejectedError) {
+          badgeRef.current?.pulse()
+          return
+        }
+        throw e
+      }
+      setGameState(nextState)
     }
 
     fetch(`/api/game/${lobbyId}/action`, {
@@ -436,19 +465,30 @@ export default function PlayGame(props: PlayGameProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(action),
     }).then(async (res) => {
+      if (res.status === 409) {
+        const body = await res.json().catch(() => null) as { error?: string } | null
+        if (body?.error === 'not_your_priority') {
+          if (snapshot) setGameState(snapshot)
+          badgeRef.current?.pulse()
+          return
+        }
+      }
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         console.error('[sendAction] server error:', res.status, body)
       }
     }).catch((err) => console.error('[sendAction] network error:', err))
-  }, [mode, lobbyId, props])
+  }, [mode, lobbyId, props, gameState])
 
   // Derived state
   const myState = gameState?.players[userId]
   const opponentId = gameState ? getOpponentId(gameState, userId) : null
   const opponentState = opponentId ? gameState?.players[opponentId] : null
-  const hasPriority = gameState?.priorityPlayerId === userId
-  const isActivePlayer = gameState?.activePlayerId === userId
+  const { hasPriority, activePlayerId } = usePriority(gameState, userId)
+  const isActivePlayer = activePlayerId === userId
+  const activePlayerName = activePlayerId ? (playerNames[activePlayerId] ?? 'Player') : ''
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const badgeRef = useRef<PriorityBadgeHandle>(null)
   const myName = playerNames[userId] ?? 'Player'
 
   const isGoldfish = mode === 'goldfish'
@@ -1363,17 +1403,20 @@ export default function PlayGame(props: PlayGameProps) {
           <span className="hidden text-sm font-bold sm:inline">GoblinAI</span>
         </button>
       </div>
+      <PriorityBadge ref={badgeRef} hasPriority={hasPriority} activePlayerName={activePlayerName} />
       {/* Scrollable: opponent + spacer + player battlefield */}
       <div className="flex-1 overflow-y-auto flex flex-col">
         {/* Opponent field — full in multiplayer, minimal life counter in goldfish */}
         {!isGoldfish ? (
-          <OpponentField
-            state={opponentState}
-            cardMap={cardMap}
-            expanded={opponentExpanded}
-            onToggleExpand={() => setOpponentExpanded((v) => !v)}
-            onCardPreview={(card, instanceId) => setPreview({ card, zone: 'opponentBattlefield' as PreviewZone, instanceId })}
-          />
+          <PriorityLock locked={!hasPriority} onBlockedAttempt={() => badgeRef.current?.pulse()}>
+            <OpponentField
+              state={opponentState}
+              cardMap={cardMap}
+              expanded={opponentExpanded}
+              onToggleExpand={() => setOpponentExpanded((v) => !v)}
+              onCardPreview={(card, instanceId) => setPreview({ card, zone: 'opponentBattlefield' as PreviewZone, instanceId })}
+            />
+          </PriorityLock>
         ) : opponentState && botId ? (
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-2">
             <span className="text-[10px] font-bold text-font-muted uppercase tracking-wider">
@@ -1454,7 +1497,7 @@ export default function PlayGame(props: PlayGameProps) {
         <div className="flex-1" />
 
         {/* Your battlefield — anchored to bottom of scroll area */}
-        <div className="px-3 py-1.5">
+        <PriorityLock locked={!hasPriority} onBlockedAttempt={() => badgeRef.current?.pulse()} className="px-3 py-1.5">
           {/* Creatures */}
           <BattlefieldZone
             title="CREATURES"
@@ -1518,11 +1561,11 @@ export default function PlayGame(props: PlayGameProps) {
               }
             />
           </div>
-        </div>
+        </PriorityLock>
       </div>
 
-      {/* Game Log — multiplayer only */}
-      {!isGoldfish && (
+      {/* Game Log — multiplayer only, side panel on desktop */}
+      {!isGoldfish && isDesktop && (
         <GameLog
           entries={log}
           myUserId={userId}
@@ -1530,80 +1573,128 @@ export default function PlayGame(props: PlayGameProps) {
           playerNames={playerNames}
           onSendChat={handleSendChat}
           onCardPreview={(card) => setPreview({ card })}
+          mode="side"
         />
       )}
 
       {/* Hand + Commander Zone */}
-      <div className="border-t border-border bg-bg-card px-3 py-2">
-        <div className="flex gap-2">
-          <div className="flex-1 min-w-0">
-            <div
-              ref={setHandDropRef}
-              className={`rounded-lg transition-shadow ${isHandDropOver ? 'ring-2 ring-bg-accent' : ''}`}
-            >
-              <HandArea
-                cards={myHandCards}
-                onPlayCard={handlePlayCard}
-                draggable
-                onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
-                onCardPreview={(card, instanceId) =>
-                  setPreview({ card, zone: 'hand', instanceId })
-                }
-              />
+      <PriorityLock locked={!hasPriority} onBlockedAttempt={() => badgeRef.current?.pulse()}>
+        <div className="border-t border-border bg-bg-card px-3 py-2">
+          <div className="flex gap-2">
+            <div className="flex-1 min-w-0">
+              <div
+                ref={setHandDropRef}
+                className={`rounded-lg transition-shadow ${isHandDropOver ? 'ring-2 ring-bg-accent' : ''}`}
+              >
+                <HandArea
+                  cards={myHandCards}
+                  onPlayCard={handlePlayCard}
+                  draggable
+                  onCardAction={(card, id, x, y) => openActionMenu('hand', id, card, x, y)}
+                  onCardPreview={(card, instanceId) =>
+                    setPreview({ card, zone: 'hand', instanceId })
+                  }
+                />
+              </div>
             </div>
+            {myState.commandZone.length > 0 && (
+              <div className="flex shrink-0 flex-col gap-1">
+                <span className="text-[7px] font-bold tracking-wider text-yellow-500 text-center">CMD</span>
+                {myState.commandZone.map((c) => {
+                  const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
+                  return (
+                    <CommandZoneCard
+                      key={c.instanceId}
+                      cardId={c.cardId}
+                      data={data}
+                      onOpenPreview={(row) =>
+                        setPreview({ card: row, zone: 'commandZone', instanceId: c.instanceId })
+                      }
+                      onOpenAction={(row, x, y) => openActionMenu('command', c.instanceId, row, x, y)}
+                    />
+                  )
+                })}
+              </div>
+            )}
           </div>
-          {myState.commandZone.length > 0 && (
-            <div className="flex shrink-0 flex-col gap-1">
-              <span className="text-[7px] font-bold tracking-wider text-yellow-500 text-center">CMD</span>
-              {myState.commandZone.map((c) => {
-                const data = cardMap[c.instanceId] ?? cardMap[String(c.cardId)]
-                return (
-                  <CommandZoneCard
-                    key={c.instanceId}
-                    cardId={c.cardId}
-                    data={data}
-                    onOpenPreview={(row) =>
-                      setPreview({ card: row, zone: 'commandZone', instanceId: c.instanceId })
-                    }
-                    onOpenAction={(row, x, y) => openActionMenu('command', c.instanceId, row, x, y)}
-                  />
-                )
-              })}
-            </div>
-          )}
+        </div>
+      </PriorityLock>
+
+      {/* Game Log — mobile sheet (below hand, above action bar) */}
+      {!isGoldfish && !isDesktop && (
+        <GameLog
+          entries={log}
+          myUserId={userId}
+          cardMap={cardMap}
+          playerNames={playerNames}
+          onSendChat={handleSendChat}
+          onCardPreview={(card) => setPreview({ card })}
+          mode="sheet"
+        />
+      )}
+
+      {/* Action Bar at bottom — priority-locked, with always-on life + concede overlay */}
+      <div className="relative">
+        <PriorityLock locked={!hasPriority} onBlockedAttempt={() => badgeRef.current?.pulse()}>
+          <GameActionBar
+            mode={mode}
+            phase={gameState.phase}
+            turn={gameState.turn}
+            life={myState.life}
+            libraryCount={myState.libraryCount}
+            graveyardCount={myState.graveyard.length}
+            exileCount={myState.exile.length}
+            graveyardTopCard={graveyardTop}
+            exileTopCard={exileTop}
+            hasPriority={hasPriority}
+            isActivePlayer={isActivePlayer}
+            onPassPriority={() => sendAction(createPassPriority(userId, myName))}
+            onLifeChange={(amount) => sendAction(createLifeChange(userId, myName, userId, myName, amount))}
+            onDraw={() => sendAction(createDraw(userId, myName))}
+            onViewZone={setViewingZone}
+            onConcede={isGoldfish
+              ? () => {
+                const gProps = props as PlayGameProps & { mode: 'goldfish' }
+                setGameState(structuredClone(gProps.initialState))
+                setGameOver(null)
+              }
+              : () => sendAction(createConcede(userId, myName))
+            }
+            onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
+            autoPass={myState.autoPass}
+            onToggleAutoPass={() => sendAction(createToggleAutoPass(userId, myName, myState.autoPass))}
+            onSpecialActions={() => setShowSpecialActions(true)}
+            hideConcede
+            hideOwnLifeControls
+          />
+        </PriorityLock>
+
+        {/* Always-clickable: own life controls + concede — overlays above the lock */}
+        <div className="pointer-events-none absolute right-2 top-2 z-40 flex items-center gap-2">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-border/60 bg-bg-card px-1.5 py-0.5">
+            <button
+              onClick={() => sendAction(createLifeChange(userId, myName, userId, myName, -1))}
+              className="flex h-5 w-5 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-red"
+              aria-label="Lose 1 life"
+            >−</button>
+            <span className="min-w-[18px] text-center text-[10px] font-bold text-font-primary">{myState?.life ?? 20}</span>
+            <button
+              onClick={() => sendAction(createLifeChange(userId, myName, userId, myName, +1))}
+              className="flex h-5 w-5 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-green"
+              aria-label="Gain 1 life"
+            >+</button>
+          </div>
+          <button
+            onClick={isGoldfish
+              ? () => { window.location.href = `/decks/${(props as PlayGameProps & { mode: 'goldfish' }).deckId}` }
+              : () => sendAction(createConcede(userId, myName))
+            }
+            className="pointer-events-auto rounded-md border border-bg-red/50 bg-bg-card px-2 py-1 text-[10px] font-bold text-bg-red"
+          >
+            Concede
+          </button>
         </div>
       </div>
-
-      {/* Action Bar at bottom */}
-      <GameActionBar
-        mode={mode}
-        phase={gameState.phase}
-        turn={gameState.turn}
-        life={myState.life}
-        libraryCount={myState.libraryCount}
-        graveyardCount={myState.graveyard.length}
-        exileCount={myState.exile.length}
-        graveyardTopCard={graveyardTop}
-        exileTopCard={exileTop}
-        hasPriority={hasPriority}
-        isActivePlayer={isActivePlayer}
-        onPassPriority={() => sendAction(createPassPriority(userId, myName))}
-        onLifeChange={(amount) => sendAction(createLifeChange(userId, myName, userId, myName, amount))}
-        onDraw={() => sendAction(createDraw(userId, myName))}
-        onViewZone={setViewingZone}
-        onConcede={isGoldfish
-          ? () => {
-            const gProps = props as PlayGameProps & { mode: 'goldfish' }
-            setGameState(structuredClone(gProps.initialState))
-            setGameOver(null)
-          }
-          : () => sendAction(createConcede(userId, myName))
-        }
-        onConfirmUntap={() => sendAction(createConfirmUntap(userId, myName))}
-        autoPass={myState.autoPass}
-        onToggleAutoPass={() => sendAction(createToggleAutoPass(userId, myName, myState.autoPass))}
-        onSpecialActions={() => setShowSpecialActions(true)}
-      />
 
       {/* Zone viewers */}
       {viewingZone === 'graveyard' && (

@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { enforceLimit, assistantLimiter, getClientId } from '@/lib/rate-limit'
 import { buildGoblinAIContext } from '@/lib/goblinai/context-builder'
 import { generateGoblinAIText, GoblinAINotConfiguredError } from '@/lib/goblinai/deepseek'
-import { RESTATEMENT_SYSTEM_PROMPT, buildRestatementPrompt } from '@/lib/goblinai/prompts'
+import { RESTATEMENT_SYSTEM_PROMPT, FINAL_ANSWER_SYSTEM_PROMPT, buildRestatementPrompt, buildFinalAnswerPrompt } from '@/lib/goblinai/prompts'
 import type { MentionedCardRef } from '@/lib/goblinai/types'
 
 const RESTATEMENT_REQUEST_SCHEMA = {
@@ -47,13 +47,6 @@ export async function POST(request: NextRequest) {
 
   const { message, mentions, conversationId } = body
 
-  if (mentions.length === 0) {
-    return NextResponse.json(
-      { error: 'Use @mention for every card involved. Per domande su carte specifiche usa @mention per ogni carta coinvolta.' },
-      { status: 400 },
-    )
-  }
-
   const ctx = await buildGoblinAIContext({ message, mentions })
 
   for (const m of mentions) {
@@ -84,20 +77,91 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // When the question is straightforward (single card, no complex interactions),
+  // generate the answer directly with full card context — never redirect to the
+  // context-less /simple endpoint. The card context includes type_line so the AI
+  // knows e.g. that Karn is an artifact and counts itself.
   if (!ctx.requiresConfirmation) {
-    return NextResponse.json({
-      conversationId: convId,
-      messageId: null,
-      requiresConfirmation: false,
-      restatement: '',
-      assumptions: [],
-      missingInfoQuestions: [],
-      interactionKeywords: ctx.interactionKeywords,
-      mentionedCards: ctx.cards,
-      redirectTo: 'simple',
-    })
+    try {
+      const prompt = buildFinalAnswerPrompt({
+        confirmedRestatement: message,
+        cards: ctx.cards.map((c) => ({
+          name: c.name,
+          mana_cost: c.mana_cost,
+          type_line: c.type_line,
+          oracle_text: c.oracle_text,
+        })),
+        rules: ctx.rules.map((r) => ({
+          rule_number: r.rule_number,
+          text: r.text,
+        })),
+        interactionKeywords: ctx.interactionKeywords,
+      })
+
+      const result = await generateGoblinAIText({
+        system: FINAL_ANSWER_SYSTEM_PROMPT,
+        prompt,
+      })
+
+      const { data: userMsg } = await adminClient
+        .from('goblinai_messages')
+        .insert({
+          conversation_id: convId,
+          user_id: user.id,
+          role: 'user',
+          content: message,
+          mentioned_card_ids: mentions.map((m) => m.id),
+          interaction_keywords: ctx.interactionKeywords,
+        })
+        .select('id')
+        .single()
+
+      await adminClient
+        .from('goblinai_messages')
+        .insert({
+          conversation_id: convId,
+          user_id: user.id,
+          role: 'assistant',
+          content: result.text,
+          interaction_keywords: ctx.interactionKeywords,
+          model: 'deepseek-v4-flash',
+          prompt_tokens: result.promptTokens,
+          completion_tokens: result.completionTokens,
+        })
+      await adminClient
+        .from('goblinai_conversations')
+        .update({ title: message.slice(0, 50) })
+        .eq('id', convId)
+        .is('title', null)
+      await adminClient
+        .from('goblinai_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', convId)
+
+      return NextResponse.json({
+        conversationId: convId,
+        messageId: userMsg?.id ?? null,
+        requiresConfirmation: false,
+        answer: result.text,
+        interactionKeywords: ctx.interactionKeywords,
+        mentionedCards: ctx.cards,
+      })
+    } catch (err) {
+      if (err instanceof GoblinAINotConfiguredError) {
+        return NextResponse.json(
+          { error: 'GoblinAI is not configured' },
+          { status: 503 },
+        )
+      }
+      console.error('Direct answer generation failed:', err)
+      return NextResponse.json(
+        { error: 'Failed to generate answer' },
+        { status: 500 },
+      )
+    }
   }
 
+  // Complex question — generate restatement for user confirmation
   try {
     const prompt = buildRestatementPrompt({
       message,
@@ -144,13 +208,21 @@ export async function POST(request: NextRequest) {
       .select('id')
       .single()
 
+    await adminClient
+      .from('goblinai_conversations')
+      .update({ title: message.slice(0, 50) })
+      .eq('id', convId)
+      .is('title', null)
+    await adminClient
+      .from('goblinai_conversations')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', convId)
+
     return NextResponse.json({
       conversationId: convId,
       messageId: restMsg?.id ?? null,
       requiresConfirmation: true,
       restatement: result.text,
-      assumptions: [],
-      missingInfoQuestions: [],
       interactionKeywords: ctx.interactionKeywords,
       mentionedCards: ctx.cards,
     })

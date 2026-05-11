@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   }
 
   const startTime = Date.now()
-  const MAX_RUNTIME = 280_000
+  const MAX_RUNTIME = 295_000
 
   // 1. Resolve latest oracle_cards bulk entry
   const bulkRes = await fetch('https://api.scryfall.com/bulk-data')
@@ -39,20 +39,35 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'oracle_cards entry not found' }, { status: 500 })
   }
 
-  // 2. Short-circuit if we already processed this bulk version
+  // 2. Short-circuit if we already processed this bulk version AND no
+  //    partial cursor exists from a previous aborted run.
   const admin = createAdminClient()
   const META_KEY = 'daily_bulk_sync_oracle'
+  const CURSOR_KEY = 'daily_bulk_sync_oracle_cursor'
+
   const { data: meta } = await admin
     .from('sync_metadata')
     .select('value')
     .eq('key', META_KEY)
     .maybeSingle()
-  if (meta?.value === entry.updated_at) {
+
+  const { data: cursorRow } = await admin
+    .from('sync_metadata')
+    .select('value')
+    .eq('key', CURSOR_KEY)
+    .maybeSingle()
+
+  if (meta?.value === entry.updated_at && !cursorRow) {
     return NextResponse.json({
       skipped: true,
       reason: 'already up to date',
       version: entry.updated_at,
     })
+  }
+
+  // New bulk version → reset cursor
+  if (meta?.value !== entry.updated_at && cursorRow) {
+    await admin.from('sync_metadata').delete().eq('key', CURSOR_KEY)
   }
 
   // 3. Download bulk into memory. oracle_cards is ~150MB uncompressed —
@@ -85,34 +100,65 @@ export async function GET(request: NextRequest) {
       last_price_update: stampNow,
     }))
 
+  // Resume from last checkpoint if previous run aborted
+  const startIndex = cursorRow ? parseInt(cursorRow.value, 10) : 0
+
   let upserted = 0
   let errors = 0
   let aborted = false
+  let lastProcessedIndex = startIndex
 
-  for (let i = 0; i < toUpsert.length; i += BATCH) {
+  for (let i = startIndex; i < toUpsert.length; i += BATCH) {
     if (Date.now() - startTime >= MAX_RUNTIME) {
       aborted = true
       break
     }
     const batch = toUpsert.slice(i, i + BATCH)
-    const { error } = await admin
+
+    // Retry once on transient failures before counting as an error
+    let result = await admin
       .from('cards')
       .upsert(batch, { onConflict: 'scryfall_id' })
-    if (error) {
+    if (result.error) {
+      await new Promise((r) => setTimeout(r, 1000))
+      result = await admin
+        .from('cards')
+        .upsert(batch, { onConflict: 'scryfall_id' })
+    }
+
+    if (result.error) {
       errors++
-      console.error(`daily-sync batch ${i}: ${error.message}`)
+      console.error(`daily-sync batch ${i}: ${result.error.message}`)
     } else {
       upserted += batch.length
+      lastProcessedIndex = i + BATCH
+    }
+
+    // Save cursor every 5 batches so aborted runs can resume
+    if ((i - startIndex) / BATCH % 5 === 0) {
+      await admin.from('sync_metadata').upsert(
+        { key: CURSOR_KEY, value: String(lastProcessedIndex) },
+        { onConflict: 'key' },
+      )
     }
   }
 
-  // 5. Checkpoint only on clean run
+  // 5. Checkpoint on clean run; clear the cursor
   if (!aborted && errors === 0) {
     await admin.from('sync_metadata').upsert(
       { key: META_KEY, value: entry.updated_at },
       { onConflict: 'key' },
     )
+    await admin.from('sync_metadata')
+      .delete()
+      .eq('key', CURSOR_KEY)
     await admin.rpc('refresh_mv_cards_sets' as never)
+  } else if (aborted) {
+    // Save final cursor so next run resumes
+    await admin.from('sync_metadata').upsert(
+      { key: CURSOR_KEY, value: String(lastProcessedIndex) },
+      { onConflict: 'key' },
+    )
   }
 
   return NextResponse.json({

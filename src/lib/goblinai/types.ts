@@ -59,11 +59,13 @@ export interface RestatementRequest {
 
 export interface RestatementResponse {
   conversationId: string
-  messageId: string
+  messageId: string | null
   requiresConfirmation: boolean
   restatement: string
-  assumptions: string[]
-  missingInfoQuestions: string[]
+  /** Direct answer when the question doesn't need the confirmation flow. */
+  answer?: string
+  assumptions?: string[]
+  missingInfoQuestions?: string[]
   interactionKeywords: InteractionKeyword[]
   mentionedCards: GoblinAICardContext[]
 }

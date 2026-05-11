@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { X, Printer, CheckSquare, Square, Mail, AlertTriangle } from 'lucide-react'
 import { generateProxyPdfWithDetails } from '@/lib/proxyPdf'
 import type { Database } from '@/types/supabase'
-import type { PaperOption, PaperPreset } from '@/lib/proxyPdf'
+import type { BleedMode, PaperOption, PaperPreset, PrintRasterPreset } from '@/lib/proxyPdf'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -94,6 +94,8 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   const [gapY, setGapY] = useState(5)
   const [scale, setScale] = useState<ScaleOption>(100)
   const [bleed, setBleed] = useState(1)
+  const [bleedMode, setBleedMode] = useState<BleedMode>('preserve')
+  const [printRasterPreset, setPrintRasterPreset] = useState<PrintRasterPreset>('standard')
   const [cutGuides, setCutGuides] = useState(true)
   const [debugLayout, setDebugLayout] = useState(false)
   const [deselected, setDeselected] = useState<Set<string>>(() => {
@@ -206,7 +208,8 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     }
   }, [gridPreset, customCols, customRows])
 
-  const gapWarning = gapX <= 2 * bleed || gapY <= 2 * bleed
+  const effectiveBleed = bleedMode === 'none' ? 0 : bleed
+  const gapWarning = effectiveBleed > 0 && (gapX <= 2 * effectiveBleed || gapY <= 2 * effectiveBleed)
 
   const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
     const cardsWithImages = selectedCards
@@ -224,12 +227,14 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
       grid,
       cutGuides,
       debugLayout,
+      printRasterPreset,
+      bleedMode,
       cards: cardsWithImages,
       onProgress: (done, total) => setProgress({ done, total }),
     })
     setSkipWarning(skippedUrls.length)
     return { blob, skippedCount: skippedUrls.length }
-  }, [selectedCards, paper, orientation, scale, bleed, gapX, gapY, grid, cutGuides, debugLayout])
+  }, [selectedCards, paper, orientation, scale, bleed, gapX, gapY, grid, cutGuides, debugLayout, printRasterPreset, bleedMode])
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true)
@@ -548,6 +553,19 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
             </label>
 
             <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Bleed mode
+              <select
+                value={bleedMode}
+                onChange={(e) => setBleedMode(e.target.value as BleedMode)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                <option value="preserve">Preserve full card</option>
+                <option value="crop">Crop into bleed</option>
+                <option value="none">No bleed</option>
+              </select>
+            </label>
+
+            <label className={`flex items-center gap-1.5 text-xs text-font-secondary ${bleedMode === 'none' ? 'opacity-50' : ''}`}>
               Bleed
               <input
                 type="number"
@@ -555,10 +573,25 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
                 max={5}
                 step={0.5}
                 value={bleed}
+                disabled={bleedMode === 'none'}
                 onChange={(e) => setBleed(Math.max(0, Number(e.target.value)))}
                 className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
               />
               mm
+            </label>
+
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Raster
+              <select
+                value={printRasterPreset}
+                onChange={(e) => setPrintRasterPreset(e.target.value as PrintRasterPreset)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                <option value="fast">Fast</option>
+                <option value="standard">Standard</option>
+                <option value="high">High</option>
+                <option value="ultra">Ultra</option>
+              </select>
             </label>
 
             <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
@@ -586,6 +619,13 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>Gap too small for selected bleed: bleed areas may overlap.</span>
+            </div>
+          )}
+
+          {bleedMode === 'crop' && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>This mode may crop card edges by the selected bleed amount.</span>
             </div>
           )}
 

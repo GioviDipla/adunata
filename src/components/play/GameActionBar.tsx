@@ -31,6 +31,8 @@ interface GameActionBarProps {
   autoPass?: boolean
   onToggleAutoPass?: () => void
   onSpecialActions?: () => void
+  hideConcede?: boolean
+  hideOwnLifeControls?: boolean
 }
 
 export default function GameActionBar({
@@ -39,6 +41,7 @@ export default function GameActionBar({
   graveyardTopCard, exileTopCard,
   hasPriority, isActivePlayer, onPassPriority, onLifeChange, onDraw,
   onViewZone, onConcede, onConfirmUntap, autoPass, onToggleAutoPass, onSpecialActions,
+  hideConcede, hideOwnLifeControls,
 }: GameActionBarProps) {
   const phaseRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -87,18 +90,20 @@ export default function GameActionBar({
           {mode !== 'goldfish' && <PriorityIndicator hasPriority={hasPriority} />}
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => onLifeChange(-1)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-red">
-            <Minus size={10} />
-          </button>
-          <div className="flex items-center gap-0.5">
-            <Heart size={11} className="text-bg-red" />
-            <span className="min-w-[20px] text-center text-sm font-bold text-font-primary">{life}</span>
+        {!hideOwnLifeControls && (
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => onLifeChange(-1)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-red">
+              <Minus size={10} />
+            </button>
+            <div className="flex items-center gap-0.5">
+              <Heart size={11} className="text-bg-red" />
+              <span className="min-w-[20px] text-center text-sm font-bold text-font-primary">{life}</span>
+            </div>
+            <button onClick={() => onLifeChange(1)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-green">
+              <Plus size={10} />
+            </button>
           </div>
-          <button onClick={() => onLifeChange(1)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-secondary active:bg-bg-green">
-            <Plus size={10} />
-          </button>
-        </div>
+        )}
 
         <div className="flex items-center gap-1.5">
           <ZoneStack
@@ -159,10 +164,12 @@ export default function GameActionBar({
                 <Sparkles size={16} /><span className="text-[7px] font-bold">SPECIAL</span>
               </button>
             )}
-            <button onClick={onConcede}
-              className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-red px-3 py-2 text-font-white active:brightness-95">
-              <Flag size={14} /><span className="text-[8px] font-bold">{mode === 'goldfish' ? 'RESTART' : 'GG'}</span>
-            </button>
+            {!hideConcede && (
+              <button onClick={onConcede}
+                className="flex flex-col items-center gap-0.5 rounded-xl bg-bg-red px-3 py-2 text-font-white active:brightness-95">
+                <Flag size={14} /><span className="text-[8px] font-bold">{mode === 'goldfish' ? 'RESTART' : 'GG'}</span>
+              </button>
+            )}
           </>
         ) : autoPass ? (
           <div className="flex flex-1 items-center justify-center gap-3 py-2">

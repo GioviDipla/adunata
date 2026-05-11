@@ -13,11 +13,11 @@ export function createPlayCard(playerId: string, playerName: string, instanceId:
 }
 
 export function createTap(playerId: string, playerName: string, instanceId: string, cardName: string): GameAction {
-  return { type: 'tap', playerId, data: { instanceId }, text: `${playerName} taps ${cardName}` }
+  return { type: 'tap', playerId, data: { instanceId, cardName }, text: `${playerName} taps ${cardName}` }
 }
 
 export function createUntap(playerId: string, playerName: string, instanceId: string, cardName: string): GameAction {
-  return { type: 'untap', playerId, data: { instanceId }, text: `${playerName} untaps ${cardName}` }
+  return { type: 'untap', playerId, data: { instanceId, cardName }, text: `${playerName} untaps ${cardName}` }
 }
 
 export function createConfirmUntap(playerId: string, playerName: string): GameAction {
@@ -28,7 +28,7 @@ export function createDeclareAttackers(playerId: string, playerName: string, att
   const names = attackerNames.length > 0 ? attackerNames.join(', ') : 'no creatures'
   return {
     type: 'declare_attackers', playerId,
-    data: { attackerIds },
+    data: { attackerIds, attackerNames },   // names now persisted
     text: `${playerName} declares attackers: ${names}`,
   }
 }
@@ -39,7 +39,7 @@ export function createDeclareBlockers(playerId: string, playerName: string, bloc
     : 'no blockers'
   return {
     type: 'declare_blockers', playerId,
-    data: { blockerAssignments: blockerAssignments.map((b) => ({ blockerId: b.blockerId, attackerId: b.attackerId })) },
+    data: { blockerAssignments },   // keep full assignment objects for renderer
     text: `${playerName} declares blockers: ${desc}`,
   }
 }
@@ -55,7 +55,7 @@ export function createCombatDamage(playerId: string, damageToPlayer: number, cre
 export function createMoveZone(playerId: string, playerName: string, instanceId: string, cardId: number, cardName: string, from: string, to: string): GameAction {
   return {
     type: 'move_zone', playerId,
-    data: { instanceId, cardId, from, to },
+    data: { instanceId, cardId, cardName, from, to },
     text: `${playerName} moves ${cardName} from ${from} to ${to}`,
   }
 }
@@ -64,7 +64,7 @@ export function createLifeChange(playerId: string, playerName: string, targetPla
   const dir = amount > 0 ? 'gains' : 'loses'
   return {
     type: 'life_change', playerId,
-    data: { targetPlayerId, amount },
+    data: { targetPlayerId, targetName, amount },
     text: `${targetName} ${dir} ${Math.abs(amount)} life`,
   }
 }
@@ -77,8 +77,12 @@ export function createDiscard(playerId: string, playerName: string, instanceId: 
   }
 }
 
-export function createDraw(playerId: string, playerName: string): GameAction {
-  return { type: 'draw', playerId, data: {}, text: `${playerName} draws a card` }
+export function createDraw(playerId: string, playerName: string, count: number = 1): GameAction {
+  return {
+    type: 'draw', playerId,
+    data: { count },
+    text: `${playerName} draws ${count === 1 ? 'a card' : `${count} cards`}`,
+  }
 }
 
 export function createConcede(playerId: string, playerName: string): GameAction {
@@ -116,7 +120,7 @@ export function createRemoveCounter(playerId: string, playerName: string, instan
 export function createCreateToken(playerId: string, playerName: string, tokens: { instanceId: string; cardId: number }[], tokenName: string, quantity: number): GameAction {
   return {
     type: 'create_token', playerId,
-    data: { tokens },
+    data: { tokens, tokenName, quantity },
     text: `${playerName} creates ${quantity}x ${tokenName} token${quantity > 1 ? 's' : ''}`,
   }
 }

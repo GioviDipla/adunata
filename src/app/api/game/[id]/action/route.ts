@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { applyAction } from '@/lib/game/engine'
+import { ActionRejectedError } from '@/lib/game/errors'
 import { GAME_STATE_COLUMNS } from '@/lib/supabase/columns'
 import type { GameState, GameAction } from '@/lib/game/types'
 import type { Json } from '@/types/supabase'
@@ -135,7 +136,15 @@ export async function POST(
     const expectedSeq = stateToProcess.lastActionSeq
 
     // Apply action through the engine
-    let newState = applyAction(stateToProcess, action)
+    let newState: GameState
+    try {
+      newState = applyAction(stateToProcess, action)
+    } catch (e) {
+      if (e instanceof ActionRejectedError) {
+        return NextResponse.json({ error: e.code, meta: e.meta ?? null }, { status: 409 })
+      }
+      throw e
+    }
 
     // Auto-pass loop: chain pass_priority for players with autoPass enabled
     let autoPassCount = 0
