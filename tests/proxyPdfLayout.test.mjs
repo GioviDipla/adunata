@@ -101,6 +101,36 @@ test('computeCardImageLayout preserves main image in trim box for preserve mode'
   assert.equal(imageLayout.bleedFitMode, 'cover')
 })
 
+test('computeDirectPokerTrimBox defaults to centered 63x88 trim on 89x89 paper', () => {
+  const trimBox = layout.computeDirectPokerTrimBox({})
+  assert.deepEqual(plain(trimBox), { x: 13, y: 0.5, w: 63, h: 88 })
+})
+
+test('computeDirectPokerTrimBox applies calibration offsets without changing trim size', () => {
+  const trimBox = layout.computeDirectPokerTrimBox({ offsetXmm: 14, offsetYmm: 1 })
+  assert.deepEqual(plain(trimBox), { x: 14, y: 1, w: 63, h: 88 })
+})
+
+test('computeDirectPokerImageBox preserve mode ignores bleed and never expands past trim', () => {
+  const imageBox = layout.computeDirectPokerImageBox({
+    offsetXmm: 13,
+    offsetYmm: 0.5,
+    bleedMm: 1,
+    printFitMode: 'preserve',
+  })
+  assert.deepEqual(plain(imageBox), { x: 13, y: 0.5, w: 63, h: 88 })
+})
+
+test('computeDirectPokerImageBox crop mode may expand into bleed box', () => {
+  const imageBox = layout.computeDirectPokerImageBox({
+    offsetXmm: 13,
+    offsetYmm: 0.5,
+    bleedMm: 1,
+    printFitMode: 'crop',
+  })
+  assert.deepEqual(plain(imageBox), { x: 12, y: -0.5, w: 65, h: 90 })
+})
+
 test('generateCropMarks emits short deduplicated segments only', () => {
   const marks = layout.generateCropMarks(layout.computeGridLayout(a4Portrait3x3), a4Portrait3x3, {
     length: 4,

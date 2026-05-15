@@ -7,6 +7,7 @@ export interface Rect {
 
 export type BleedMode = 'crop' | 'preserve' | 'none'
 export type ImageFitMode = 'cover' | 'contain'
+export type PrintFitMode = 'preserve' | 'crop'
 
 export interface CardImageLayout {
   imageDrawBox: Rect
@@ -53,6 +54,13 @@ export interface LayoutWarning {
 export interface PageSlot {
   pageIndex: number
   slotIndex: number
+}
+
+export interface DirectPokerBoxOptions {
+  offsetXmm?: number
+  offsetYmm?: number
+  bleedMm?: number
+  printFitMode?: PrintFitMode
 }
 
 const ROUNDING_FACTOR = 100
@@ -151,6 +159,24 @@ export function computeCardImageLayout(
     mainImageDrawBox: trimBox,
     mainFitMode: 'contain',
   }
+}
+
+export function computeDirectPokerTrimBox(options: DirectPokerBoxOptions = {}): Rect {
+  return {
+    x: round2(options.offsetXmm ?? 13),
+    y: round2(options.offsetYmm ?? 0.5),
+    w: 63,
+    h: 88,
+  }
+}
+
+export function computeDirectPokerImageBox(options: DirectPokerBoxOptions = {}): Rect {
+  const trimBox = computeDirectPokerTrimBox(options)
+  if ((options.printFitMode ?? 'preserve') === 'crop') {
+    const bleedMm = Math.max(0, options.bleedMm ?? 0)
+    return computeBleedBoxes([trimBox], bleedMm)[0]
+  }
+  return trimBox
 }
 
 export function paginateCards<T>(cards: T[], cardsPerPage: number): T[][] {

@@ -4,7 +4,16 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { X, Printer, CheckSquare, Square, Mail, AlertTriangle } from 'lucide-react'
 import { generateProxyPdfWithDetails } from '@/lib/proxyPdf'
 import type { Database } from '@/types/supabase'
-import type { BleedMode, PaperOption, PaperPreset, PrintRasterPreset } from '@/lib/proxyPdf'
+import type {
+  BleedMode,
+  DirectPokerRotation,
+  DirectPrintRasterPreset,
+  OutputMode,
+  PaperOption,
+  PaperPreset,
+  PrintFitMode,
+  PrintRasterPreset,
+} from '@/lib/proxyPdf'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -83,6 +92,7 @@ function deriveScryfallImageUrls(card: CardRow): string[] {
 
 export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
+  const [outputMode, setOutputMode] = useState<OutputMode>('direct-poker')
   const [paperPreset, setPaperPreset] = useState<PaperPreset>('a4')
   const [customWidth, setCustomWidth] = useState(210)
   const [customHeight, setCustomHeight] = useState(297)
@@ -95,6 +105,13 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   const [scale, setScale] = useState<ScaleOption>(100)
   const [bleed, setBleed] = useState(1)
   const [bleedMode, setBleedMode] = useState<BleedMode>('preserve')
+  const [printFitMode, setPrintFitMode] = useState<PrintFitMode>('preserve')
+  const [offsetXmm, setOffsetXmm] = useState(13)
+  const [offsetYmm, setOffsetYmm] = useState(0.5)
+  const [rotation, setRotation] = useState<DirectPokerRotation>(0)
+  const [directPrintRasterPreset, setDirectPrintRasterPreset] = useState<DirectPrintRasterPreset>('high')
+  const [calibrationMode, setCalibrationMode] = useState(false)
+  const [showDirectPrintGuides, setShowDirectPrintGuides] = useState(false)
   const [printRasterPreset, setPrintRasterPreset] = useState<PrintRasterPreset>('standard')
   const [cutGuides, setCutGuides] = useState(true)
   const [debugLayout, setDebugLayout] = useState(false)
@@ -209,19 +226,20 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   }, [gridPreset, customCols, customRows])
 
   const effectiveBleed = bleedMode === 'none' ? 0 : bleed
-  const gapWarning = effectiveBleed > 0 && (gapX <= 2 * effectiveBleed || gapY <= 2 * effectiveBleed)
+  const gapWarning = outputMode === 'a4-sheet' && effectiveBleed > 0 && (gapX <= 2 * effectiveBleed || gapY <= 2 * effectiveBleed)
 
   const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
     const cardsWithImages = selectedCards
       .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
       .filter((e) => e.imageUrls.length > 0)
-    if (cardsWithImages.length === 0) return null
+    if (cardsWithImages.length === 0 && !(outputMode === 'direct-poker' && calibrationMode)) return null
 
     const { blob, skippedUrls } = await generateProxyPdfWithDetails({
+      outputMode,
       paper,
       orientation,
       scale: scale / 100,
-      bleed,
+      bleed: outputMode === 'direct-poker' && printFitMode === 'preserve' ? 0 : bleed,
       gapX,
       gapY,
       grid,
@@ -229,12 +247,40 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
       debugLayout,
       printRasterPreset,
       bleedMode,
+      printFitMode,
+      offsetXmm,
+      offsetYmm,
+      rotation,
+      calibrationMode,
+      showDirectPrintGuides,
+      directPrintRasterPreset,
       cards: cardsWithImages,
       onProgress: (done, total) => setProgress({ done, total }),
     })
     setSkipWarning(skippedUrls.length)
     return { blob, skippedCount: skippedUrls.length }
-  }, [selectedCards, paper, orientation, scale, bleed, gapX, gapY, grid, cutGuides, debugLayout, printRasterPreset, bleedMode])
+  }, [
+    selectedCards,
+    outputMode,
+    calibrationMode,
+    paper,
+    orientation,
+    scale,
+    printFitMode,
+    bleed,
+    gapX,
+    gapY,
+    grid,
+    cutGuides,
+    debugLayout,
+    printRasterPreset,
+    bleedMode,
+    offsetXmm,
+    offsetYmm,
+    rotation,
+    showDirectPrintGuides,
+    directPrintRasterPreset,
+  ])
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true)
@@ -292,7 +338,10 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     }
   }, [buildPdfBlob, deckName, onClose])
 
-  const pages = Math.ceil(totalCards / (grid.cols * grid.rows))
+  const pages = outputMode === 'direct-poker'
+    ? (calibrationMode ? 1 : totalCards)
+    : Math.ceil(totalCards / (grid.cols * grid.rows))
+  const canGenerate = totalCards > 0 || (outputMode === 'direct-poker' && calibrationMode)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-bg-dark/80" onClick={onClose}>
@@ -414,205 +463,330 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
               Skip basic lands
             </label>
 
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Output
+              <select
+                value={outputMode}
+                onChange={(e) => setOutputMode(e.target.value as OutputMode)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                <option value="direct-poker">Direct poker card</option>
+                <option value="a4-sheet">A4 sheet</option>
+              </select>
+            </label>
+
+            {outputMode === 'direct-poker' && (
+              <>
+                <span className="text-xs text-font-muted">Paper 89x89 mm · Card 63x88 mm</span>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Fit
+                  <select
+                    value={printFitMode}
+                    onChange={(e) => setPrintFitMode(e.target.value as PrintFitMode)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value="preserve">Preserve full card</option>
+                    <option value="crop">Crop into bleed</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Offset X
+                  <input
+                    type="number"
+                    step={0.1}
+                    value={offsetXmm}
+                    onChange={(e) => setOffsetXmm(Number(e.target.value))}
+                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                  mm
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Offset Y
+                  <input
+                    type="number"
+                    step={0.1}
+                    value={offsetYmm}
+                    onChange={(e) => setOffsetYmm(Number(e.target.value))}
+                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                  mm
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Rotation
+                  <select
+                    value={rotation}
+                    onChange={(e) => setRotation(Number(e.target.value) as DirectPokerRotation)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value={0}>0</option>
+                    <option value={90}>90</option>
+                    <option value={180}>180</option>
+                    <option value={270}>270</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Raster
+                  <select
+                    value={directPrintRasterPreset}
+                    onChange={(e) => setDirectPrintRasterPreset(e.target.value as DirectPrintRasterPreset)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value="fast">Fast — 240 dpi — layout/test</option>
+                    <option value="standard">Standard — 300 dpi — recommended for A4</option>
+                    <option value="high">High — 360 dpi — recommended for direct poker</option>
+                    <option value="ultra">Ultra — 600 dpi — max quality, slower printing</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={calibrationMode}
+                    onChange={(e) => setCalibrationMode(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
+                  />
+                  Calibration mode
+                </label>
+
+                <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showDirectPrintGuides}
+                    onChange={(e) => setShowDirectPrintGuides(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
+                  />
+                  Show guides
+                </label>
+
+                {printFitMode === 'crop' && (
+                  <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                    Bleed
+                    <input
+                      type="number"
+                      min={0}
+                      max={5}
+                      step={0.5}
+                      value={bleed}
+                      onChange={(e) => setBleed(Math.max(0, Number(e.target.value)))}
+                      className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                    />
+                    mm
+                  </label>
+                )}
+              </>
+            )}
+
             {/* Paper */}
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Paper
-              <select
-                value={paperPreset}
-                onChange={(e) => setPaperPreset(e.target.value as PaperPreset)}
-                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              >
-                <option value="a4">A4</option>
-                <option value="a5">A5</option>
-                <option value="a6">A6</option>
-                <option value="letter">Letter</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Orientation
-              <select
-                value={orientation}
-                onChange={(e) => setOrientation(e.target.value as Orientation)}
-                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-            </label>
-
-            {paperPreset === 'custom' && (
+            {outputMode === 'a4-sheet' && (
               <>
                 <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-                  W
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={customWidth}
-                    onChange={(e) => setCustomWidth(Number(e.target.value))}
-                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-                  />
+                  Paper
+                  <select
+                    value={paperPreset}
+                    onChange={(e) => setPaperPreset(e.target.value as PaperPreset)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value="a4">A4</option>
+                    <option value="a5">A5</option>
+                    <option value="a6">A6</option>
+                    <option value="letter">Letter</option>
+                    <option value="custom">Custom</option>
+                  </select>
                 </label>
+
                 <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-                  H
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={customHeight}
-                    onChange={(e) => setCustomHeight(Number(e.target.value))}
-                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-                  />
+                  Orientation
+                  <select
+                    value={orientation}
+                    onChange={(e) => setOrientation(e.target.value as Orientation)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                  </select>
                 </label>
               </>
             )}
 
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Grid
-              <select
-                value={gridPreset}
-                onChange={(e) => setGridPreset(e.target.value as GridPreset)}
-                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              >
-                <option value="3x3">3x3</option>
-                <option value="4x2">4x2</option>
-                <option value="5x2">5x2</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-
-            {gridPreset === 'custom' && (
+            {outputMode === 'a4-sheet' && (
               <>
+                {paperPreset === 'custom' && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                      W
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={customWidth}
+                        onChange={(e) => setCustomWidth(Number(e.target.value))}
+                        className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                      H
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={customHeight}
+                        onChange={(e) => setCustomHeight(Number(e.target.value))}
+                        className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                      />
+                    </label>
+                  </>
+                )}
+
                 <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-                  Cols
-                  <input
-                    type="number"
-                    min={1}
-                    max={8}
-                    value={customCols}
-                    onChange={(e) => setCustomCols(Number(e.target.value))}
-                    className="w-14 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-                  />
+                  Grid
+                  <select
+                    value={gridPreset}
+                    onChange={(e) => setGridPreset(e.target.value as GridPreset)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value="3x3">3x3</option>
+                    <option value="4x2">4x2</option>
+                    <option value="5x2">5x2</option>
+                    <option value="custom">Custom</option>
+                  </select>
                 </label>
+
+                {gridPreset === 'custom' && (
+                  <>
+                    <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                      Cols
+                      <input
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={customCols}
+                        onChange={(e) => setCustomCols(Number(e.target.value))}
+                        className="w-14 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                      Rows
+                      <input
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={customRows}
+                        onChange={(e) => setCustomRows(Number(e.target.value))}
+                        className="w-14 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                      />
+                    </label>
+                  </>
+                )}
+
                 <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-                  Rows
+                  Gap X
                   <input
                     type="number"
-                    min={1}
-                    max={8}
-                    value={customRows}
-                    onChange={(e) => setCustomRows(Number(e.target.value))}
-                    className="w-14 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                    min={0}
+                    max={20}
+                    step={0.5}
+                    value={gapX}
+                    onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}
+                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
                   />
+                  mm
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Gap Y
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    step={0.5}
+                    value={gapY}
+                    onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}
+                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                  mm
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Scale
+                  <select
+                    value={scale}
+                    onChange={(e) => setScale(Number(e.target.value) as ScaleOption)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value={100}>100%</option>
+                    <option value={95}>95%</option>
+                    <option value={90}>90%</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Bleed mode
+                  <select
+                    value={bleedMode}
+                    onChange={(e) => setBleedMode(e.target.value as BleedMode)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value="preserve">Preserve full card</option>
+                    <option value="crop">Crop into bleed</option>
+                    <option value="none">No bleed</option>
+                  </select>
+                </label>
+
+                <label className={`flex items-center gap-1.5 text-xs text-font-secondary ${bleedMode === 'none' ? 'opacity-50' : ''}`}>
+                  Bleed
+                  <input
+                    type="number"
+                    min={0}
+                    max={5}
+                    step={0.5}
+                    value={bleed}
+                    disabled={bleedMode === 'none'}
+                    onChange={(e) => setBleed(Math.max(0, Number(e.target.value)))}
+                    className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  />
+                  mm
+                </label>
+
+                <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+                  Raster
+                  <select
+                    value={printRasterPreset}
+                    onChange={(e) => setPrintRasterPreset(e.target.value as PrintRasterPreset)}
+                    className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+                  >
+                    <option value="fast">Fast — 240 dpi — layout/test</option>
+                    <option value="standard">Standard — 300 dpi — recommended for A4</option>
+                    <option value="high">High — 360 dpi — recommended for direct poker</option>
+                    <option value="ultra">Ultra — 600 dpi — max quality, slower printing</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={cutGuides}
+                    onChange={(e) => setCutGuides(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
+                  />
+                  Cut guides
+                </label>
+
+                <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={debugLayout}
+                    onChange={(e) => setDebugLayout(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
+                  />
+                  Debug layout
                 </label>
               </>
             )}
-
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Gap X
-              <input
-                type="number"
-                min={0}
-                max={20}
-                step={0.5}
-                value={gapX}
-                onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}
-                className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              />
-              mm
-            </label>
-
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Gap Y
-              <input
-                type="number"
-                min={0}
-                max={20}
-                step={0.5}
-                value={gapY}
-                onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}
-                className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              />
-              mm
-            </label>
-
-            {/* Scale */}
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Scale
-              <select
-                value={scale}
-                onChange={(e) => setScale(Number(e.target.value) as ScaleOption)}
-                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              >
-                <option value={100}>100%</option>
-                <option value={95}>95%</option>
-                <option value={90}>90%</option>
-              </select>
-            </label>
-
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Bleed mode
-              <select
-                value={bleedMode}
-                onChange={(e) => setBleedMode(e.target.value as BleedMode)}
-                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              >
-                <option value="preserve">Preserve full card</option>
-                <option value="crop">Crop into bleed</option>
-                <option value="none">No bleed</option>
-              </select>
-            </label>
-
-            <label className={`flex items-center gap-1.5 text-xs text-font-secondary ${bleedMode === 'none' ? 'opacity-50' : ''}`}>
-              Bleed
-              <input
-                type="number"
-                min={0}
-                max={5}
-                step={0.5}
-                value={bleed}
-                disabled={bleedMode === 'none'}
-                onChange={(e) => setBleed(Math.max(0, Number(e.target.value)))}
-                className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              />
-              mm
-            </label>
-
-            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
-              Raster
-              <select
-                value={printRasterPreset}
-                onChange={(e) => setPrintRasterPreset(e.target.value as PrintRasterPreset)}
-                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
-              >
-                <option value="fast">Fast</option>
-                <option value="standard">Standard</option>
-                <option value="high">High</option>
-                <option value="ultra">Ultra</option>
-              </select>
-            </label>
-
-            <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
-              <input
-                type="checkbox"
-                checked={cutGuides}
-                onChange={(e) => setCutGuides(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
-              />
-              Cut guides
-            </label>
-
-            <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
-              <input
-                type="checkbox"
-                checked={debugLayout}
-                onChange={(e) => setDebugLayout(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-border accent-bg-accent"
-              />
-              Debug layout
-            </label>
           </div>
 
           {gapWarning && (
@@ -622,10 +796,10 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
             </div>
           )}
 
-          {bleedMode === 'crop' && (
+          {((outputMode === 'a4-sheet' && bleedMode === 'crop') || (outputMode === 'direct-poker' && printFitMode === 'crop')) && (
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-              <span>This mode may crop card edges by the selected bleed amount.</span>
+              <span>This mode may crop card edges.</span>
             </div>
           )}
 
@@ -643,7 +817,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button
               onClick={handleGenerate}
-              disabled={generating || totalCards === 0}
+              disabled={generating || !canGenerate}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-bg-accent px-4 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {generating ? (
@@ -663,7 +837,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
             {canShareFiles && (
               <button
                 onClick={handleShare}
-                disabled={generating || totalCards === 0}
+                disabled={generating || !canGenerate}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-bg-accent/60 bg-bg-card px-4 py-2.5 text-sm font-bold text-font-accent transition-colors hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Mail size={16} />
