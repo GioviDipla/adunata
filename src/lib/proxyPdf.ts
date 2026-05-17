@@ -65,8 +65,8 @@ export type PrintRasterPreset = 'fast' | 'standard' | 'high' | 'ultra'
 interface PrintRasterPresetOptions {
   dpi: number
   jpegQuality: number
-  maxWidthPx: number
-  maxHeightPx: number
+  maxWidthPx?: number
+  maxHeightPx?: number
   allowUpscale?: boolean
   bleedJpegQuality?: number
 }
@@ -90,8 +90,6 @@ export const PRINT_RASTER_PRESETS: Record<PrintRasterPreset, PrintRasterPresetOp
   ultra: {
     dpi: 600,
     jpegQuality: 0.98,
-    maxWidthPx: 1900,
-    maxHeightPx: 2700,
     bleedJpegQuality: 0.94,
   },
 }
@@ -100,7 +98,7 @@ export const DIRECT_PRINT_RASTER_PRESETS: Record<DirectPrintRasterPreset, PrintR
   fast: { dpi: 240, jpegQuality: 0.82, maxWidthPx: 800, maxHeightPx: 1100 },
   standard: { dpi: 300, jpegQuality: 0.88, maxWidthPx: 800, maxHeightPx: 1100 },
   high: { dpi: 360, jpegQuality: 0.9, maxWidthPx: 1000, maxHeightPx: 1400 },
-  ultra: { dpi: 600, jpegQuality: 0.98, maxWidthPx: 1600, maxHeightPx: 2200 },
+  ultra: { dpi: 600, jpegQuality: 0.98 },
 }
 
 export function defaultDirectPokerRasterPreset(): DirectPrintRasterPreset {
@@ -197,12 +195,13 @@ export function printRasterDimensions(
 ): { width: number; height: number } {
   const rawWidth = Math.round((options.bleedWmm / 25.4) * options.dpi)
   const rawHeight = Math.round((options.bleedHmm / 25.4) * options.dpi)
-  const maxWidth = options.maxWidthPx ?? 1000
-  const maxHeight = options.maxHeightPx ?? 1400
   const sourceScale = options.allowUpscale === false && sourceWidth && sourceHeight
     ? Math.min(sourceWidth / rawWidth, sourceHeight / rawHeight, 1)
     : 1
-  const maxScale = Math.min(maxWidth / rawWidth, maxHeight / rawHeight, sourceScale, 1)
+  // When maxWidthPx/maxHeightPx are absent the DPI setting alone governs size.
+  const maxScale = options.maxWidthPx != null && options.maxHeightPx != null
+    ? Math.min(options.maxWidthPx / rawWidth, options.maxHeightPx / rawHeight, sourceScale, 1)
+    : Math.min(sourceScale, 1)
   return {
     width: Math.max(1, Math.round(rawWidth * maxScale)),
     height: Math.max(1, Math.round(rawHeight * maxScale)),

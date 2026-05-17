@@ -62,8 +62,6 @@ test('print raster presets keep existing caps and add ultra', () => {
   assert.deepEqual(plain(proxyPdf.PRINT_RASTER_PRESETS.ultra), {
     dpi: 600,
     jpegQuality: 0.98,
-    maxWidthPx: 1900,
-    maxHeightPx: 2700,
     bleedJpegQuality: 0.94,
   })
 })
@@ -109,8 +107,6 @@ test('direct poker raster presets target card-sized JPEGs in increasing weight o
   assert.deepEqual(plain(proxyPdf.DIRECT_PRINT_RASTER_PRESETS.ultra), {
     dpi: 600,
     jpegQuality: 0.98,
-    maxWidthPx: 1600,
-    maxHeightPx: 2200,
   })
 
   const fast = proxyPdf.printRasterDimensions({
