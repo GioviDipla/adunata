@@ -71,11 +71,8 @@ function imageUriFromFaces(card: CardRow, key: 'png' | 'large' | 'normal'): stri
   return typeof value === 'string' ? value : null
 }
 
-function deriveImageUrls(card: CardRow): string[] {
+function deriveScryfallImageUrls(card: CardRow): string[] {
   const urls: string[] = []
-  // MPCFill HD scan first; route returns 503 when backend not configured so
-  // the cascade falls through to Scryfall without extra latency.
-  urls.push(`/api/mpcfill-image?scryfall_id=${encodeURIComponent(card.scryfall_id)}&dpi=600&quality=95`)
   const facePng = imageUriFromFaces(card, 'png')
   const faceLarge = imageUriFromFaces(card, 'large')
   const faceNormal = imageUriFromFaces(card, 'normal')
@@ -233,7 +230,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
 
   const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
     const cardsWithImages = selectedCards
-      .map((e) => ({ imageUrls: deriveImageUrls(e.card), quantity: e.quantity }))
+      .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
       .filter((e) => e.imageUrls.length > 0)
     if (cardsWithImages.length === 0 && !(outputMode === 'direct-poker' && calibrationMode)) return null
 
