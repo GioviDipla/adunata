@@ -365,8 +365,8 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
           </div>
         </div>
 
-        {/* Card sections */}
-        <div className="flex-1 overflow-y-auto px-3 py-3">
+        {/* Scrollable body: card sections + options + warnings */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
           {sections.map((section) => {
             const sectionSelected = section.cards.filter((e) => !deselected.has(cardKey(e))).length
             const sectionTotal = section.cards.length
@@ -447,10 +447,9 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
           {sections.length === 0 && (
             <p className="text-sm text-font-muted text-center py-8">No cards in this deck.</p>
           )}
-        </div>
 
-        {/* Options bar */}
-        <div className="border-t border-border px-4 py-3">
+          {/* Options bar — inside scroll body so all controls stay reachable on mobile */}
+          <div className="-mx-3 mt-3 border-t border-border px-4 pt-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {/* Skip basic lands toggle */}
             <label className="flex items-center gap-2 text-xs text-font-secondary cursor-pointer">
@@ -812,9 +811,12 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
               </span>
             </div>
           )}
+          </div>
+        </div>
 
-          {/* Generate / Share buttons */}
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        {/* Pinned action bar — always visible regardless of options bar height */}
+        <div className="shrink-0 border-t border-border bg-bg-surface px-4 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               onClick={handleGenerate}
               disabled={generating || !canGenerate}
