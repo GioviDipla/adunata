@@ -195,10 +195,13 @@ export function printRasterDimensions(
 ): { width: number; height: number } {
   const rawWidth = Math.round((options.bleedWmm / 25.4) * options.dpi)
   const rawHeight = Math.round((options.bleedHmm / 25.4) * options.dpi)
-  const sourceScale = options.allowUpscale === false && sourceWidth && sourceHeight
+  // Upscaling beyond source dims only invents interpolated pixels and
+  // bloats the PDF. Treat undefined allowUpscale as "no upscale" so every
+  // preset (including Ultra) caps at source resolution unless explicitly
+  // opted in.
+  const sourceScale = options.allowUpscale !== true && sourceWidth && sourceHeight
     ? Math.min(sourceWidth / rawWidth, sourceHeight / rawHeight, 1)
     : 1
-  // When maxWidthPx/maxHeightPx are absent the DPI setting alone governs size.
   const maxScale = options.maxWidthPx != null && options.maxHeightPx != null
     ? Math.min(options.maxWidthPx / rawWidth, options.maxHeightPx / rawHeight, sourceScale, 1)
     : Math.min(sourceScale, 1)
@@ -260,6 +263,28 @@ export async function optimizeCardImageForPrint(
   const originalWidth = image.naturalWidth || image.width
   const originalHeight = image.naturalHeight || image.height
   const { width: optimizedWidth, height: optimizedHeight } = printRasterDimensions(options, originalWidth, originalHeight)
+
+  // Fast path: source is JPEG, already covers target dims, and aspect ratio
+  // matches within tolerance → embed native bytes. Skips a canvas decode/
+  // re-encode that would only lose quality and inflate the PDF.
+  if (
+    sourceImage instanceof Blob &&
+    sourceImage.type === 'image/jpeg' &&
+    originalWidth >= optimizedWidth &&
+    originalHeight >= optimizedHeight
+  ) {
+    const sourceAspect = originalWidth / originalHeight
+    const targetAspect = optimizedWidth / optimizedHeight
+    const aspectDelta = Math.abs(sourceAspect - targetAspect) / targetAspect
+    if (aspectDelta < 0.02) {
+      revokeUrl?.()
+      const bytes = new Uint8Array(await sourceImage.arrayBuffer())
+      if (options.debug && process.env.NODE_ENV !== 'production') {
+        console.log({ skipCanvas: true, originalWidth, originalHeight, optimizedWidth, optimizedHeight, originalBytes, optimizedBytes: bytes.length })
+      }
+      return bytes
+    }
+  }
 
   try {
     const canvas = document.createElement('canvas')

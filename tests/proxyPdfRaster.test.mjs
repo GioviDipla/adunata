@@ -85,6 +85,33 @@ test('ultra can use higher limits without inventing pixels beyond the source', (
   assert.deepEqual(plain(ultraDimensions), { width: 1488, height: 2079 })
 })
 
+test('printRasterDimensions clamps to source dims by default (no upscale)', () => {
+  // Scryfall PNG 745x1040 fed into Ultra preset must not exceed source.
+  const clamped = proxyPdf.printRasterDimensions(
+    { bleedWmm: 63, bleedHmm: 88, ...proxyPdf.PRINT_RASTER_PRESETS.ultra },
+    745,
+    1040,
+  )
+  assert.ok(clamped.width <= 745, `expected width <= 745, got ${clamped.width}`)
+  assert.ok(clamped.height <= 1040, `expected height <= 1040, got ${clamped.height}`)
+  assert.ok(clamped.width >= 740, `expected width near source, got ${clamped.width}`)
+  assert.ok(clamped.height >= 1035, `expected height near source, got ${clamped.height}`)
+})
+
+test('printRasterDimensions allows upscale when explicitly opted in', () => {
+  const upscaled = proxyPdf.printRasterDimensions(
+    {
+      bleedWmm: 63,
+      bleedHmm: 88,
+      ...proxyPdf.PRINT_RASTER_PRESETS.ultra,
+      allowUpscale: true,
+    },
+    745,
+    1040,
+  )
+  assert.deepEqual(plain(upscaled), { width: 1488, height: 2079 })
+})
+
 test('direct poker raster presets target card-sized JPEGs in increasing weight order', () => {
   assert.deepEqual(plain(proxyPdf.DIRECT_PRINT_RASTER_PRESETS.fast), {
     dpi: 240,

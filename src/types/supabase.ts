@@ -52,6 +52,7 @@ export interface Database {
           has_dies_trigger: boolean
           has_end_step_trigger: boolean
           has_cast_trigger: boolean
+          mpcfill_drive_id: string | null
         }
         Insert: {
           id?: number
@@ -95,6 +96,7 @@ export interface Database {
           has_dies_trigger?: boolean
           has_end_step_trigger?: boolean
           has_cast_trigger?: boolean
+          mpcfill_drive_id?: string | null
         }
         Update: {
           id?: number
@@ -138,6 +140,7 @@ export interface Database {
           has_dies_trigger?: boolean
           has_end_step_trigger?: boolean
           has_cast_trigger?: boolean
+          mpcfill_drive_id?: string | null
         }
         Relationships: []
       }

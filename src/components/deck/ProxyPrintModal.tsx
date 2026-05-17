@@ -71,8 +71,11 @@ function imageUriFromFaces(card: CardRow, key: 'png' | 'large' | 'normal'): stri
   return typeof value === 'string' ? value : null
 }
 
-function deriveScryfallImageUrls(card: CardRow): string[] {
+function deriveImageUrls(card: CardRow): string[] {
   const urls: string[] = []
+  // MPCFill HD scan first; route returns 503 when backend not configured so
+  // the cascade falls through to Scryfall without extra latency.
+  urls.push(`/api/mpcfill-image?scryfall_id=${encodeURIComponent(card.scryfall_id)}&dpi=600&quality=95`)
   const facePng = imageUriFromFaces(card, 'png')
   const faceLarge = imageUriFromFaces(card, 'large')
   const faceNormal = imageUriFromFaces(card, 'normal')
@@ -92,7 +95,7 @@ function deriveScryfallImageUrls(card: CardRow): string[] {
 
 export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
-  const [outputMode, setOutputMode] = useState<OutputMode>('direct-poker')
+  const [outputMode, setOutputMode] = useState<OutputMode>('a4-sheet')
   const [paperPreset, setPaperPreset] = useState<PaperPreset>('a4')
   const [customWidth, setCustomWidth] = useState(210)
   const [customHeight, setCustomHeight] = useState(297)
@@ -230,7 +233,7 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
 
   const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
     const cardsWithImages = selectedCards
-      .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
+      .map((e) => ({ imageUrls: deriveImageUrls(e.card), quantity: e.quantity }))
       .filter((e) => e.imageUrls.length > 0)
     if (cardsWithImages.length === 0 && !(outputMode === 'direct-poker' && calibrationMode)) return null
 
