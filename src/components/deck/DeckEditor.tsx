@@ -197,7 +197,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
         const { data: localTokens } = await supabase
           .from('cards')
           .select(CARD_GAME_COLUMNS)
-          .ilike('type_line', '%Token%')
+          .or('type_line.ilike.%Token%,type_line.ilike.%Dungeon%,type_line.ilike.%Emblem%,type_line.ilike.%Plane%,type_line.ilike.%Scheme%')
           .ilike('name', `%${tokenSearch.trim()}%`)
           .limit(10)
 
@@ -210,7 +210,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
         }
 
         const res = await fetch(
-          `https://api.scryfall.com/cards/search?q=t:token+${encodeURIComponent(tokenSearch.trim())}&unique=cards`,
+          `https://api.scryfall.com/cards/search?q=(t:token+OR+t:dungeon+OR+t:emblem+OR+t:plane+OR+t:scheme)+${encodeURIComponent(tokenSearch.trim())}&unique=cards`,
           { signal: controller.signal }
         )
         if (res.ok) {
@@ -224,8 +224,8 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             toughness: c.toughness ?? null,
             colors: c.colors ?? [],
             color_identity: c.color_identity ?? [],
-            image_small: c.image_uris ? (c.image_uris as Record<string, string>).small : null,
-            image_normal: c.image_uris ? (c.image_uris as Record<string, string>).normal : null,
+            image_small: c.image_uris ? (c.image_uris as Record<string, string>).small : (c.card_faces as unknown[])?.[0] ? ((c.card_faces as Record<string, unknown>[])[0].image_uris as Record<string, string>)?.small ?? null : null,
+            image_normal: c.image_uris ? (c.image_uris as Record<string, string>).normal : (c.card_faces as unknown[])?.[0] ? ((c.card_faces as Record<string, unknown>[])[0].image_uris as Record<string, string>)?.normal ?? null : null,
             oracle_text: c.oracle_text ?? null,
             keywords: c.keywords ?? [],
             set_code: c.set ?? '',
