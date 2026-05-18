@@ -91,14 +91,19 @@ function deriveScryfallImageUrls(card: CardRow): string[] {
   return [...new Set(urls)]
 }
 
-function getBackFaceSmallImage(card: CardRow): string | null {
+function getBackFaceImage(card: CardRow): string | null {
   if (!Array.isArray(card.card_faces) || card.card_faces.length < 2) return null
   const backFace = card.card_faces[1]
   if (!backFace || typeof backFace !== 'object' || Array.isArray(backFace)) return null
   const imageUris = backFace.image_uris
   if (!imageUris || typeof imageUris !== 'object' || Array.isArray(imageUris)) return null
   const small = imageUris.small
-  return typeof small === 'string' ? small : null
+  if (typeof small === 'string' && small.length > 0) return small
+  const normal = imageUris.normal
+  if (typeof normal === 'string' && normal.length > 0) return normal
+  const large = imageUris.large
+  if (typeof large === 'string' && large.length > 0) return large
+  return null
 }
 
 export default function ProxyPrintModal({ deckName, cards, userName, onClose }: ProxyPrintModalProps) {
@@ -560,7 +565,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                     const key = cardKey(entry)
                     const selected = !deselected.has(key)
                     const isFlipped = flippedCards.has(key)
-                    const backImage = getBackFaceSmallImage(entry.card)
+                    const backImage = getBackFaceImage(entry.card)
                     const showBack = isFlipped && backImage
                     const imageSrc = showBack ? backImage : entry.card.image_small
                     return (
@@ -870,7 +875,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                     type="number"
                     min={0}
                     max={20}
-                    step={0.5}
+                    step={0.1}
                     value={gapX}
                     onChange={(e) => setGapX(Math.max(0, Number(e.target.value)))}
                     className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
@@ -884,7 +889,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                     type="number"
                     min={0}
                     max={20}
-                    step={0.5}
+                    step={0.1}
                     value={gapY}
                     onChange={(e) => setGapY(Math.max(0, Number(e.target.value)))}
                     className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
@@ -1059,18 +1064,18 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
             {expandedOrder.length === 0 ? (
               <p className="text-sm text-font-muted text-center py-16">No cards selected.</p>
             ) : (
-              <div className="flex flex-col items-center gap-6 py-4 px-2">
+              <div className="flex flex-col items-center gap-8 py-4 px-1 sm:px-4">
                 {paginated.map((slots, pageIdx) => (
-                  <div key={pageIdx} className="flex flex-col items-center w-full max-w-[1200px]">
+                  <div key={pageIdx} className="flex flex-col items-center w-full max-w-[1600px]">
                     <span className="text-[10px] font-semibold text-font-muted mb-2 tracking-wide">
                       PAGE {pageIdx + 1} OF {previewPages}
                     </span>
                     <div
-                      className="grid justify-center w-full"
+                      className="grid justify-center"
                       style={{
                         gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`,
                         gap: `${gridGapYPx}px ${gridGapXPx}px`,
-                        maxWidth: `${grid.cols * 120 + (grid.cols - 1) * gridGapXPx}px`,
+                        width: '100%',
                       }}
                     >
                       {slots.map((slot, slotIdx) => {
@@ -1085,7 +1090,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                             />
                           )
                         }
-                        const backImage = getBackFaceSmallImage(slot.card)
+                        const backImage = getBackFaceImage(slot.card)
                         const slotKey = `${slot.card.id}-${globalIdx}`
                         const isFlipped = flippedCards.has(slotKey)
                         const imageSrc = isFlipped && backImage ? backImage : slot.card.image_small
