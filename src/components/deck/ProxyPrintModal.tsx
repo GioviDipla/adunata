@@ -158,7 +158,12 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
   const [canShareFiles, setCanShareFiles] = useState(false)
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set())
   const [showPreview, setShowPreview] = useState(false)
-  const [expandedOrder, setExpandedOrder] = useState<Array<{ card: CardRow; board: string }>>([])
+  interface ExpandedSlot {
+    card: CardRow
+    board: string
+    face?: 'front' | 'back'
+  }
+  const [expandedOrder, setExpandedOrder] = useState<ExpandedSlot[]>([])
   const [dragSlot, setDragSlot] = useState<number | null>(null)
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null)
   const [previewPage, setPreviewPage] = useState(0)
@@ -249,9 +254,14 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
   }, [cards, deselected])
 
   const openPreview = useCallback(() => {
-    const expanded = selectedCards.flatMap((e) =>
-      Array.from({ length: e.quantity }, () => ({ card: e.card, board: e.board })),
-    )
+    const expanded: ExpandedSlot[] = []
+    for (const e of selectedCards) {
+      const isDfc = Array.isArray(e.card.card_faces) && e.card.card_faces.length >= 2
+      for (let i = 0; i < e.quantity; i++) {
+        expanded.push({ card: e.card, board: e.board, face: 'front' })
+        if (isDfc) expanded.push({ card: e.card, board: e.board, face: 'back' })
+      }
+    }
     setExpandedOrder(expanded)
     setPreviewPage(0)
     setShowPreview(true)
@@ -296,11 +306,13 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
     setDragOverSlot(null)
   }, [])
 
-  // Group expanded slots back into entries with quantities for the decklist email
+  // Group expanded slots back into entries with quantities for the decklist email.
+  // Back-face slots are ignored — they represent the same card as their front sibling.
   const groupExpandedToEntries = useCallback(
-    (slots: Array<{ card: CardRow; board: string }>): CardEntry[] => {
+    (slots: ExpandedSlot[]): CardEntry[] => {
       const grouped: CardEntry[] = []
       for (const slot of slots) {
+        if (slot.face === 'back') continue
         const last = grouped[grouped.length - 1]
         if (last && last.card.id === slot.card.id && last.board === slot.board) {
           last.quantity++
@@ -362,8 +374,12 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
   const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
     const sourceCards = showPreview ? expandedOrder : selectedCards
     const cardsWithImages = showPreview
-      ? (sourceCards as Array<{ card: CardRow; board: string }>)
-          .map((s) => ({ imageUrls: deriveScryfallImageUrls(s.card), quantity: 1 }))
+      ? (sourceCards as ExpandedSlot[]).map((s) => ({
+          imageUrls: s.face === 'back'
+            ? [getBackFaceImage(s.card)].filter((u): u is string => u !== null)
+            : deriveScryfallImageUrls(s.card),
+          quantity: 1,
+        }))
       : (sourceCards as CardEntry[])
           .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
       .filter((e) => e.imageUrls.length > 0)
@@ -490,7 +506,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
       })
       const sourceCards = showPreview ? expandedOrder : selectedCards
       const entries = showPreview
-        ? groupExpandedToEntries(sourceCards as Array<{ card: CardRow; board: string }>)
+        ? groupExpandedToEntries(sourceCards as ExpandedSlot[])
         : (sourceCards as CardEntry[])
       const decklist = buildMoxfieldDecklist(entries)
 
@@ -1044,10 +1060,10 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
       {showPreview && (() => {
         const slotsPerPage = Math.max(1, grid.cols * grid.rows)
         const previewPages = Math.max(1, Math.ceil(expandedOrder.length / slotsPerPage))
-        const paginated: (Array<{ card: CardRow; board: string } | null>)[] = []
+        const paginated: (Array<ExpandedSlot | null>)[] = []
         for (let pi = 0; pi < previewPages; pi++) {
           const start = pi * slotsPerPage
-          const slots: Array<{ card: CardRow; board: string } | null> = []
+          const slots: Array<ExpandedSlot | null> = []
           for (let si = 0; si < slotsPerPage; si++) {
             const idx = start + si
             slots.push(idx < expandedOrder.length ? expandedOrder[idx] : null)
@@ -1104,13 +1120,13 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                             />
                           )
                         }
-                        const backImage = getBackFaceImage(slot.card)
-                        const slotKey = `${slot.card.id}-${globalIdx}`
-                        const isFlipped = flippedCards.has(slotKey)
-                        const imageSrc = isFlipped && backImage ? backImage : getPreviewImage(slot.card)
+                        const isBackFace = slot.face === 'back'
+                        const imageSrc = isBackFace
+                          ? getBackFaceImage(slot.card)
+                          : getPreviewImage(slot.card)
                         return (
                           <div
-                            key={slotKey}
+                            key={`${slot.card.id}-${slot.face || 'front'}-${globalIdx}`}
                             draggable
                             onDragStart={() => handleDragStart(globalIdx)}
                             onDragOver={(e) => handleDragOver(e, globalIdx)}
@@ -1131,21 +1147,16 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                                 <span className="text-[9px] text-font-muted text-center leading-tight">{slot.card.name}</span>
                               </div>
                             )}
-                            {/* Flip toggle for double-faced cards */}
-                            {backImage && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); toggleFlip(slotKey); }}
-                                className={`absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-bg-dark/80 text-[8px] font-bold text-font-primary hover:bg-bg-accent hover:text-font-white transition-colors ${
-                                  isFlipped ? 'bg-bg-accent/80 text-font-white' : ''
-                                }`}
-                                title={isFlipped ? 'Show front' : 'Show back'}
-                              >
-                                ↻
-                              </button>
-                            )}
-                            {/* Position number — top-left */}
-                            <div className="absolute top-0.5 left-0.5 flex h-4 min-w-[16px] items-center justify-center rounded bg-bg-dark/70 px-0.5 text-[8px] font-bold text-font-primary/80 backdrop-blur-sm">
-                              {globalIdx + 1}
+                            {/* Position number + back label */}
+                            <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5">
+                              <span className="flex h-4 min-w-[16px] items-center justify-center rounded bg-bg-dark/70 px-0.5 text-[8px] font-bold text-font-primary/80 backdrop-blur-sm">
+                                {globalIdx + 1}
+                              </span>
+                              {isBackFace && (
+                                <span className="flex h-4 items-center rounded bg-bg-accent/70 px-1 text-[7px] font-bold text-font-white backdrop-blur-sm">
+                                  BACK
+                                </span>
+                              )}
                             </div>
                           </div>
                         )
