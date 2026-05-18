@@ -38,7 +38,10 @@ const bulkType = args.find(a => a.startsWith('--type='))?.split('=')[1] || 'defa
 const force = args.includes('--force')
 const TMP_FILE = resolve(__dirname, '..', `.tmp-bulk-${bulkType}.json`)
 
-const SKIP_LAYOUTS = new Set(['token', 'double_faced_token', 'emblem', 'art_series'])
+// Skip pure cosmetic / non-gameplay layouts. We keep `double_faced_token`
+// because dungeons (Initiative, Undercity, Lost Mine, Tomb of Annihilation,
+// Dungeon of the Mad Mage) ride on that layout and are gameplay-relevant.
+const SKIP_LAYOUTS = new Set(['token', 'emblem', 'art_series'])
 
 // Pre-computed phase-trigger flags — mirror the DB backfill patterns so future
 // imports stay consistent with the initial state. Applied on oracle_text at
