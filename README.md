@@ -135,8 +135,10 @@ npm run dev
 | Variabile | Dove si prende |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | stessa pagina, key pubblica |
-| `SUPABASE_SERVICE_ROLE_KEY` | stessa pagina, key privata (server-only) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys, key pubblica |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | compatibilità legacy: stessa publishable key o vecchia anon key |
+| `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys, key privata (server-only) |
+| `SUPABASE_SERVICE_ROLE_KEY` | compatibilità legacy: stessa secret key o vecchia service role key |
 | `CRON_SECRET` | stringa casuale, protegge gli endpoint `/api/cron/*` |
 
 ### Caricare il catalogo Scryfall

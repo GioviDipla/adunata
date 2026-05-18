@@ -61,11 +61,12 @@ interface DeckEditorProps {
   deck: DeckRow
   initialCards: DeckCardEntry[]
   initialSections?: SectionRow[]
+  currentUserName: string
 }
 
 type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens' | 'removed'
 
-export default function DeckEditor({ deck, initialCards, initialSections = [] }: DeckEditorProps) {
+export default function DeckEditor({ deck, initialCards, initialSections = [], currentUserName }: DeckEditorProps) {
   const router = useRouter()
   const [cards, setCards] = useState<DeckCardEntry[]>(initialCards)
   const [sections, setSections] = useState<SectionRow[]>(initialSections)
@@ -1055,6 +1056,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
         <ProxyPrintModal
           deckName={deckName}
           cards={statsCards}
+          userName={currentUserName}
           onClose={() => setShowProxyPrint(false)}
         />
       )}

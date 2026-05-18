@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { X, Printer, CheckSquare, Square, Mail, AlertTriangle } from 'lucide-react'
+import { X, Printer, CheckSquare, Square, Mail, AlertTriangle, Send } from 'lucide-react'
 import { generateProxyPdfWithDetails } from '@/lib/proxyPdf'
 import type { Database } from '@/types/supabase'
 import type {
@@ -26,6 +26,7 @@ interface CardEntry {
 interface ProxyPrintModalProps {
   deckName: string
   cards: CardEntry[]
+  userName: string
   onClose: () => void
 }
 
@@ -90,7 +91,17 @@ function deriveScryfallImageUrls(card: CardRow): string[] {
   return [...new Set(urls)]
 }
 
-export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrintModalProps) {
+function getBackFaceSmallImage(card: CardRow): string | null {
+  if (!Array.isArray(card.card_faces) || card.card_faces.length < 2) return null
+  const backFace = card.card_faces[1]
+  if (!backFace || typeof backFace !== 'object' || Array.isArray(backFace)) return null
+  const imageUris = backFace.image_uris
+  if (!imageUris || typeof imageUris !== 'object' || Array.isArray(imageUris)) return null
+  const small = imageUris.small
+  return typeof small === 'string' ? small : null
+}
+
+export default function ProxyPrintModal({ deckName, cards, userName, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
   const [outputMode, setOutputMode] = useState<OutputMode>('a4-sheet')
   const [paperPreset, setPaperPreset] = useState<PaperPreset>('a4')
@@ -126,6 +137,13 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   const [generating, setGenerating] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [canShareFiles, setCanShareFiles] = useState(false)
+  const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set())
+  const [showPreview, setShowPreview] = useState(false)
+  const [expandedOrder, setExpandedOrder] = useState<Array<{ card: CardRow; board: string }>>([])
+  const [dragSlot, setDragSlot] = useState<number | null>(null)
+  const [dragOverSlot, setDragOverSlot] = useState<number | null>(null)
+  const [previewPage, setPreviewPage] = useState(0)
+  const [sendingOrder, setSendingOrder] = useState(false)
   const [skipWarning, setSkipWarning] = useState<number>(0)
 
   useEffect(() => {
@@ -198,9 +216,103 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     })
   }, [cards])
 
+  const toggleFlip = useCallback((key: string) => {
+    setFlippedCards((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
   const selectedCards = useMemo(() => {
     return cards.filter((e) => !deselected.has(cardKey(e)))
   }, [cards, deselected])
+
+  const openPreview = useCallback(() => {
+    const expanded = selectedCards.flatMap((e) =>
+      Array.from({ length: e.quantity }, () => ({ card: e.card, board: e.board })),
+    )
+    setExpandedOrder(expanded)
+    setPreviewPage(0)
+    setShowPreview(true)
+  }, [selectedCards])
+
+  const closePreview = useCallback(() => {
+    setShowPreview(false)
+  }, [])
+
+  // Drag-and-drop handlers for grid reordering
+  const handleDragStart = useCallback((index: number) => {
+    setDragSlot(index)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    setDragOverSlot(index)
+  }, [])
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverSlot(null)
+  }, [])
+
+  const handleDrop = useCallback((index: number) => {
+    if (dragSlot === null || dragSlot === index) {
+      setDragSlot(null)
+      setDragOverSlot(null)
+      return
+    }
+    setExpandedOrder((prev) => {
+      const next = [...prev]
+      const [moved] = next.splice(dragSlot, 1)
+      next.splice(index, 0, moved)
+      return next
+    })
+    setDragSlot(null)
+    setDragOverSlot(null)
+  }, [dragSlot])
+
+  const handleDragEnd = useCallback(() => {
+    setDragSlot(null)
+    setDragOverSlot(null)
+  }, [])
+
+  // Group expanded slots back into entries with quantities for the decklist email
+  const groupExpandedToEntries = useCallback(
+    (slots: Array<{ card: CardRow; board: string }>): CardEntry[] => {
+      const grouped: CardEntry[] = []
+      for (const slot of slots) {
+        const last = grouped[grouped.length - 1]
+        if (last && last.card.id === slot.card.id && last.board === slot.board) {
+          last.quantity++
+        } else {
+          grouped.push({ card: slot.card, quantity: 1, board: slot.board })
+        }
+      }
+      return grouped
+    },
+    [],
+  )
+
+  const buildMoxfieldDecklist = useCallback((entries: CardEntry[]): string => {
+    const main: string[] = []
+    const sideboard: string[] = []
+    const maybeboard: string[] = []
+    const tokens: string[] = []
+    for (const entry of cards) {
+      const line = `${entry.quantity} ${entry.card.name}`
+      if (entry.board === 'main' || entry.board === 'commander') main.push(line)
+      else if (entry.board === 'sideboard') sideboard.push(line)
+      else if (entry.board === 'maybeboard') maybeboard.push(line)
+      else if (entry.board === 'tokens') tokens.push(line)
+    }
+    const parts: string[] = []
+    if (main.length) parts.push(main.join('\n'))
+    if (sideboard.length) parts.push(`\n// Sideboard\n${sideboard.join('\n')}`)
+    if (maybeboard.length) parts.push(`\n// Maybeboard\n${maybeboard.join('\n')}`)
+    if (tokens.length) parts.push(`\n// Tokens\n${tokens.join('\n')}`)
+    return parts.join('\n')
+  }, [])
 
   const totalCards = useMemo(() => {
     return selectedCards.reduce((sum, e) => sum + e.quantity, 0)
@@ -229,8 +341,12 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
   const gapWarning = outputMode === 'a4-sheet' && effectiveBleed > 0 && (gapX <= 2 * effectiveBleed || gapY <= 2 * effectiveBleed)
 
   const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
-    const cardsWithImages = selectedCards
-      .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
+    const sourceCards = showPreview ? expandedOrder : selectedCards
+    const cardsWithImages = showPreview
+      ? (sourceCards as Array<{ card: CardRow; board: string }>)
+          .map((s) => ({ imageUrls: deriveScryfallImageUrls(s.card), quantity: 1 }))
+      : (sourceCards as CardEntry[])
+          .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
       .filter((e) => e.imageUrls.length > 0)
     if (cardsWithImages.length === 0 && !(outputMode === 'direct-poker' && calibrationMode)) return null
 
@@ -261,6 +377,8 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     return { blob, skippedCount: skippedUrls.length }
   }, [
     selectedCards,
+    expandedOrder,
+    showPreview,
     outputMode,
     calibrationMode,
     paper,
@@ -338,6 +456,48 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
     }
   }, [buildPdfBlob, deckName, onClose])
 
+  const handlePrintOrder = useCallback(async () => {
+    setSendingOrder(true)
+    try {
+      const blob = await buildPdfBlob()
+      if (!blob) return
+      const pdfBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const result = reader.result as string
+          resolve(result.slice(result.indexOf(',') + 1))
+        }
+        reader.readAsDataURL(blob.blob)
+      })
+      const sourceCards = showPreview ? expandedOrder : selectedCards
+      const entries = showPreview
+        ? groupExpandedToEntries(sourceCards as Array<{ card: CardRow; board: string }>)
+        : (sourceCards as CardEntry[])
+      const decklist = buildMoxfieldDecklist(entries)
+
+      const res = await fetch('/api/print-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userName,
+          deckName,
+          decklist,
+          pdfBase64,
+          timestamp: new Date().toISOString(),
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error((err as { error?: string }).error ?? 'Failed to send order')
+      }
+      onClose()
+    } catch (err) {
+      console.error('[print-order]', err)
+    } finally {
+      setSendingOrder(false)
+    }
+  }, [buildPdfBlob, buildMoxfieldDecklist, groupExpandedToEntries, deckName, userName, onClose, showPreview, expandedOrder, selectedCards])
+
   const pages = outputMode === 'direct-poker'
     ? (calibrationMode ? 1 : totalCards)
     : Math.ceil(totalCards / (grid.cols * grid.rows))
@@ -399,44 +559,66 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
                   {section.cards.map((entry) => {
                     const key = cardKey(entry)
                     const selected = !deselected.has(key)
+                    const isFlipped = flippedCards.has(key)
+                    const backImage = getBackFaceSmallImage(entry.card)
+                    const showBack = isFlipped && backImage
+                    const imageSrc = showBack ? backImage : entry.card.image_small
                     return (
-                      <button
+                      <div
                         key={key}
-                        onClick={() => toggleCard(key)}
-                        className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-                          selected
-                            ? 'border-bg-accent ring-1 ring-bg-accent/30'
-                            : 'border-border opacity-40'
-                        }`}
-                        style={{ touchAction: 'manipulation' }}
+                        className="relative"
                       >
-                        {entry.card.image_small ? (
-                          <img
-                            src={entry.card.image_small}
-                            alt={entry.card.name}
-                            className="w-full h-auto"
-                            loading="lazy"
-                            draggable={false}
-                          />
-                        ) : (
-                          <div className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2">
-                            <span className="text-center text-[9px] text-font-muted">{entry.card.name}</span>
-                          </div>
-                        )}
-                        {/* Quantity badge — bottom-left keeps it off the
-                            card name in the top-left of the frame. */}
-                        <div className="absolute bottom-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-dark/80 px-1 text-[10px] font-bold text-font-primary backdrop-blur-sm">
-                          {entry.quantity}x
-                        </div>
-                        {/* Checkbox icon */}
-                        <div className="absolute top-1 right-1">
-                          {selected ? (
-                            <CheckSquare size={14} className="text-bg-accent" />
+                        <button
+                          onClick={() => toggleCard(key)}
+                          className={`relative overflow-hidden rounded-lg border-2 transition-all w-full ${
+                            selected
+                              ? 'border-bg-accent ring-1 ring-bg-accent/30'
+                              : 'border-border opacity-40'
+                          }`}
+                          style={{ touchAction: 'manipulation' }}
+                        >
+                          {imageSrc ? (
+                            <img
+                              src={imageSrc}
+                              alt={entry.card.name}
+                              className="w-full h-auto"
+                              loading="lazy"
+                              draggable={false}
+                            />
                           ) : (
-                            <Square size={14} className="text-font-muted" />
+                            <div className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2">
+                              <span className="text-center text-[9px] text-font-muted">{entry.card.name}</span>
+                            </div>
                           )}
-                        </div>
-                      </button>
+                          {/* Quantity badge */}
+                          <div className="absolute bottom-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-dark/80 px-1 text-[10px] font-bold text-font-primary backdrop-blur-sm">
+                            {entry.quantity}x
+                          </div>
+                          {/* Checkbox icon */}
+                          <div className="absolute top-1 right-1">
+                            {selected ? (
+                              <CheckSquare size={14} className="text-bg-accent" />
+                            ) : (
+                              <Square size={14} className="text-font-muted" />
+                            )}
+                          </div>
+                        </button>
+                        {/* Flip button for double-faced cards */}
+                        {backImage && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleFlip(key)
+                            }}
+                            className={`absolute bottom-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-bg-dark/80 text-[10px] font-bold text-font-primary backdrop-blur-sm hover:bg-bg-accent hover:text-font-white transition-colors ${
+                              isFlipped ? 'bg-bg-accent/80 text-font-white' : ''
+                            }`}
+                            title={isFlipped ? 'Show front' : 'Show back'}
+                          >
+                            ↻
+                          </button>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -818,23 +1000,12 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
         <div className="shrink-0 border-t border-border bg-bg-surface px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
-              onClick={handleGenerate}
-              disabled={generating || !canGenerate}
+              onClick={openPreview}
+              disabled={!canGenerate}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-bg-accent px-4 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {generating ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-font-white/30 border-t-font-white" />
-                  {progress.total > 0
-                    ? `${progress.done}/${progress.total}`
-                    : 'Generating…'}
-                </>
-              ) : (
-                <>
-                  <Printer size={16} />
-                  Generate PDF
-                </>
-              )}
+              <Printer size={16} />
+              Preview PDF
             </button>
             {canShareFiles && (
               <button
@@ -849,6 +1020,178 @@ export default function ProxyPrintModal({ deckName, cards, onClose }: ProxyPrint
           </div>
         </div>
       </div>
+
+      {/* ====== PREVIEW MODAL — full screen grid ====== */}
+      {showPreview && (() => {
+        const slotsPerPage = Math.max(1, grid.cols * grid.rows)
+        const previewPages = Math.max(1, Math.ceil(expandedOrder.length / slotsPerPage))
+        const paginated: (Array<{ card: CardRow; board: string } | null>)[] = []
+        for (let pi = 0; pi < previewPages; pi++) {
+          const start = pi * slotsPerPage
+          const slots: Array<{ card: CardRow; board: string } | null> = []
+          for (let si = 0; si < slotsPerPage; si++) {
+            const idx = start + si
+            slots.push(idx < expandedOrder.length ? expandedOrder[idx] : null)
+          }
+          paginated.push(slots)
+        }
+        const gridGapXPx = Math.max(4, gapX * 2)
+        const gridGapYPx = Math.max(4, gapY * 2)
+
+        return (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-bg-dark" onClick={closePreview}>
+          {/* Header */}
+          <div className="flex items-center justify-between shrink-0 border-b border-border bg-bg-surface px-3 py-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <button onClick={closePreview} className="rounded p-1 text-font-muted hover:bg-bg-hover hover:text-font-primary">
+                <X size={18} />
+              </button>
+              <h2 className="text-sm font-bold text-font-primary">Preview & Order</h2>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-font-muted">
+              <span>{expandedOrder.length} card{expandedOrder.length !== 1 ? 's' : ''} · {previewPages} page{previewPages !== 1 ? 's' : ''}</span>
+              <span className="hidden sm:inline">{grid.cols}×{grid.rows} · gap {gapX}/{gapY} mm</span>
+            </div>
+          </div>
+
+          {/* Grid area */}
+          <div className="flex-1 min-h-0 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {expandedOrder.length === 0 ? (
+              <p className="text-sm text-font-muted text-center py-16">No cards selected.</p>
+            ) : (
+              <div className="flex flex-col items-center gap-6 py-4 px-2">
+                {paginated.map((slots, pageIdx) => (
+                  <div key={pageIdx} className="flex flex-col items-center w-full max-w-[1200px]">
+                    <span className="text-[10px] font-semibold text-font-muted mb-2 tracking-wide">
+                      PAGE {pageIdx + 1} OF {previewPages}
+                    </span>
+                    <div
+                      className="grid justify-center w-full"
+                      style={{
+                        gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`,
+                        gap: `${gridGapYPx}px ${gridGapXPx}px`,
+                        maxWidth: `${grid.cols * 120 + (grid.cols - 1) * gridGapXPx}px`,
+                      }}
+                    >
+                      {slots.map((slot, slotIdx) => {
+                        const globalIdx = pageIdx * slotsPerPage + slotIdx
+                        const isDragging = dragSlot === globalIdx
+                        const isDragOver = dragOverSlot === globalIdx
+                        if (!slot) {
+                          return (
+                            <div
+                              key={`empty-${slotIdx}`}
+                              className="aspect-[63/88] rounded border border-dashed border-border/20 bg-bg-cell/10"
+                            />
+                          )
+                        }
+                        const backImage = getBackFaceSmallImage(slot.card)
+                        const slotKey = `${slot.card.id}-${globalIdx}`
+                        const isFlipped = flippedCards.has(slotKey)
+                        const imageSrc = isFlipped && backImage ? backImage : slot.card.image_small
+                        return (
+                          <div
+                            key={slotKey}
+                            draggable
+                            onDragStart={() => handleDragStart(globalIdx)}
+                            onDragOver={(e) => handleDragOver(e, globalIdx)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={() => handleDrop(globalIdx)}
+                            onDragEnd={handleDragEnd}
+                            className={`relative aspect-[63/88] rounded overflow-hidden border-2 transition-all cursor-grab active:cursor-grabbing ${
+                              isDragging ? 'opacity-30 scale-95 border-bg-accent' :
+                              isDragOver ? 'border-bg-accent ring-2 ring-bg-accent/50 scale-[1.02]' :
+                              'border-transparent hover:border-border/50'
+                            }`}
+                            style={{ touchAction: 'none' }}
+                          >
+                            {imageSrc ? (
+                              <img src={imageSrc} alt={slot.card.name} className="w-full h-full object-cover" draggable={false} loading="lazy" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-bg-cell p-1">
+                                <span className="text-[9px] text-font-muted text-center leading-tight">{slot.card.name}</span>
+                              </div>
+                            )}
+                            {/* Flip toggle for double-faced cards */}
+                            {backImage && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleFlip(slotKey); }}
+                                className={`absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-bg-dark/80 text-[8px] font-bold text-font-primary hover:bg-bg-accent hover:text-font-white transition-colors ${
+                                  isFlipped ? 'bg-bg-accent/80 text-font-white' : ''
+                                }`}
+                                title={isFlipped ? 'Show front' : 'Show back'}
+                              >
+                                ↻
+                              </button>
+                            )}
+                            {/* Position number — top-left */}
+                            <div className="absolute top-0.5 left-0.5 flex h-4 min-w-[16px] items-center justify-center rounded bg-bg-dark/70 px-0.5 text-[8px] font-bold text-font-primary/80 backdrop-blur-sm">
+                              {globalIdx + 1}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="shrink-0 border-t border-border bg-bg-surface px-3 py-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPreviewPage(Math.max(0, previewPage - 1))}
+                  disabled={previewPage === 0}
+                  className="rounded p-1 text-font-muted hover:bg-bg-hover hover:text-font-primary disabled:opacity-25"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <span className="text-xs text-font-secondary tabular-nums min-w-[3rem] text-center">
+                  {previewPage + 1}/{previewPages}
+                </span>
+                <button
+                  onClick={() => setPreviewPage(Math.min(previewPages - 1, previewPage + 1))}
+                  disabled={previewPage >= previewPages - 1}
+                  className="rounded p-1 text-font-muted hover:bg-bg-hover hover:text-font-primary disabled:opacity-25"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <span className="hidden sm:inline text-[10px] text-font-muted ml-2">Drag cards to reorder</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating || sendingOrder || expandedOrder.length === 0}
+                  className="flex items-center gap-1.5 rounded-lg bg-bg-accent px-3 py-1.5 text-xs font-bold text-font-white hover:bg-bg-accent/80 disabled:opacity-40"
+                >
+                  {generating ? (
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-font-white/30 border-t-font-white" />
+                  ) : (
+                    <Printer size={14} />
+                  )}
+                  {generating ? 'Generating…' : 'Generate PDF'}
+                </button>
+                <button
+                  onClick={handlePrintOrder}
+                  disabled={generating || sendingOrder || expandedOrder.length === 0}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-font-secondary hover:bg-bg-hover disabled:opacity-40"
+                >
+                  {sendingOrder ? (
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-font-secondary/30 border-t-font-secondary" />
+                  ) : (
+                    <Send size={14} />
+                  )}
+                  {sendingOrder ? 'Sending…' : 'Print at StudioB35'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )})()}
     </div>
   )
 }
