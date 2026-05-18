@@ -197,7 +197,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
         const { data: localTokens } = await supabase
           .from('cards')
           .select(CARD_GAME_COLUMNS)
-          .or('type_line.ilike.%Token%,type_line.ilike.%Dungeon%,type_line.ilike.%Emblem%,type_line.ilike.%Plane%,type_line.ilike.%Scheme%')
+          .or('type_line.ilike.%Token%,type_line.ilike.%Dungeon%,type_line.ilike.%Emblem%,type_line.ilike.%Plane%,type_line.ilike.%Scheme%,layout.eq.token,layout.eq.double_faced_token,layout.eq.emblem')
           .ilike('name', `%${tokenSearch.trim()}%`)
           .limit(10)
 
@@ -832,29 +832,31 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
           </div>
 
           {/* Board tabs */}
-          <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
+          <div className="mb-3 grid grid-cols-5 gap-1 rounded-lg bg-bg-cell p-1">
             {(['main', 'sideboard', 'maybeboard', 'tokens', 'removed'] as BoardTab[]).map((tab) => {
               return (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`flex-1 rounded-md px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                  className={`min-w-0 overflow-hidden rounded-md px-1 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:py-2 sm:text-sm ${
                     activeTab === tab
                       ? 'bg-bg-surface text-font-primary shadow-sm'
                       : 'text-font-secondary hover:text-font-primary'
                   }`}
                 >
-                  <span className="sm:hidden">
-                    {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : tab === 'tokens' ? 'Tkns' : 'Rmvd'}
-                  </span>
-                  <span className="hidden sm:inline">
-                    {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : tab === 'tokens' ? 'Tokens' : 'Removed'}
-                  </span>
-                  {tabCounts[tab] != null && (
-                    <span className="ml-1 text-[10px] sm:text-xs text-font-muted">
-                      ({tabCounts[tab]})
+                  <span className="flex min-w-0 items-center justify-center whitespace-nowrap">
+                    <span className="truncate sm:hidden">
+                      {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : tab === 'tokens' ? 'Tkns' : 'Rmvd'}
                     </span>
-                  )}
+                    <span className="hidden truncate sm:inline">
+                      {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : tab === 'tokens' ? 'Tokens' : 'Removed'}
+                    </span>
+                    {tabCounts[tab] != null && (
+                      <span className="ml-1 shrink-0 text-[10px] text-font-muted sm:text-xs">
+                        ({tabCounts[tab]})
+                      </span>
+                    )}
+                  </span>
                 </button>
               )
             })}
@@ -1119,9 +1121,28 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
             setImportPrefill('')
           }}
           onCardsImported={(imported) => {
-            for (const { card, board } of imported) {
-              handleCardAdded(card, board)
-            }
+            setCards((prev) => {
+              const next = [...prev]
+              for (const { card, board, quantity, isFoil } of imported) {
+                const existingIdx = next.findIndex(
+                  (c) => c.card.id === card.id && c.board === board && c.isFoil === isFoil
+                )
+                if (existingIdx >= 0) {
+                  next[existingIdx] = { ...next[existingIdx], quantity: next[existingIdx].quantity + quantity }
+                } else {
+                  next.push({
+                    id: `imp-${card.id}-${board}-${isFoil ? 'f' : 'r'}`,
+                    card,
+                    quantity,
+                    board,
+                    isFoil,
+                  })
+                }
+              }
+              return next
+            })
+            setShowImport(false)
+            setImportPrefill('')
           }}
         />
       )}

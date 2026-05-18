@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /**
- * One-shot importer for Scryfall `layout:double_faced_token` cards.
+ * Generic Scryfall layout importer.
  *
- * The default bulk sync historically skipped this layout, which dropped
- * every dungeon (Undercity, Lost Mine, Tomb of Annihilation, Dungeon of
- * the Mad Mage, the Initiative) plus any double-sided token from the DB.
- * After fixing bulk-sync.mjs, this script backfills the missing rows
- * without re-downloading the full 163 MB bulk dump.
+ * Targets a single Scryfall `layout:` value, paginates unique prints, and
+ * upserts each row into the cards table via the service-role client. Used
+ * to backfill layouts the bulk sync historically skipped (token,
+ * double_faced_token for dungeons) without re-downloading the full
+ * default_cards bulk dump (~163 MB).
  *
  * Usage:
- *   node scripts/import-dual-token-cards.mjs
+ *   node scripts/import-cards-by-layout.mjs --layout=token
+ *   node scripts/import-cards-by-layout.mjs --layout=double_faced_token
+ *   node scripts/import-cards-by-layout.mjs --layout=emblem
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -102,14 +104,18 @@ async function fetchAllPages(url) {
 }
 
 async function main() {
-  console.log('Fetching layout:double_faced_token from Scryfall...')
-  const cards = await fetchAllPages(
-    'https://api.scryfall.com/cards/search?q=layout%3Adouble_faced_token&unique=prints&order=released'
-  )
+  const args = process.argv.slice(2)
+  const layout = args.find(a => a.startsWith('--layout='))?.split('=')[1]
+  if (!layout) {
+    console.error('Missing --layout=<value>. Examples: token, double_faced_token, emblem')
+    process.exit(1)
+  }
+  console.log(`Fetching layout:${layout} from Scryfall...`)
+  const url = `https://api.scryfall.com/cards/search?q=layout%3A${encodeURIComponent(layout)}&unique=prints&order=released`
+  const cards = await fetchAllPages(url)
   console.log(`  ${cards.length} cards found`)
 
-  // Filter out art-series and the cards whose front/back lacks an image
-  // (Scryfall sometimes lists these as placeholders).
+  // Skip placeholders without imagery (Scryfall sometimes lists them).
   const importable = cards.filter(c => {
     if (!c.id) return false
     if (!c.image_uris && !c.card_faces?.[0]?.image_uris) return false
@@ -131,7 +137,7 @@ async function main() {
     console.log(`  upserted ${upserted}/${mapped.length}`)
   }
 
-  console.log(`Done. ${upserted} double-faced tokens (including dungeons) upserted.`)
+  console.log(`Done. ${upserted} cards with layout:${layout} upserted.`)
 }
 
 main().catch(err => {
