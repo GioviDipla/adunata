@@ -14,7 +14,7 @@ interface ImportCardsModalProps {
   /** Pre-fills the textarea — used by the import-retry flow. */
   initialText?: string
   onClose: () => void
-  onCardsImported: (cards: { card: CardRow; board: string }[]) => void
+  onCardsImported: (cards: { card: CardRow; board: string; quantity: number; isFoil: boolean }[]) => void
 }
 
 export default function ImportCardsModal({
@@ -62,7 +62,7 @@ export default function ImportCardsModal({
       })
 
       const data = await res.json() as {
-        imported?: { card: CardRow; board: string }[]
+        imported?: { card: CardRow; board: string; quantity: number; isFoil?: boolean }[]
         failures?: { name: string; reason: string }[]
         error?: string
       }
@@ -77,7 +77,7 @@ export default function ImportCardsModal({
       const failed = data.failures ?? []
 
       if (imported.length > 0) {
-        onCardsImported(imported.map((i) => ({ card: i.card, board: i.board })))
+        onCardsImported(imported.map((i) => ({ card: i.card, board: i.board, quantity: i.quantity, isFoil: i.isFoil ?? false })))
       }
 
       if (failed.length === 0) {
