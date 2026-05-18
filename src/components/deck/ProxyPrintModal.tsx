@@ -92,18 +92,32 @@ function deriveScryfallImageUrls(card: CardRow): string[] {
 }
 
 function getBackFaceImage(card: CardRow): string | null {
+  // Only double-faced cards have a back face
   if (!Array.isArray(card.card_faces) || card.card_faces.length < 2) return null
   const backFace = card.card_faces[1]
-  if (!backFace || typeof backFace !== 'object' || Array.isArray(backFace)) return null
-  const imageUris = backFace.image_uris
-  if (!imageUris || typeof imageUris !== 'object' || Array.isArray(imageUris)) return null
-  const small = imageUris.small
-  if (typeof small === 'string' && small.length > 0) return small
-  const normal = imageUris.normal
-  if (typeof normal === 'string' && normal.length > 0) return normal
-  const large = imageUris.large
-  if (typeof large === 'string' && large.length > 0) return large
+  if (backFace && typeof backFace === 'object' && !Array.isArray(backFace)) {
+    const imageUris = backFace.image_uris
+    if (imageUris && typeof imageUris === 'object' && !Array.isArray(imageUris)) {
+      // Prefer largest available image
+      const large = imageUris.large
+      if (typeof large === 'string' && large.length > 0) return large
+      const normal = imageUris.normal
+      if (typeof normal === 'string' && normal.length > 0) return normal
+      const small = imageUris.small
+      if (typeof small === 'string' && small.length > 0) return small
+    }
+  }
+  // Fallback: some layouts (dungeon, emblem) store card_faces without
+  // full image_uris. Derive back url from scryfall_id.
+  const id = card.scryfall_id
+  if (id.length >= 2) {
+    return `https://cards.scryfall.io/large/back/${id[0]}/${id[1]}/${id}.jpg`
+  }
   return null
+}
+
+function getPreviewImage(card: CardRow): string | null {
+  return card.image_normal || card.image_small
 }
 
 export default function ProxyPrintModal({ deckName, cards, userName, onClose }: ProxyPrintModalProps) {
@@ -567,7 +581,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                     const isFlipped = flippedCards.has(key)
                     const backImage = getBackFaceImage(entry.card)
                     const showBack = isFlipped && backImage
-                    const imageSrc = showBack ? backImage : entry.card.image_small
+                    const imageSrc = showBack ? backImage : getPreviewImage(entry.card)
                     return (
                       <div
                         key={key}
@@ -1066,16 +1080,16 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
             ) : (
               <div className="flex flex-col items-center gap-8 py-4 px-1 sm:px-4">
                 {paginated.map((slots, pageIdx) => (
-                  <div key={pageIdx} className="flex flex-col items-center w-full max-w-[1600px]">
+                  <div key={pageIdx} className="flex flex-col items-center w-full">
                     <span className="text-[10px] font-semibold text-font-muted mb-2 tracking-wide">
                       PAGE {pageIdx + 1} OF {previewPages}
                     </span>
                     <div
-                      className="grid justify-center"
+                      className="grid justify-center mx-auto"
                       style={{
-                        gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`,
+                        gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 260px))`,
                         gap: `${gridGapYPx}px ${gridGapXPx}px`,
-                        width: '100%',
+                        maxWidth: `${grid.cols * 260 + (grid.cols - 1) * gridGapXPx}px`,
                       }}
                     >
                       {slots.map((slot, slotIdx) => {
@@ -1093,7 +1107,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                         const backImage = getBackFaceImage(slot.card)
                         const slotKey = `${slot.card.id}-${globalIdx}`
                         const isFlipped = flippedCards.has(slotKey)
-                        const imageSrc = isFlipped && backImage ? backImage : slot.card.image_small
+                        const imageSrc = isFlipped && backImage ? backImage : getPreviewImage(slot.card)
                         return (
                           <div
                             key={slotKey}
