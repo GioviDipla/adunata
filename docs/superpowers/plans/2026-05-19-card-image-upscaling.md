@@ -82,7 +82,7 @@ create table public.card_image_batches (
   label text,
   status text not null default 'queued'
     check (status in ('queued', 'processing', 'completed', 'completed_with_errors', 'failed', 'cancelled')),
-  target_profile text not null default 'hd-4x',
+  target_profile text not null default 'hd-2x',
   total_jobs integer not null default 0 check (total_jobs >= 0),
   completed_jobs integer not null default 0 check (completed_jobs >= 0),
   failed_jobs integer not null default 0 check (failed_jobs >= 0),
@@ -108,10 +108,10 @@ create table public.card_image_assets (
   storage_path text not null,
   status text not null default 'queued'
     check (status in ('queued', 'processing', 'ready', 'failed', 'cancelled')),
-  target_profile text not null default 'hd-4x',
+  target_profile text not null default 'hd-2x',
   model text not null default 'realesrgan-x4plus',
-  scale integer not null default 4 check (scale > 0),
-  target_dpi integer not null default 1200 check (target_dpi > 0),
+  scale integer not null default 2 check (scale > 0),
+  target_dpi integer not null default 600 check (target_dpi > 0),
   width_px integer check (width_px is null or width_px > 0),
   height_px integer check (height_px is null or height_px > 0),
   bytes bigint check (bytes is null or bytes > 0),
@@ -451,21 +451,21 @@ const { buildCardImageStoragePath } = loadTsModule(path.resolve('src/lib/card-im
 
 test('builds stable front path', () => {
   assert.equal(
-    buildCardImageStoragePath({ scryfallId: 'abcdef', faceName: 'front', profile: 'hd-4x' }),
-    'scryfall/a/b/abcdef/front@4x.png',
+    buildCardImageStoragePath({ scryfallId: 'abcdef', faceName: 'front', profile: 'hd-2x' }),
+    'scryfall/a/b/abcdef/front@2x.png',
   )
 })
 
 test('builds stable back path', () => {
   assert.equal(
-    buildCardImageStoragePath({ scryfallId: 'abcdef', faceName: 'back', profile: 'hd-4x' }),
-    'scryfall/a/b/abcdef/back@4x.png',
+    buildCardImageStoragePath({ scryfallId: 'abcdef', faceName: 'back', profile: 'hd-2x' }),
+    'scryfall/a/b/abcdef/back@2x.png',
   )
 })
 
 test('rejects missing scryfall id', () => {
   assert.throws(
-    () => buildCardImageStoragePath({ scryfallId: '', faceName: 'front', profile: 'hd-4x' }),
+    () => buildCardImageStoragePath({ scryfallId: '', faceName: 'front', profile: 'hd-2x' }),
     /scryfall_id/,
   )
 })
@@ -477,7 +477,7 @@ Create `src/lib/card-images/profiles.ts`:
 
 ```ts
 export interface CardImageProfile {
-  name: 'hd-4x'
+  name: 'hd-2x'
   model: string
   scale: number
   targetDpi: number
@@ -485,16 +485,16 @@ export interface CardImageProfile {
 }
 
 export const CARD_IMAGE_PROFILES: Record<CardImageProfile['name'], CardImageProfile> = {
-  'hd-4x': {
-    name: 'hd-4x',
+  'hd-2x': {
+    name: 'hd-2x',
     model: 'realesrgan-x4plus',
-    scale: 4,
-    targetDpi: 1200,
+    scale: 2,
+    targetDpi: 600,
     outputMimeType: 'image/png',
   },
 }
 
-export function getCardImageProfile(name = 'hd-4x'): CardImageProfile {
+export function getCardImageProfile(name = 'hd-2x'): CardImageProfile {
   const profile = CARD_IMAGE_PROFILES[name as CardImageProfile['name']]
   if (!profile) throw new Error(`Unsupported card image profile: ${name}`)
   return profile
@@ -507,14 +507,14 @@ Create `src/lib/card-images/storage-path.ts`:
 export interface CardImageStoragePathOptions {
   scryfallId: string
   faceName: 'front' | 'back'
-  profile: 'hd-4x'
+  profile: 'hd-2x'
 }
 
 export function buildCardImageStoragePath(options: CardImageStoragePathOptions): string {
   const id = options.scryfallId
   if (!id || id.length < 2) throw new Error('scryfall_id is required to build card image storage path')
 
-  const scaleSuffix = options.profile === 'hd-4x' ? '4x' : options.profile
+  const scaleSuffix = options.profile === 'hd-2x' ? '2x' : options.profile
   return `scryfall/${id[0]}/${id[1]}/${id}/${options.faceName}@${scaleSuffix}.png`
 }
 ```
@@ -717,7 +717,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
   const cardIds = Array.isArray(body.cardIds) ? body.cardIds.filter((id): id is string => typeof id === 'string') : []
   const label = typeof body.label === 'string' ? body.label : null
-  const profile = getCardImageProfile(typeof body.targetProfile === 'string' ? body.targetProfile : 'hd-4x')
+  const profile = getCardImageProfile(typeof body.targetProfile === 'string' ? body.targetProfile : 'hd-2x')
 
   if (cardIds.length === 0) {
     return NextResponse.json({ error: 'cardIds required' }, { status: 400 })
@@ -916,7 +916,7 @@ export default function CardImageUpscaleAdmin() {
     const res = await fetch('/api/admin/card-images/batches', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cardIds, targetProfile: 'hd-4x', label: `Manual batch ${new Date().toISOString()}` }),
+      body: JSON.stringify({ cardIds, targetProfile: 'hd-2x', label: `Manual batch ${new Date().toISOString()}` }),
     })
     if (res.ok) {
       setSelected(new Set())
@@ -1179,7 +1179,7 @@ function parseArgs(argv) {
   return {
     limit: Number(args.get('limit') ?? 25),
     concurrency: Number(args.get('concurrency') ?? 1),
-    profile: String(args.get('profile') ?? 'hd-4x'),
+    profile: String(args.get('profile') ?? 'hd-2x'),
     assetId: args.get('asset-id') ? String(args.get('asset-id')) : null,
     dryRun: args.get('dry-run') === true,
     keepTemp: args.get('keep-temp') === true,
@@ -1238,7 +1238,7 @@ async function downloadSource(asset, filePath) {
 
 function runUpscale(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
-    const child = spawn(REALESRGAN_BIN, ['-i', inputPath, '-o', outputPath, '-n', REALESRGAN_MODEL, '-s', '4', '-f', 'png'])
+    const child = spawn(REALESRGAN_BIN, ['-i', inputPath, '-o', outputPath, '-n', REALESRGAN_MODEL, '-s', '2', '-f', 'png'])
     let stderr = ''
     child.stderr.on('data', (chunk) => { stderr += chunk.toString() })
     child.on('close', (code) => {
@@ -1429,7 +1429,7 @@ For a ready asset:
 - click signed URL/open action in admin UI;
 - confirm PNG opens;
 - confirm DB dimensions match the PNG dimensions;
-- confirm Storage path follows `scryfall/{a}/{b}/{id}/front@4x.png` or `back@4x.png`.
+- confirm Storage path follows `scryfall/{a}/{b}/{id}/front@2x.png` or `back@2x.png`.
 
 - [ ] **Step 7: Commit fixes if needed**
 

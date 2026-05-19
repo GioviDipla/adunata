@@ -73,7 +73,7 @@ Proposed fields:
 - `created_by uuid not null references auth.users(id) on delete restrict`
 - `label text`
 - `status text not null default 'queued'`
-- `target_profile text not null default 'hd-4x'`
+- `target_profile text not null default 'hd-2x'`
 - `total_jobs integer not null default 0`
 - `completed_jobs integer not null default 0`
 - `failed_jobs integer not null default 0`
@@ -110,10 +110,10 @@ Proposed fields:
 - `source_url text not null`
 - `storage_path text not null`
 - `status text not null default 'queued'`
-- `target_profile text not null default 'hd-4x'`
+- `target_profile text not null default 'hd-2x'`
 - `model text not null default 'realesrgan-x4plus'`
-- `scale integer not null default 4`
-- `target_dpi integer not null default 1200`
+- `scale integer not null default 2`
+- `target_dpi integer not null default 600`
 - `width_px integer`
 - `height_px integer`
 - `bytes bigint`
@@ -217,11 +217,11 @@ card-images-hd
 Stable object path pattern:
 
 ```text
-scryfall/{first_char}/{second_char}/{scryfall_id}/front@4x.png
-scryfall/{first_char}/{second_char}/{scryfall_id}/back@4x.png
+scryfall/{first_char}/{second_char}/{scryfall_id}/front@2x.png
+scryfall/{first_char}/{second_char}/{scryfall_id}/back@2x.png
 ```
 
-For single-faced cards, only `front@4x.png` is generated. For double-faced cards, `front@4x.png` and `back@4x.png` can be queued independently.
+For single-faced cards, only `front@2x.png` is generated. For double-faced cards, `front@2x.png` and `back@2x.png` can be queued independently.
 
 The path pattern is intentionally compatible with a future public image API.
 
@@ -301,7 +301,7 @@ Top controls:
 - search input;
 - status filter;
 - set code filter;
-- target profile display, fixed to `hd-4x` for MVP;
+- target profile display, fixed to `hd-2x` for MVP;
 - selected count;
 - primary action: `Create upscale batch`.
 
@@ -372,7 +372,7 @@ Route responsibilities:
 
 Batch creation rules:
 
-- The request accepts `target_profile`, defaulting to `hd-4x`.
+- The request accepts `target_profile`, defaulting to `hd-2x`.
 - The API resolves each selected card into one or more face jobs.
 - For double-faced cards, queue one asset per face when source URLs exist.
 - If an asset is already `ready`, count it as available and do not requeue.
@@ -422,7 +422,7 @@ Locking and retry rules:
 Example command:
 
 ```bash
-node scripts/upscale-card-images.mjs --limit=50 --concurrency=1 --profile=hd-4x
+node scripts/upscale-card-images.mjs --limit=50 --concurrency=1 --profile=hd-2x
 ```
 
 CLI options:
@@ -430,7 +430,7 @@ CLI options:
 ```text
 --limit=<n>              maximum jobs to process in this run; default 25
 --concurrency=<n>        parallel upscale processes; default 1
---profile=<name>         target profile; default hd-4x
+--profile=<name>         target profile; default hd-2x
 --asset-id=<uuid>        process one specific asset
 --dry-run                print selected work and commands without claiming jobs
 --keep-temp              keep temporary input/output files for inspection
@@ -462,7 +462,7 @@ Temporary files:
 Real-ESRGAN command shape should be generated from env and profile config, not hard-coded inside the worker loop. Example conceptual command:
 
 ```bash
-"$REALESRGAN_BIN" -i source.png -o output.png -n "$REALESRGAN_MODEL" -s 4
+"$REALESRGAN_BIN" -i source.png -o output.png -n "$REALESRGAN_MODEL" -s 2
 ```
 
 The worker should capture exit code, stderr, and stdout. Store only concise failure text in `last_error`; verbose logs stay local.
@@ -498,7 +498,7 @@ REALESRGAN_MODEL=realesrgan-x4plus
 4. Verify manually with one source image before using the app queue:
 
 ```bash
-"$REALESRGAN_BIN" -i /tmp/source.png -o /tmp/output.png -n "$REALESRGAN_MODEL" -s 4 -f png
+"$REALESRGAN_BIN" -i /tmp/source.png -o /tmp/output.png -n "$REALESRGAN_MODEL" -s 2 -f png
 ```
 
 If the NCNN/Vulkan build is not stable on the M1 Max environment, keep the worker abstraction and swap the command adapter later. The database/storage design does not depend on the exact upscaler binary.
@@ -515,10 +515,10 @@ For a standard MTG card at 63×88 mm:
 - 600 dpi is approximately `1488×2079 px`.
 - 1200 dpi is approximately `2976×4157 px`.
 
-If the source is a Scryfall PNG around `745×1040`, a 4x upscale lands close to the 1200 dpi-equivalent target. The MVP target profile is therefore:
+If the source is a Scryfall large image around `672×936`, a 2x upscale lands around `1344×1872`, which is a lighter print asset than the previous 4x target while still improving source sharpness. The MVP target profile is therefore:
 
 ```text
-hd-4x
+hd-2x
 ```
 
 with PNG output and metadata storing actual pixel dimensions. The system should store real dimensions instead of relying only on a DPI label.
@@ -528,17 +528,17 @@ with PNG output and metadata storing actual pixel dimensions. The system should 
 The MVP supports one target profile:
 
 ```text
-hd-4x
+hd-2x
 ```
 
 Profile definition:
 
 ```json
 {
-  "name": "hd-4x",
+  "name": "hd-2x",
   "model": "realesrgan-x4plus",
-  "scale": 4,
-  "target_dpi": 1200,
+  "scale": 2,
+  "target_dpi": 600,
   "output_mime_type": "image/png"
 }
 ```
@@ -546,9 +546,9 @@ Profile definition:
 Keep the profile name in both batch and asset rows. Future profiles can be added without changing the storage model, for example:
 
 ```text
-hd-2x
-anime-4x
-print-clean-4x
+hd-4x
+anime-2x
+print-clean-2x
 ```
 
 Do not add multiple profiles in the MVP UI. One profile is enough until real samples prove the need for another model.
@@ -558,8 +558,8 @@ Do not add multiple profiles in the MVP UI. One profile is enough until real sam
 The MVP generates and stores PNG only:
 
 ```text
-front@4x.png
-back@4x.png
+front@2x.png
+back@2x.png
 ```
 
 Reasons:
@@ -573,7 +573,7 @@ Do not generate JPEG/WebP derivatives in the MVP. Add them later only if measure
 Future derivative examples:
 
 ```text
-front@4x.print.jpg
+front@2x.print.jpg
 front@2x.preview.webp
 ```
 
@@ -592,7 +592,7 @@ Worker validation per asset:
 - Output MIME type is `image/png`.
 - Output dimensions are read from the generated image, not assumed.
 - Width and height are greater than source dimensions.
-- Expected 4x output is roughly source dimensions multiplied by 4, allowing a small tolerance if the tool pads/crops.
+- Expected 2x output is roughly source dimensions multiplied by 2, allowing a small tolerance if the tool pads/crops.
 - File size is non-zero and below the Storage limit.
 - SHA-256 checksum is stored in `checksum`.
 - Storage upload succeeds before `status` becomes `ready`.
@@ -760,7 +760,7 @@ The current MVP only needs stable storage paths and complete metadata.
 - MVP is generation/storage only; public API serving is deferred.
 - Storage starts private.
 - Canonical generated format is PNG only.
-- Initial profile is `hd-4x`.
+- Initial profile is `hd-2x`.
 - Local worker uses a command adapter around `realesrgan-ncnn-vulkan` first.
 - No full-catalog automatic generation in MVP.
 - No sample seed helper in the first implementation; use admin search/select to create the initial sample batch.
