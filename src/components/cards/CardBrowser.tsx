@@ -9,6 +9,7 @@ import type { Database } from '@/types/supabase'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import CardGrid from './CardGrid'
 import CardContextMenu from './CardContextMenu'
+import UpscaledBadge from './UpscaledBadge'
 
 // CardDetail mounts only when a card is opened — defer the chunk so the
 // initial /cards paint doesn't ship modal + printings panel + Scryfall
@@ -689,11 +690,9 @@ export default function CardBrowser({
                   ? 'bg-bg-accent/20 text-font-accent ring-1 ring-bg-accent/40'
                   : 'bg-bg-card border border-border text-font-secondary hover:text-font-primary'
               }`}
-              title={showUpscaledOnly ? 'Show all cards' : 'Show only cards with an upscaled 2x image'}
+              title={showUpscaledOnly ? 'Show all cards' : 'Show only cards with an upscaled image'}
             >
-              <span className="inline-flex h-4 min-w-5 items-center justify-center rounded bg-bg-accent/90 px-1 text-[9px] font-black leading-none text-font-white">
-                2x
-              </span>
+              <UpscaledBadge />
               Upscaled only
             </button>
           </div>
