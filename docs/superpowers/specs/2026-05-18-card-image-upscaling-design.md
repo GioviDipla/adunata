@@ -522,7 +522,11 @@ REALESRGAN_TILE_SIZE=1024
   -v
 ```
 
-For Scryfall `large` card images, force a tile size larger than the source image when possible. A 672x936 card should use `-t 1024`; leaving `-t 0` in auto mode can split the card into multiple tiles and produce visible stitched blocks, which looks like a puzzle.
+Direct 2x output should not be produced by downscaling a generated 4x file. The current test evidence is:
+
+- `realesrgan-x4plus -s 4` produces the best-looking result, but the output is too large for the initial profile.
+- `realesrgan-x4plus -s 2` can produce visible tile/stitch artifacts with auto tiling, and forcing `-t 1024` avoids the puzzle effect but still does not match the visual quality of the 4x run.
+- Next direct-2x candidate is the native 2x model path exposed by the package: `realesr-animevideov3 -s 2`, tested with the same default runtime settings as the successful 4x command.
 
 If the NCNN/Vulkan build is not stable on the M1 Max environment, keep the worker abstraction and swap the command adapter later. The database/storage design does not depend on the exact upscaler binary.
 

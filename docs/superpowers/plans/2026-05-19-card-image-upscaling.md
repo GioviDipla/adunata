@@ -1123,6 +1123,8 @@ REALESRGAN_MODEL=realesrgan-x4plus
 REALESRGAN_TILE_SIZE=1024
 ```
 
+Before locking the worker defaults, validate direct 2x quality. The `realesrgan-x4plus` model is natively 4x; `-s 2` did not match the successful 4x visual result in the Karn test. Test `realesr-animevideov3 -s 2` as the native direct-2x candidate, without downsampling from a generated 4x image.
+
 Add to `package.json` scripts:
 
 ```json
