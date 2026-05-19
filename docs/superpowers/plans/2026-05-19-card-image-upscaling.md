@@ -37,7 +37,7 @@ Create:
 
 Modify:
 
-- `.env.local.example` — document `REALESRGAN_BIN`, `REALESRGAN_MODEL`.
+- `.env.local.example` — document `REALESRGAN_BIN`, `REALESRGAN_MODEL_PATH`, `REALESRGAN_MODEL`, `REALESRGAN_TILE_SIZE`.
 - `package.json` — add focused test and worker scripts.
 - `src/types/supabase.ts` — update hand-maintained types after migration.
 
@@ -1118,7 +1118,9 @@ Add to `.env.local.example`:
 
 ```env
 REALESRGAN_BIN=/absolute/path/to/realesrgan-ncnn-vulkan
+REALESRGAN_MODEL_PATH=/absolute/path/to/realesrgan-ncnn-vulkan/models
 REALESRGAN_MODEL=realesrgan-x4plus
+REALESRGAN_TILE_SIZE=1024
 ```
 
 Add to `package.json` scripts:
@@ -1145,10 +1147,13 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
 const REALESRGAN_BIN = process.env.REALESRGAN_BIN
+const REALESRGAN_MODEL_PATH = process.env.REALESRGAN_MODEL_PATH
 const REALESRGAN_MODEL = process.env.REALESRGAN_MODEL ?? 'realesrgan-x4plus'
+const REALESRGAN_TILE_SIZE = process.env.REALESRGAN_TILE_SIZE ?? '1024'
 
 if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Missing Supabase env')
 if (!REALESRGAN_BIN) throw new Error('Missing REALESRGAN_BIN')
+if (!REALESRGAN_MODEL_PATH) throw new Error('Missing REALESRGAN_MODEL_PATH')
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
@@ -1238,7 +1243,16 @@ async function downloadSource(asset, filePath) {
 
 function runUpscale(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
-    const child = spawn(REALESRGAN_BIN, ['-i', inputPath, '-o', outputPath, '-n', REALESRGAN_MODEL, '-s', '2', '-f', 'png'])
+    const child = spawn(REALESRGAN_BIN, [
+      '-i', inputPath,
+      '-o', outputPath,
+      '-m', REALESRGAN_MODEL_PATH,
+      '-n', REALESRGAN_MODEL,
+      '-s', '2',
+      '-t', REALESRGAN_TILE_SIZE,
+      '-j', '1:1:1',
+      '-f', 'png',
+    ])
     let stderr = ''
     child.stderr.on('data', (chunk) => { stderr += chunk.toString() })
     child.on('close', (code) => {
@@ -1481,7 +1495,9 @@ Do not commit `.env.local`. Confirm local config contains:
 
 ```env
 REALESRGAN_BIN=/absolute/path/to/realesrgan-ncnn-vulkan
+REALESRGAN_MODEL_PATH=/absolute/path/to/realesrgan-ncnn-vulkan/models
 REALESRGAN_MODEL=realesrgan-x4plus
+REALESRGAN_TILE_SIZE=1024
 ```
 
 - [ ] **Step 5: Stop dev server**

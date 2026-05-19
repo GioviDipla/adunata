@@ -462,7 +462,15 @@ Temporary files:
 Real-ESRGAN command shape should be generated from env and profile config, not hard-coded inside the worker loop. Example conceptual command:
 
 ```bash
-"$REALESRGAN_BIN" -i source.png -o output.png -n "$REALESRGAN_MODEL" -s 2
+"$REALESRGAN_BIN" \
+  -i source.png \
+  -o output.png \
+  -m "$REALESRGAN_MODEL_PATH" \
+  -n "$REALESRGAN_MODEL" \
+  -s 2 \
+  -t "${REALESRGAN_TILE_SIZE:-1024}" \
+  -j 1:1:1 \
+  -f png
 ```
 
 The worker should capture exit code, stderr, and stdout. Store only concise failure text in `last_error`; verbose logs stay local.
@@ -477,7 +485,9 @@ Environment variables:
 
 ```env
 REALESRGAN_BIN=/path/to/realesrgan-ncnn-vulkan
+REALESRGAN_MODEL_PATH=/path/to/realesrgan-ncnn-vulkan/models
 REALESRGAN_MODEL=realesrgan-x4plus
+REALESRGAN_TILE_SIZE=1024
 ```
 
 ### Local Real-ESRGAN Setup
@@ -492,14 +502,27 @@ Setup expectations:
 
 ```env
 REALESRGAN_BIN=/absolute/path/to/realesrgan-ncnn-vulkan
+REALESRGAN_MODEL_PATH=/absolute/path/to/realesrgan-ncnn-vulkan/models
 REALESRGAN_MODEL=realesrgan-x4plus
+REALESRGAN_TILE_SIZE=1024
 ```
 
 4. Verify manually with one source image before using the app queue:
 
 ```bash
-"$REALESRGAN_BIN" -i /tmp/source.png -o /tmp/output.png -n "$REALESRGAN_MODEL" -s 2 -f png
+"$REALESRGAN_BIN" \
+  -i /tmp/source.png \
+  -o /tmp/output.png \
+  -m "$REALESRGAN_MODEL_PATH" \
+  -n "$REALESRGAN_MODEL" \
+  -s 2 \
+  -t "${REALESRGAN_TILE_SIZE:-1024}" \
+  -j 1:1:1 \
+  -f png \
+  -v
 ```
+
+For Scryfall `large` card images, force a tile size larger than the source image when possible. A 672x936 card should use `-t 1024`; leaving `-t 0` in auto mode can split the card into multiple tiles and produce visible stitched blocks, which looks like a puzzle.
 
 If the NCNN/Vulkan build is not stable on the M1 Max environment, keep the worker abstraction and swap the command adapter later. The database/storage design does not depend on the exact upscaler binary.
 
