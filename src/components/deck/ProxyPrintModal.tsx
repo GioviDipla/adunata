@@ -238,7 +238,8 @@ interface UpscaledImagePrepareItem {
 interface UpscaledImagePrepareResponse {
   total: number
   cached: number
-  ready: number
+  queued: number
+  disabled: number
   failed: number
 }
 

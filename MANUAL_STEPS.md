@@ -4,6 +4,29 @@ Solo cose ancora da fare. Completati rimossi (tanto git ricorda).
 
 ---
 
+## [UPSCALE-WORKER] — Worker asincrono per immagini Ultra
+
+**Comportamento:** in produzione Vercel non genera immagini con Real-ESRGAN. Quando Ultra trova immagini mancanti, accoda righe `queued` in Supabase; un worker locale o dedicato deve processarle.
+
+Per attivare/disattivare l'accodamento automatico:
+
+```bash
+CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=true   # default: accoda missing asset
+CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=false  # disabilita accodamento automatico
+```
+
+Su Vercel imposta la variabile in Project Settings → Environment Variables. Per spegnere subito la feature, mettila a `false` e redeploy.
+
+Per consumare la coda dal Mac:
+
+```bash
+npm run upscale:card-images:watch -- --limit=10 --poll-interval-sec=30
+```
+
+Il Mac deve essere acceso, online e con `REALESRGAN_BIN`/`REALESRGAN_MODEL_PATH` configurati.
+
+---
+
 ## [PRINT-ORDER] — Setup Resend per "Print at StudioB35"
 
 **Problema:** bottone "Print at StudioB35" fa fetch a `/api/print-order` che invia email via Resend con PDF allegato a `amministrazione@studiob35.com`. `RESEND_API_KEY` è vuoto in `.env.local` e mancante completamente in Vercel → API risponde 500 → bottone resetta senza feedback (ora UI mostra errore).

@@ -12,6 +12,7 @@ Latest implementation note:
 - Ultra raster now prepares missing `hd-2x` assets in one batch for the whole proxy list before PDF generation, stores them, and reuses them on later PDF generations.
 - `hd-4x` remains on-demand only for Epic raster and is not stored.
 - SOS `layout=prepare` cards use one combined front image; back-face assets must not be queued unless the stored face has explicit `image_uris`.
+- Production Ultra missing assets are queued asynchronously. Vercel does not run Real-ESRGAN; a local or dedicated worker consumes `queued` rows. `CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=false` disables automatic queueing.
 
 ## Goal
 

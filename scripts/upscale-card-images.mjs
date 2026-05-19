@@ -54,10 +54,16 @@ function parseArgs(argv) {
     assetId: args.get('asset-id') ? String(args.get('asset-id')) : null,
     dryRun: args.get('dry-run') === true,
     keepTemp: args.get('keep-temp') === true,
+    watch: args.get('watch') === true,
+    pollIntervalSec: Number(args.get('poll-interval-sec') ?? 30),
     workerId: String(args.get('worker-id') ?? `${os.hostname()}-${process.pid}`),
     staleAfterMin: Number(args.get('stale-after-min') ?? 30),
     maxAttempts: Number(args.get('max-attempts') ?? 3),
   }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function selectAssets(options) {
@@ -199,21 +205,39 @@ if (options.concurrency !== 1) {
   console.warn('concurrency is parsed but the first worker implementation processes sequentially; using concurrency=1')
 }
 
-const assets = await selectAssets(options)
-if (options.dryRun) {
-  for (const asset of assets) {
-    console.log(JSON.stringify({
-      id: asset.id,
-      status: asset.status,
-      attempts: asset.attempts,
-      source_url: asset.source_url,
-      storage_path: asset.storage_path,
-    }))
+async function runOnce() {
+  const assets = await selectAssets(options)
+  if (options.dryRun) {
+    for (const asset of assets) {
+      console.log(JSON.stringify({
+        id: asset.id,
+        status: asset.status,
+        attempts: asset.attempts,
+        source_url: asset.source_url,
+        storage_path: asset.storage_path,
+      }))
+    }
+    console.log(`selected=${assets.length}`)
+    return assets.length
   }
-  console.log(`selected=${assets.length}`)
-  process.exit(0)
+
+  if (assets.length === 0) {
+    console.log('selected=0')
+    return 0
+  }
+
+  for (const asset of assets) {
+    await processAsset(asset, options)
+  }
+  return assets.length
 }
 
-for (const asset of assets) {
-  await processAsset(asset, options)
+if (options.dryRun || !options.watch) {
+  await runOnce()
+} else {
+  console.log(`watching queued card image assets every ${options.pollIntervalSec}s as ${options.workerId}`)
+  for (;;) {
+    const selected = await runOnce()
+    if (selected === 0) await sleep(Math.max(1, options.pollIntervalSec) * 1000)
+  }
 }
