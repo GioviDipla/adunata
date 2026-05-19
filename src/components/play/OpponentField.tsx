@@ -51,6 +51,7 @@ function toCardRow(cardId: number, data: CardMap[string]): CardRow {
     has_dies_trigger: data.hasDiesTrigger,
     has_end_step_trigger: data.hasEndStepTrigger,
     has_cast_trigger: data.hasCastTrigger,
+    has_upscaled_2x: false,
   }
 }
 

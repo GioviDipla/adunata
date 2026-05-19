@@ -20,6 +20,7 @@
 - 2026-05-19: Adjusted Ultra generation to batch-preflight the whole proxy list. `POST /api/card-image/upscaled` now receives all selected card faces, generates any missing `hd-2x` assets, stores them in `card-images-hd`, and then PDF generation reads the cached images with `GET /api/card-image/upscaled`. The GET path is cache-only; if an asset is still missing, PDF generation falls back to the next image candidate.
 - 2026-05-19: Investigated SOS failures. All failed assets were invalid derived back-face URLs for `layout=prepare` cards, where Scryfall stores one combined front image and `card_faces` have no `image_uris`. The source resolver and queue script now only derive fallback URLs for the front face; existing invalid back-face assets were marked `cancelled`.
 - 2026-05-19: Switched Ultra missing-asset handling to queued async for production. `POST /api/card-image/upscaled` now reads ready assets and queues missing `hd-2x` rows instead of running Real-ESRGAN inside Vercel. Set `CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=false` to disable automatic queueing. Run `npm run upscale:card-images:watch -- --limit=<n>` on a local worker machine to consume queued assets.
+- 2026-05-19: Added a denormalized `cards.has_upscaled_2x` flag maintained from ready `card_image_assets`, plus tiny `2x` badges on card thumbnails in Cards, Deckbuilder, and Deckviewer. Cards search can now filter to only printings with a ready `hd-2x` asset.
 
 Immediate sectioned commands:
 

@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Heart } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
+import UpscaledBadge from './UpscaledBadge'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import { formatPreferredPrice } from '@/lib/utils/price'
 
@@ -120,6 +121,10 @@ const CardItem = memo(function CardItem({ card, liked, onSelect, onContextAction
             {formatPreferredPrice(card)}
           </div>
         ) : null}
+
+        {card.has_upscaled_2x && (
+          <UpscaledBadge className="absolute bottom-1.5 right-1.5" />
+        )}
       </div>
 
       {/* Card info */}
@@ -148,6 +153,10 @@ const CardItem = memo(function CardItem({ card, liked, onSelect, onContextAction
       )}
     </div>
   )
-}, (prev, next) => prev.card.id === next.card.id && prev.liked === next.liked)
+}, (prev, next) =>
+  prev.card.id === next.card.id &&
+  prev.liked === next.liked &&
+  prev.card.has_upscaled_2x === next.card.has_upscaled_2x
+)
 
 export default CardItem

@@ -67,6 +67,7 @@ export interface Database {
           has_dies_trigger: boolean
           has_end_step_trigger: boolean
           has_cast_trigger: boolean
+          has_upscaled_2x: boolean
         }
         Insert: {
           id?: number
@@ -110,6 +111,7 @@ export interface Database {
           has_dies_trigger?: boolean
           has_end_step_trigger?: boolean
           has_cast_trigger?: boolean
+          has_upscaled_2x?: boolean
         }
         Update: {
           id?: number
@@ -153,6 +155,7 @@ export interface Database {
           has_dies_trigger?: boolean
           has_end_step_trigger?: boolean
           has_cast_trigger?: boolean
+          has_upscaled_2x?: boolean
         }
         Relationships: []
       }

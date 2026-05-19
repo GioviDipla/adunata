@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { Crown, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
+import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
 
@@ -241,6 +242,9 @@ export default function DeckTextView({
             alt={hoverCard.card.name}
             className="h-auto w-56 rounded-lg shadow-2xl"
           />
+          {hoverCard.card.has_upscaled_2x && (
+            <UpscaledBadge className="absolute bottom-1.5 right-1.5" />
+          )}
         </div>
       )}
       {contextMenu && onMoveToBoard && (() => {
