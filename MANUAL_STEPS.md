@@ -4,6 +4,28 @@ Solo cose ancora da fare. Completati rimossi (tanto git ricorda).
 
 ---
 
+## [PRINT-ORDER] — Setup Resend per "Print at StudioB35"
+
+**Problema:** bottone "Print at StudioB35" fa fetch a `/api/print-order` che invia email via Resend con PDF allegato a `amministrazione@studiob35.com`. `RESEND_API_KEY` è vuoto in `.env.local` e mancante completamente in Vercel → API risponde 500 → bottone resetta senza feedback (ora UI mostra errore).
+
+Cosa fare:
+1. Accedi a https://resend.com (stesso account usato per email auth, se già creato)
+2. **Domains** → Aggiungi e verifica `adunata.studiob35.com` (record DNS DKIM/SPF). Il sender configurato in `src/app/api/print-order/route.ts` è `orders@adunata.studiob35.com` — il dominio deve essere verificato altrimenti Resend rifiuta send.
+3. **API Keys** → crea chiave "adunata-print-order" con permesso `Sending access` su dominio sopra.
+4. Aggiungi la chiave a Vercel (tutti gli ambienti):
+   ```bash
+   printf "re_xxxxxxxxxxxx" | vercel env add RESEND_API_KEY production --yes
+   printf "re_xxxxxxxxxxxx" | vercel env add RESEND_API_KEY preview --yes
+   printf "re_xxxxxxxxxxxx" | vercel env add RESEND_API_KEY development --yes
+   ```
+5. Aggiorna `.env.local` riga 4: `RESEND_API_KEY="re_xxxxxxxxxxxx"` (rimuovi virgolette vuote esistenti).
+6. Redeploy: `vercel --prod` (o push su `release`/`main`).
+7. Test: apri un deck → "Print Proxy" → seleziona carte → Preview → "Print at StudioB35". Banner verde deve apparire e email arrivare ad `amministrazione@studiob35.com`.
+
+Nota payload: Vercel limita request body a 4.5 MB. PDF base64 di un commander deck full pages può sforare. Se Resend ok ma client vede errore "413" o "Body exceeded", serve refactor: upload PDF su Supabase Storage e passare URL al route handler.
+
+---
+
 ## [EMAIL] — Migliorare deliverability email (uscire dallo Spam)
 
 **Problema:** email di conferma iscrizione e reset password finiscono in Spam. Supabase di default usa SMTP condiviso con reputazione variabile. L'iCloud SMTP attuale ha limiti di volume e deliverability scarsa.

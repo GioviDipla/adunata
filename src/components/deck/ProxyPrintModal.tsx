@@ -54,6 +54,194 @@ const GRID_PRESETS: Record<Exclude<GridPreset, 'custom'>, { cols: number; rows: 
   '5x2': { cols: 5, rows: 2 },
 }
 
+type PrintPresetId =
+  | 'epic'
+  | 'ultra'
+  | 'high'
+  | 'standard'
+  | 'ultra-spaced'
+  | 'high-spaced'
+  | 'standard-spaced'
+  | 'direct-poker'
+
+interface PrintPresetConfig {
+  id: PrintPresetId
+  label: string
+  hint: string
+  values: {
+    outputMode: OutputMode
+    paperPreset?: PaperPreset
+    orientation?: Orientation
+    gridPreset?: GridPreset
+    scale?: ScaleOption
+    bleed?: number
+    bleedMode?: BleedMode
+    gapX?: number
+    gapY?: number
+    cutGuides?: boolean
+    printRasterPreset?: PrintRasterPreset
+    printFitMode?: PrintFitMode
+    rotation?: DirectPokerRotation
+    directPrintRasterPreset?: DirectPrintRasterPreset
+  }
+}
+
+const PRINT_PRESETS: PrintPresetConfig[] = [
+  {
+    id: 'epic',
+    label: 'Epic · 4x on demand',
+    hint: 'Massima definizione. Genera immagini 4x al volo e richiede piu tempo.',
+    values: {
+      outputMode: 'a4-sheet',
+      paperPreset: 'a4',
+      orientation: 'portrait',
+      gridPreset: '3x3',
+      scale: 100,
+      bleed: 0,
+      bleedMode: 'preserve',
+      gapX: 0.1,
+      gapY: 0.1,
+      cutGuides: true,
+      printRasterPreset: 'epic',
+    },
+  },
+  {
+    id: 'ultra',
+    label: 'Ultra · senza spaziatura',
+    hint: 'Massima qualità, taglio facile. A4 3×3, 0 bleed, gap 0,1mm.',
+    values: {
+      outputMode: 'a4-sheet',
+      paperPreset: 'a4',
+      orientation: 'portrait',
+      gridPreset: '3x3',
+      scale: 100,
+      bleed: 0,
+      bleedMode: 'preserve',
+      gapX: 0.1,
+      gapY: 0.1,
+      cutGuides: true,
+      printRasterPreset: 'ultra',
+    },
+  },
+  {
+    id: 'high',
+    label: 'High · senza spaziatura',
+    hint: 'Inkjet casa, taglio righello. A4 3×3, 0 bleed, gap 0,1mm.',
+    values: {
+      outputMode: 'a4-sheet',
+      paperPreset: 'a4',
+      orientation: 'portrait',
+      gridPreset: '3x3',
+      scale: 100,
+      bleed: 0,
+      bleedMode: 'preserve',
+      gapX: 0.1,
+      gapY: 0.1,
+      cutGuides: true,
+      printRasterPreset: 'high',
+    },
+  },
+  {
+    id: 'standard',
+    label: 'Standard · senza spaziatura',
+    hint: 'Bozza veloce. A4 3×3, 0 bleed, gap 0,1mm.',
+    values: {
+      outputMode: 'a4-sheet',
+      paperPreset: 'a4',
+      orientation: 'portrait',
+      gridPreset: '3x3',
+      scale: 100,
+      bleed: 0,
+      bleedMode: 'preserve',
+      gapX: 0.1,
+      gapY: 0.1,
+      cutGuides: true,
+      printRasterPreset: 'standard',
+    },
+  },
+  {
+    id: 'ultra-spaced',
+    label: 'Ultra · con spaziatura',
+    hint: 'Taglierina pro. A4 3×3, 1mm bleed, gap 2mm.',
+    values: {
+      outputMode: 'a4-sheet',
+      paperPreset: 'a4',
+      orientation: 'portrait',
+      gridPreset: '3x3',
+      scale: 100,
+      bleed: 1,
+      bleedMode: 'preserve',
+      gapX: 2,
+      gapY: 2,
+      cutGuides: true,
+      printRasterPreset: 'ultra',
+    },
+  },
+  {
+    id: 'high-spaced',
+    label: 'High · con spaziatura',
+    hint: 'Taglierina pro, alta qualità. A4 3×3, 1mm bleed, gap 2mm.',
+    values: {
+      outputMode: 'a4-sheet',
+      paperPreset: 'a4',
+      orientation: 'portrait',
+      gridPreset: '3x3',
+      scale: 100,
+      bleed: 1,
+      bleedMode: 'preserve',
+      gapX: 2,
+      gapY: 2,
+      cutGuides: true,
+      printRasterPreset: 'high',
+    },
+  },
+  {
+    id: 'standard-spaced',
+    label: 'Standard · con spaziatura',
+    hint: 'Taglierina pro, qualità base. A4 3×3, 1mm bleed, gap 2mm.',
+    values: {
+      outputMode: 'a4-sheet',
+      paperPreset: 'a4',
+      orientation: 'portrait',
+      gridPreset: '3x3',
+      scale: 100,
+      bleed: 1,
+      bleedMode: 'preserve',
+      gapX: 2,
+      gapY: 2,
+      cutGuides: true,
+      printRasterPreset: 'standard',
+    },
+  },
+  {
+    id: 'direct-poker',
+    label: 'Direct Poker · stampante carte',
+    hint: 'Canon Selphy / stampanti card-size 63×88. Ultra raster, no bleed.',
+    values: {
+      outputMode: 'direct-poker',
+      printFitMode: 'preserve',
+      rotation: 0,
+      directPrintRasterPreset: 'ultra',
+    },
+  },
+]
+
+const DEFAULT_PRESET_ID: PrintPresetId = 'ultra'
+type CardFace = 'front' | 'back'
+
+interface UpscaledImagePrepareItem {
+  cardId: string
+  scryfallId: string
+  face: CardFace
+}
+
+interface UpscaledImagePrepareResponse {
+  total: number
+  cached: number
+  ready: number
+  failed: number
+}
+
 function isBasicLand(card: CardRow): boolean {
   return (card.type_line ?? '').includes('Basic Land')
 }
@@ -62,32 +250,84 @@ function cardKey(entry: CardEntry): string {
   return `${entry.card.id}-${entry.board}`
 }
 
-function imageUriFromFaces(card: CardRow, key: 'png' | 'large' | 'normal'): string | null {
+function imageUriFromFace(card: CardRow, faceIndex: number, key: 'png' | 'large' | 'normal'): string | null {
   if (!Array.isArray(card.card_faces)) return null
-  const frontFace = card.card_faces[0]
-  if (!frontFace || typeof frontFace !== 'object' || Array.isArray(frontFace)) return null
-  const imageUris = frontFace.image_uris
+  const face = card.card_faces[faceIndex]
+  if (!face || typeof face !== 'object' || Array.isArray(face)) return null
+  const imageUris = face.image_uris
   if (!imageUris || typeof imageUris !== 'object' || Array.isArray(imageUris)) return null
   const value = imageUris[key]
   return typeof value === 'string' ? value : null
 }
 
-function deriveScryfallImageUrls(card: CardRow): string[] {
+function cardImagePathFace(face: CardFace): string {
+  return face === 'back' ? 'back' : 'front'
+}
+
+function deriveScryfallImageUrls(card: CardRow, face: CardFace = 'front'): string[] {
   const urls: string[] = []
-  const facePng = imageUriFromFaces(card, 'png')
-  const faceLarge = imageUriFromFaces(card, 'large')
-  const faceNormal = imageUriFromFaces(card, 'normal')
+  const faceIndex = face === 'back' ? 1 : 0
+  const facePng = imageUriFromFace(card, faceIndex, 'png')
+  const faceLarge = imageUriFromFace(card, faceIndex, 'large')
+  const faceNormal = imageUriFromFace(card, faceIndex, 'normal')
   if (facePng) urls.push(facePng)
   if (faceLarge) urls.push(faceLarge)
   const id = card.scryfall_id
+  const pathFace = cardImagePathFace(face)
   if (id.length >= 2) {
-    urls.push(`https://cards.scryfall.io/png/front/${id[0]}/${id[1]}/${id}.png`)
-    urls.push(`https://cards.scryfall.io/large/front/${id[0]}/${id[1]}/${id}.jpg`)
+    urls.push(`https://cards.scryfall.io/png/${pathFace}/${id[0]}/${id[1]}/${id}.png`)
+    urls.push(`https://cards.scryfall.io/large/${pathFace}/${id[0]}/${id[1]}/${id}.jpg`)
   }
   if (faceNormal) urls.push(faceNormal)
-  if (card.image_normal) {
+  if (face === 'front' && card.image_normal) {
     urls.push(card.image_normal)
   }
+  return [...new Set(urls)]
+}
+
+function upscaled2xImageUrl(card: CardRow, face: CardFace): string {
+  const params = new URLSearchParams({
+    cardId: String(card.id),
+    scryfallId: card.scryfall_id,
+    face,
+    profile: 'hd-2x',
+  })
+  return `/api/card-image/upscaled?${params.toString()}`
+}
+
+function epicUpscaleImageUrl(sourceUrl: string): string {
+  return `/api/card-image/upscale?url=${encodeURIComponent(sourceUrl)}`
+}
+
+async function prepareUpscaled2xImages(items: UpscaledImagePrepareItem[]): Promise<UpscaledImagePrepareResponse | null> {
+  if (items.length === 0) return null
+  const res = await fetch('/api/card-image/upscaled', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  })
+  const body = await res.json().catch(() => null)
+  if (!res.ok) {
+    const error = body && typeof body === 'object' && 'error' in body ? String(body.error) : `HTTP ${res.status}`
+    throw new Error(`Ultra image preparation failed: ${error}`)
+  }
+  return body as UpscaledImagePrepareResponse
+}
+
+function deriveProxyImageUrls(
+  card: CardRow,
+  rasterPreset: PrintRasterPreset | DirectPrintRasterPreset,
+  face: CardFace = 'front',
+): string[] {
+  const scryfallUrls = deriveScryfallImageUrls(card, face)
+  const urls: string[] = []
+  if (rasterPreset === 'epic' && scryfallUrls[0]) {
+    urls.push(epicUpscaleImageUrl(scryfallUrls[0]))
+  }
+  if (rasterPreset === 'ultra' || rasterPreset === 'epic') {
+    urls.push(upscaled2xImageUrl(card, face))
+  }
+  urls.push(...scryfallUrls)
   return [...new Set(urls)]
 }
 
@@ -122,6 +362,8 @@ function getPreviewImage(card: CardRow): string | null {
 
 export default function ProxyPrintModal({ deckName, cards, userName, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
+  const [presetId, setPresetId] = useState<PrintPresetId>(DEFAULT_PRESET_ID)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [outputMode, setOutputMode] = useState<OutputMode>('a4-sheet')
   const [paperPreset, setPaperPreset] = useState<PaperPreset>('a4')
   const [customWidth, setCustomWidth] = useState(210)
@@ -130,10 +372,10 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
   const [gridPreset, setGridPreset] = useState<GridPreset>('3x3')
   const [customCols, setCustomCols] = useState(3)
   const [customRows, setCustomRows] = useState(3)
-  const [gapX, setGapX] = useState(4)
-  const [gapY, setGapY] = useState(5)
+  const [gapX, setGapX] = useState(0.1)
+  const [gapY, setGapY] = useState(0.1)
   const [scale, setScale] = useState<ScaleOption>(100)
-  const [bleed, setBleed] = useState(1)
+  const [bleed, setBleed] = useState(0)
   const [bleedMode, setBleedMode] = useState<BleedMode>('preserve')
   const [printFitMode, setPrintFitMode] = useState<PrintFitMode>('preserve')
   const [offsetXmm, setOffsetXmm] = useState(13)
@@ -142,9 +384,30 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
   const [directPrintRasterPreset, setDirectPrintRasterPreset] = useState<DirectPrintRasterPreset>('high')
   const [calibrationMode, setCalibrationMode] = useState(false)
   const [showDirectPrintGuides, setShowDirectPrintGuides] = useState(false)
-  const [printRasterPreset, setPrintRasterPreset] = useState<PrintRasterPreset>('standard')
+  const [printRasterPreset, setPrintRasterPreset] = useState<PrintRasterPreset>('ultra')
   const [cutGuides, setCutGuides] = useState(true)
   const [debugLayout, setDebugLayout] = useState(false)
+
+  const applyPreset = useCallback((id: PrintPresetId) => {
+    const preset = PRINT_PRESETS.find((p) => p.id === id)
+    if (!preset) return
+    setPresetId(id)
+    const v = preset.values
+    if (v.outputMode !== undefined) setOutputMode(v.outputMode)
+    if (v.paperPreset !== undefined) setPaperPreset(v.paperPreset)
+    if (v.orientation !== undefined) setOrientation(v.orientation)
+    if (v.gridPreset !== undefined) setGridPreset(v.gridPreset)
+    if (v.scale !== undefined) setScale(v.scale)
+    if (v.bleed !== undefined) setBleed(v.bleed)
+    if (v.bleedMode !== undefined) setBleedMode(v.bleedMode)
+    if (v.gapX !== undefined) setGapX(v.gapX)
+    if (v.gapY !== undefined) setGapY(v.gapY)
+    if (v.cutGuides !== undefined) setCutGuides(v.cutGuides)
+    if (v.printRasterPreset !== undefined) setPrintRasterPreset(v.printRasterPreset)
+    if (v.printFitMode !== undefined) setPrintFitMode(v.printFitMode)
+    if (v.rotation !== undefined) setRotation(v.rotation)
+    if (v.directPrintRasterPreset !== undefined) setDirectPrintRasterPreset(v.directPrintRasterPreset)
+  }, [])
   const [deselected, setDeselected] = useState<Set<string>>(() => {
     const set = new Set<string>()
     for (const entry of cards) {
@@ -154,6 +417,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
     return set
   })
   const [generating, setGenerating] = useState(false)
+  const [generationPhase, setGenerationPhase] = useState<'idle' | 'preparing-images' | 'building-pdf'>('idle')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [canShareFiles, setCanShareFiles] = useState(false)
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set())
@@ -168,6 +432,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null)
   const [previewPage, setPreviewPage] = useState(0)
   const [sendingOrder, setSendingOrder] = useState(false)
+  const [orderFeedback, setOrderFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
   const [skipWarning, setSkipWarning] = useState<number>(0)
 
   useEffect(() => {
@@ -370,18 +635,57 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
 
   const effectiveBleed = bleedMode === 'none' ? 0 : bleed
   const gapWarning = outputMode === 'a4-sheet' && effectiveBleed > 0 && (gapX <= 2 * effectiveBleed || gapY <= 2 * effectiveBleed)
+  const activeRasterPreset = outputMode === 'direct-poker' ? directPrintRasterPreset : printRasterPreset
+  const usesEpicRaster = activeRasterPreset === 'epic'
 
   const buildPdfBlob = useCallback(async (): Promise<{ blob: Blob; skippedCount: number } | null> => {
     const sourceCards = showPreview ? expandedOrder : selectedCards
+    const rasterPresetForImages = outputMode === 'direct-poker' ? directPrintRasterPreset : printRasterPreset
+    if (rasterPresetForImages === 'ultra' || rasterPresetForImages === 'epic') {
+      const prepareItems = new Map<string, UpscaledImagePrepareItem>()
+      const addPrepareItem = (card: CardRow, face: CardFace) => {
+        if (!card.scryfall_id) return
+        prepareItems.set(`${card.id}:${face}`, {
+          cardId: String(card.id),
+          scryfallId: card.scryfall_id,
+          face,
+        })
+      }
+
+      if (showPreview) {
+        for (const slot of sourceCards as ExpandedSlot[]) {
+          addPrepareItem(slot.card, slot.face === 'back' ? 'back' : 'front')
+        }
+      } else {
+        for (const entry of sourceCards as CardEntry[]) {
+          addPrepareItem(entry.card, 'front')
+        }
+      }
+
+      if (prepareItems.size > 0) {
+        setGenerationPhase('preparing-images')
+        setProgress({ done: 0, total: prepareItems.size })
+        try {
+          const prepared = await prepareUpscaled2xImages([...prepareItems.values()])
+          if (prepared?.failed) {
+            console.warn('[proxy-generate] Ultra image preparation failed for some cards', prepared)
+          }
+        } catch (err) {
+          console.warn('[proxy-generate] Ultra image preparation unavailable; falling back to source images', err)
+        }
+      }
+    }
+
+    setGenerationPhase('building-pdf')
     const cardsWithImages = showPreview
       ? (sourceCards as ExpandedSlot[]).map((s) => ({
           imageUrls: s.face === 'back'
-            ? [getBackFaceImage(s.card)].filter((u): u is string => u !== null)
-            : deriveScryfallImageUrls(s.card),
+            ? deriveProxyImageUrls(s.card, rasterPresetForImages, 'back')
+            : deriveProxyImageUrls(s.card, rasterPresetForImages, 'front'),
           quantity: 1,
         }))
       : (sourceCards as CardEntry[])
-          .map((e) => ({ imageUrls: deriveScryfallImageUrls(e.card), quantity: e.quantity }))
+          .map((e) => ({ imageUrls: deriveProxyImageUrls(e.card, rasterPresetForImages), quantity: e.quantity }))
       .filter((e) => e.imageUrls.length > 0)
     if (cardsWithImages.length === 0 && !(outputMode === 'direct-poker' && calibrationMode)) return null
 
@@ -437,6 +741,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true)
+    setGenerationPhase('idle')
     setSkipWarning(0)
     setProgress({ done: 0, total: 0 })
     try {
@@ -452,12 +757,14 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
     } catch (err) {
       console.error('[proxy-generate]', err)
     } finally {
+      setGenerationPhase('idle')
       setGenerating(false)
     }
   }, [buildPdfBlob, deckName, onClose])
 
   const handleShare = useCallback(async () => {
     setGenerating(true)
+    setGenerationPhase('idle')
     setSkipWarning(0)
     setProgress({ done: 0, total: 0 })
     try {
@@ -487,15 +794,21 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
         console.error('[proxy-share]', err)
       }
     } finally {
+      setGenerationPhase('idle')
       setGenerating(false)
     }
   }, [buildPdfBlob, deckName, onClose])
 
   const handlePrintOrder = useCallback(async () => {
     setSendingOrder(true)
+    setGenerationPhase('idle')
+    setOrderFeedback(null)
     try {
       const blob = await buildPdfBlob()
-      if (!blob) return
+      if (!blob) {
+        setOrderFeedback({ type: 'error', text: 'Impossibile generare il PDF (nessuna carta valida).' })
+        return
+      }
       const pdfBase64 = await new Promise<string>((resolve) => {
         const reader = new FileReader()
         reader.onloadend = () => {
@@ -522,13 +835,18 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
         }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error((err as { error?: string }).error ?? 'Failed to send order')
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        const msg = (err as { error?: string }).error ?? `HTTP ${res.status}`
+        throw new Error(msg)
       }
-      onClose()
+      setOrderFeedback({ type: 'success', text: 'Ordine inviato a StudioB35. Riceverai conferma via email.' })
+      setTimeout(() => onClose(), 2500)
     } catch (err) {
       console.error('[print-order]', err)
+      const text = err instanceof Error ? err.message : 'Errore sconosciuto durante invio ordine.'
+      setOrderFeedback({ type: 'error', text })
     } finally {
+      setGenerationPhase('idle')
       setSendingOrder(false)
     }
   }, [buildPdfBlob, buildMoxfieldDecklist, groupExpandedToEntries, deckName, userName, onClose, showPreview, expandedOrder, selectedCards])
@@ -680,6 +998,41 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
             </label>
 
             <label className="flex items-center gap-1.5 text-xs text-font-secondary">
+              Preset
+              <select
+                value={presetId}
+                onChange={(e) => applyPreset(e.target.value as PrintPresetId)}
+                className="rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
+              >
+                {PRINT_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <p className="mt-1.5 text-[11px] text-font-muted">
+            {PRINT_PRESETS.find((p) => p.id === presetId)?.hint}
+          </p>
+
+          <div className="mt-3 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((v) => !v)}
+              className="flex items-center gap-1.5 text-xs font-bold text-font-secondary hover:text-font-primary"
+              aria-expanded={advancedOpen}
+            >
+              <span className={`inline-block transition-transform ${advancedOpen ? 'rotate-90' : ''}`}>▶</span>
+              Avanzate
+              <span className="ml-1 text-[10px] font-normal text-font-muted">
+                ({advancedOpen ? 'nascondi' : 'mostra'} parametri manuali)
+              </span>
+            </button>
+          </div>
+
+          {advancedOpen && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <label className="flex items-center gap-1.5 text-xs text-font-secondary">
               Output
               <select
                 value={outputMode}
@@ -756,6 +1109,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                     <option value="standard">Standard — 300 dpi — recommended for A4</option>
                     <option value="high">High — 360 dpi — recommended for direct poker</option>
                     <option value="ultra">Ultra — 600 dpi — max quality, slower printing</option>
+                    <option value="epic">Epic — 4x on demand — very slow</option>
                   </select>
                 </label>
 
@@ -979,6 +1333,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                     <option value="standard">Standard — 300 dpi — recommended for A4</option>
                     <option value="high">High — 360 dpi — recommended for direct poker</option>
                     <option value="ultra">Ultra — 600 dpi — max quality, slower printing</option>
+                    <option value="epic">Epic — 4x on demand — very slow</option>
                   </select>
                 </label>
 
@@ -1004,11 +1359,19 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
               </>
             )}
           </div>
+          )}
 
           {gapWarning && (
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>Gap too small for selected bleed: bleed areas may overlap.</span>
+            </div>
+          )}
+
+          {usesEpicRaster && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>Epic genera immagini 4x on demand: il processo richiedera diverso tempo. Se non serve il massimo dettaglio, passa a Ultra.</span>
             </div>
           )}
 
@@ -1023,7 +1386,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>
-                {skipWarning} image{skipWarning === 1 ? '' : 's'} failed to download from Scryfall and were skipped.
+                {skipWarning} image{skipWarning === 1 ? '' : 's'} failed to download from the available sources and were skipped.
                 The PDF is incomplete — tap Generate again to retry.
               </span>
             </div>
@@ -1170,6 +1533,17 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
 
           {/* Footer */}
           <div className="shrink-0 border-t border-border bg-bg-surface px-3 py-2" onClick={(e) => e.stopPropagation()}>
+            {orderFeedback && (
+              <div
+                className={`mb-2 rounded-md border px-3 py-2 text-xs ${
+                  orderFeedback.type === 'success'
+                    ? 'border-green-500/40 bg-green-500/10 text-green-300'
+                    : 'border-red-500/40 bg-red-500/10 text-red-300'
+                }`}
+              >
+                {orderFeedback.text}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <button
@@ -1203,7 +1577,9 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                   ) : (
                     <Printer size={14} />
                   )}
-                  {generating ? 'Generating…' : 'Generate PDF'}
+                  {generating
+                    ? generationPhase === 'preparing-images' ? 'Preparing Ultra...' : 'Generating...'
+                    : 'Generate PDF'}
                 </button>
                 <button
                   onClick={handlePrintOrder}
@@ -1215,7 +1591,9 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                   ) : (
                     <Send size={14} />
                   )}
-                  {sendingOrder ? 'Sending…' : 'Print at StudioB35'}
+                  {sendingOrder
+                    ? generationPhase === 'preparing-images' ? 'Preparing Ultra...' : 'Sending...'
+                    : 'Print at StudioB35'}
                 </button>
               </div>
             </div>

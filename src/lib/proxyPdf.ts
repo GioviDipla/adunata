@@ -19,7 +19,7 @@ import {
 export type { BleedMode, PrintFitMode } from './proxyPdfLayout'
 
 export type OutputMode = 'a4-sheet' | 'direct-poker'
-export type DirectPrintRasterPreset = 'fast' | 'standard' | 'high' | 'ultra'
+export type DirectPrintRasterPreset = 'fast' | 'standard' | 'high' | 'ultra' | 'epic'
 export type DirectPokerRotation = 0 | 90 | 180 | 270
 
 export interface ProxyPdfOptions {
@@ -60,7 +60,7 @@ export interface PaperOption {
   height: number
 }
 
-export type PrintRasterPreset = 'fast' | 'standard' | 'high' | 'ultra'
+export type PrintRasterPreset = 'fast' | 'standard' | 'high' | 'ultra' | 'epic'
 
 interface PrintRasterPresetOptions {
   dpi: number
@@ -92,6 +92,11 @@ export const PRINT_RASTER_PRESETS: Record<PrintRasterPreset, PrintRasterPresetOp
     jpegQuality: 0.98,
     bleedJpegQuality: 0.94,
   },
+  epic: {
+    dpi: 1200,
+    jpegQuality: 0.99,
+    bleedJpegQuality: 0.96,
+  },
 }
 
 export const DIRECT_PRINT_RASTER_PRESETS: Record<DirectPrintRasterPreset, PrintRasterPresetOptions> = {
@@ -99,6 +104,7 @@ export const DIRECT_PRINT_RASTER_PRESETS: Record<DirectPrintRasterPreset, PrintR
   standard: { dpi: 300, jpegQuality: 0.88, maxWidthPx: 800, maxHeightPx: 1100 },
   high: { dpi: 360, jpegQuality: 0.9, maxWidthPx: 1000, maxHeightPx: 1400 },
   ultra: { dpi: 600, jpegQuality: 0.98 },
+  epic: { dpi: 1200, jpegQuality: 0.99 },
 }
 
 export function defaultDirectPokerRasterPreset(): DirectPrintRasterPreset {

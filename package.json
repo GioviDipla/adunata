@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:proxy-pdf": "node --test tests/proxyPdf*.test.mjs",
+    "test:card-images": "node --test tests/card-images/*.test.mjs",
+    "queue:card-images": "node scripts/queue-card-images.mjs",
+    "upscale:card-images": "node scripts/upscale-card-images.mjs",
     "test:goblinai": "vitest run tests/goblinai",
     "test:goblinai:watch": "vitest tests/goblinai",
     "test:game": "vitest run tests/play tests/game"

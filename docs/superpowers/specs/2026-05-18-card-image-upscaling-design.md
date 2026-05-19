@@ -2,7 +2,16 @@
 
 ## Status
 
-Ready for user review. The design is complete enough to become an implementation plan after review.
+Implementation started. Schema, helper utilities, local queue script, and sequential worker are in place; admin UI is still pending.
+
+Latest implementation note:
+
+- `hd-2x` uses `realesr-animevideov3 -s 2`.
+- `hd-2x` assets are stored in the private `card-images-hd` bucket and tracked by `card_image_assets`.
+- First sample completed for Karn, Legacy Reforged MAT at `1490x2080`.
+- Ultra raster now prepares missing `hd-2x` assets in one batch for the whole proxy list before PDF generation, stores them, and reuses them on later PDF generations.
+- `hd-4x` remains on-demand only for Epic raster and is not stored.
+- SOS `layout=prepare` cards use one combined front image; back-face assets must not be queued unless the stored face has explicit `image_uris`.
 
 ## Goal
 
@@ -527,6 +536,13 @@ Direct 2x output should not be produced by downscaling a generated 4x file. The 
 - `realesrgan-x4plus -s 4` produces the best-looking result, but the output is too large for the initial profile.
 - `realesrgan-x4plus -s 2` can produce visible tile/stitch artifacts with auto tiling, and forcing `-t 1024` avoids the puzzle effect but still does not match the visual quality of the 4x run.
 - Next direct-2x candidate is the native 2x model path exposed by the package: `realesr-animevideov3 -s 2`, tested with the same default runtime settings as the successful 4x command.
+
+Proxy PDF raster usage:
+
+- `Ultra` should prefer the stored `hd-2x`/upscaled2x asset when a ready row exists in `card_image_assets`.
+- `Epic` should generate a 4x image on demand for the current PDF build and must not store the generated 4x image in the database or Storage.
+- If Epic 4x generation fails or is unavailable, the image candidate order falls back to the stored `hd-2x` asset, then to the normal Scryfall image candidates.
+- The UI should warn that Epic requires significantly more time and suggest switching to Ultra when 4x detail is not needed.
 
 If the NCNN/Vulkan build is not stable on the M1 Max environment, keep the worker abstraction and swap the command adapter later. The database/storage design does not depend on the exact upscaler binary.
 

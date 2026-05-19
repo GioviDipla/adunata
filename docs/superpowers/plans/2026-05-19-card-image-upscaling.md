@@ -10,6 +10,51 @@
 
 ---
 
+## Implementation Progress
+
+- 2026-05-19: Added `card_image_batches`, `card_image_assets`, and private `card-images-hd` bucket migration. `supabase db push` is currently blocked by pre-existing remote migration history drift, so the SQL was applied to the linked database with `supabase db query --linked -f ...`.
+- 2026-05-19: Added pure helper modules and tests for source URL resolution, Storage path generation, profile config, PNG dimensions, and checksums.
+- 2026-05-19: Added `queue:card-images` for controlled sections and `upscale:card-images` for sequential resumable local processing.
+- 2026-05-19: Queued and processed the Karn, Legacy Reforged MAT sample. Output `1490x2080`, stored at `scryfall/4/2/4219b5ea-a252-4d76-a60a-9674340e8ed3/front@2x.png`.
+- 2026-05-19: Verified `npm run test:card-images`, `npm run test:proxy-pdf`, and `npm run build`.
+- 2026-05-19: Adjusted Ultra generation to batch-preflight the whole proxy list. `POST /api/card-image/upscaled` now receives all selected card faces, generates any missing `hd-2x` assets, stores them in `card-images-hd`, and then PDF generation reads the cached images with `GET /api/card-image/upscaled`. The GET path is cache-only; if an asset is still missing, PDF generation falls back to the next image candidate.
+- 2026-05-19: Investigated SOS failures. All failed assets were invalid derived back-face URLs for `layout=prepare` cards, where Scryfall stores one combined front image and `card_faces` have no `image_uris`. The source resolver and queue script now only derive fallback URLs for the front face; existing invalid back-face assets were marked `cancelled`.
+
+Immediate sectioned commands:
+
+```bash
+npm run queue:card-images -- --q="Karn, Legacy Reforged" --limit=5 --dry-run
+npm run queue:card-images -- --scryfall-id=4219b5ea-a252-4d76-a60a-9674340e8ed3 --limit=1
+npm run upscale:card-images -- --limit=1 --keep-temp
+```
+
+For larger sections, increase `--limit` on `queue:card-images`, verify with `--dry-run`, then process with `upscale:card-images -- --limit=<n>`. Keep `concurrency=1` until runtime/thermal behavior is measured.
+
+Available `queue:card-images` filters:
+
+- `--set=<code>`
+- `--collector-number=<number>`
+- `--q=<name fragment>`
+- `--scryfall-id=<uuid>`
+- `--card-id=<uuid>`
+- `--limit=<n>`
+- `--offset=<n>`
+- `--include-basic-lands`
+- `--dry-run`
+
+Available `upscale:card-images` filters/options:
+
+- `--limit=<n>`
+- `--asset-id=<uuid>`
+- `--profile=hd-2x`
+- `--dry-run`
+- `--keep-temp`
+- `--worker-id=<name>`
+- `--stale-after-min=<minutes>`
+- `--max-attempts=<n>`
+
+---
+
 ## File Structure
 
 Create:
@@ -1124,6 +1169,13 @@ REALESRGAN_TILE_SIZE=1024
 ```
 
 Before locking the worker defaults, validate direct 2x quality. The `realesrgan-x4plus` model is natively 4x; `-s 2` did not match the successful 4x visual result in the Karn test. Test `realesr-animevideov3 -s 2` as the native direct-2x candidate, without downsampling from a generated 4x image.
+
+Proxy PDF raster integration:
+
+- Add an `Ultra` image candidate endpoint that reads the ready `hd-2x` asset from `card_image_assets` + `card-images-hd` when available.
+- Add an `Epic` image candidate endpoint that runs `realesrgan-x4plus -s 4` on demand and returns the PNG without writing any `hd-4x` row or Storage object.
+- Build proxy image candidate lists in this order: Epic on-demand 4x, stored Ultra 2x, Scryfall fallback.
+- Show a warning when Epic is selected: the process can take a long time and Ultra is the recommended fallback.
 
 Add to `package.json` scripts:
 
