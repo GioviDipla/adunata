@@ -6,6 +6,7 @@ import path from 'node:path'
 import process from 'node:process'
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 dotenv.config({ path: '.env.local' })
 dotenv.config()
@@ -17,9 +18,23 @@ const REALESRGAN_MODEL_PATH = process.env.REALESRGAN_MODEL_PATH
 const REALESRGAN_MODEL = process.env.REALESRGAN_MODEL ?? 'realesr-animevideov3'
 const REALESRGAN_TILE_SIZE = process.env.REALESRGAN_TILE_SIZE ?? '0'
 
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
+const R2_BUCKET = process.env.R2_BUCKET
+
 if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Missing Supabase env')
+if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET) {
+  throw new Error('Missing R2 env (R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET)')
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+const r2 = new S3Client({
+  region: 'auto',
+  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+})
 
 function readPngDimensions(bytes) {
   const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
@@ -164,13 +179,13 @@ async function processAsset(asset, options) {
     const dimensions = readPngDimensions(outputBytes)
     const checksum = sha256Hex(outputBytes)
 
-    const upload = await supabase.storage
-      .from('card-images-hd')
-      .upload(current.storage_path, outputBytes, {
-        contentType: 'image/png',
-        upsert: true,
-      })
-    if (upload.error) throw upload.error
+    await r2.send(new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: current.storage_path,
+      Body: outputBytes,
+      ContentType: 'image/png',
+      CacheControl: 'public, max-age=31536000, immutable',
+    }))
 
     const { error: updateError } = await supabase
       .from('card_image_assets')
