@@ -57,40 +57,25 @@ async function copyOne(storagePath) {
 }
 
 async function listAllSupabaseObjects() {
-  // Supabase Storage list is paginated and folder-bound. Mirror the path
-  // layout `scryfall/<a>/<b>/<id>/<face>@2x.png` built by
-  // buildCardImageStoragePath().
-  const queue = [{ prefix: 'scryfall', depth: 0 }]
-  const found = []
-
-  while (queue.length > 0) {
-    const { prefix, depth } = queue.shift()
-    let offset = 0
-    const pageSize = 1000
-
-    for (;;) {
-      const { data, error } = await supabase.storage
-        .from(SUPABASE_BUCKET)
-        .list(prefix, { limit: pageSize, offset, sortBy: { column: 'name', order: 'asc' } })
-      if (error) throw error
-      if (!data || data.length === 0) break
-
-      for (const entry of data) {
-        const fullPath = `${prefix}/${entry.name}`
-        if (entry.id === null || entry.metadata === null) {
-          // folder — recurse
-          queue.push({ prefix: fullPath, depth: depth + 1 })
-        } else {
-          found.push(fullPath)
-        }
-      }
-
-      if (data.length < pageSize) break
-      offset += pageSize
-    }
+  // Pull keys from card_image_assets instead of Storage.list (which times out
+  // on large buckets). Every ready row's storage_path is the exact key.
+  const all = []
+  let from = 0
+  const pageSize = 1000
+  for (;;) {
+    const { data, error } = await supabase
+      .from('card_image_assets')
+      .select('storage_path')
+      .eq('status', 'ready')
+      .not('storage_path', 'is', null)
+      .range(from, from + pageSize - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data.map((row) => row.storage_path))
+    if (data.length < pageSize) break
+    from += pageSize
   }
-
-  return found
+  return all
 }
 
 async function main() {
