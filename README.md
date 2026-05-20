@@ -140,6 +140,15 @@ npm run dev
 | `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys, key privata (server-only) |
 | `SUPABASE_SERVICE_ROLE_KEY` | compatibilità legacy: stessa secret key o vecchia service role key |
 | `CRON_SECRET` | stringa casuale, protegge gli endpoint `/api/cron/*` |
+| `R2_ACCOUNT_ID` | Cloudflare R2 — account id (vedi `MANUAL_STEPS.md` [STEP R2-1]) |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 — API token access key |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 — API token secret |
+| `R2_BUCKET` | default `adunata-card-images-hd` |
+| `R2_PUBLIC_BASE_URL` | default `https://cdn.adunata.studiob35.com` (o il `pub-<hash>.r2.dev` del bucket) |
+
+### Cloudflare R2 (upscaled card images CDN)
+
+La pipeline di upscale scrive i PNG su un bucket Cloudflare R2 servito pubblicamente via `cdn.adunata.studiob35.com`. La route `/api/card-image/upscaled` restituisce un 302 verso il CDN per ogni asset con `status=ready` (no streaming proxy attraverso Vercel). Provisioning passo-passo in `MANUAL_STEPS.md` [STEP R2-1] / [STEP R2-2]; runbook completo in `docs/superpowers/plans/2026-05-19-r2-card-images-migration.md`.
 
 ### Caricare il catalogo Scryfall
 
