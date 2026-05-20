@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildCardImageStoragePath } from '@/lib/card-images/storage-path'
 import { resolveCardImageSources, type CardImageSourceCard } from '@/lib/card-images/source-url'
+import { buildR2PublicUrl } from '@/lib/r2/public-url'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-const BUCKET = 'card-images-hd'
 const CACHE_HEADER = 'public, s-maxage=31536000, max-age=86400, immutable'
 
 type AssetRow = {
@@ -46,23 +46,6 @@ function faceIndexFromValue(value: unknown): number {
 function isOnDemandQueueEnabled(): boolean {
   const value = process.env.CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND
   return !['0', 'false', 'off', 'no', 'disabled'].includes((value ?? 'true').toLowerCase())
-}
-
-async function downloadAsset(supabase: SupabaseAdmin, storagePath: string): Promise<NextResponse | null> {
-  const { data: blob, error } = await supabase.storage
-    .from(BUCKET)
-    .download(storagePath)
-
-  if (error || !blob) return null
-
-  const buffer = await blob.arrayBuffer()
-  return new NextResponse(buffer, {
-    status: 200,
-    headers: {
-      'Content-Type': blob.type || 'image/png',
-      'Cache-Control': CACHE_HEADER,
-    },
-  })
 }
 
 async function findReadyAsset(
@@ -247,8 +230,10 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient()
   const asset = await findReadyAsset(supabase, { cardId, scryfallId, faceIndex, profile })
   if (asset?.storage_path) {
-    const cached = await downloadAsset(supabase, asset.storage_path)
-    if (cached) return cached
+    return NextResponse.redirect(buildR2PublicUrl(asset.storage_path), {
+      status: 302,
+      headers: { 'Cache-Control': CACHE_HEADER },
+    })
   }
 
   return NextResponse.json({ error: 'upscaled image not found' }, { status: 404 })
