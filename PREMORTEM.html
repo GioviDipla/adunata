@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Premortem — Adunata / The Gathering</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --danger: #f85149;
+    --warn: #d2991d;
+    --ok: #3fb950;
+    --code-bg: #1c2128;
+    --tag-p0: #da3633;
+    --tag-high: #d2991d;
+    --tag-mid: #58a6ff;
+    --tag-maint: #8b949e;
+    --tag-mobile: #a371f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  h1 { font-size: 1.75rem; color: #fff; }
+  h2 {
+    font-size: 1.25rem;
+    color: #fff;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 1.05rem; color: var(--accent); margin-top: 1.5rem; margin-bottom: .5rem; }
+  h4 { font-size: .95rem; color: #fff; margin-top: 1rem; }
+  p { margin-bottom: .75rem; }
+  a { color: var(--accent); }
+
+  .meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: .5rem 2rem;
+    color: var(--muted);
+    font-size: .875rem;
+  }
+  .meta dt { font-weight: 600; color: var(--text); }
+  .meta dd { margin-left: 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: .875rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th { font-weight: 600; color: var(--text); background: var(--surface); }
+
+  .check-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: .5rem;
+  }
+  .check-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .75rem;
+  }
+  .check-item .cmd { font-family: monospace; font-size: .8rem; color: var(--accent); }
+  .check-item .result { font-size: .8rem; margin-top: .25rem; }
+  .pass { color: var(--ok); }
+  .fail { color: var(--danger); }
+
+  .risk-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+  }
+  .risk-card.p0 { border-left-color: var(--tag-p0); }
+  .risk-card.high { border-left-color: var(--tag-high); }
+  .risk-card.mid { border-left-color: var(--tag-mid); }
+  .risk-card.maint { border-left-color: var(--tag-maint); }
+  .risk-card.mobile { border-left-color: var(--tag-mobile); }
+
+  .risk-id { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+  .p0 .risk-id { color: var(--tag-p0); }
+  .high .risk-id { color: var(--tag-high); }
+  .mid .risk-id { color: var(--tag-mid); }
+  .maint .risk-id { color: var(--tag-maint); }
+  .mobile .risk-id { color: var(--tag-mobile); }
+
+  .field { margin: .5rem 0; }
+  .field-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  .field-value { font-size: .875rem; }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .75rem 1rem;
+    overflow-x: auto;
+    font-size: .8rem;
+    line-height: 1.5;
+    margin: .5rem 0;
+  }
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: .825rem; }
+
+  .badge {
+    display: inline-block;
+    font-size: .65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: .15em .55em;
+    border-radius: 999px;
+  }
+  .badge-p0 { background: var(--tag-p0); color: #fff; }
+  .badge-high { background: var(--tag-high); color: #000; }
+  .badge-mid { background: var(--tag-mid); color: #000; }
+  .badge-maint { background: var(--tag-maint); color: #000; }
+  .badge-fixed { background: var(--ok); color: #000; }
+
+  .risk-card.resolved { opacity: .7; border-left-color: var(--ok); }
+  .risk-card.resolved h3 { text-decoration: line-through; color: var(--muted); }
+
+  .priority-table th:last-child,
+  .priority-table td:last-child { text-align: right; }
+
+  .thesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin: 1rem 0;
+  }
+  .thesis ol { margin-left: 1.25rem; }
+  .thesis li { margin-bottom: .5rem; }
+
+  summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 600;
+    font-size: .875rem;
+  }
+  details { margin: .5rem 0; }
+
+  @media (max-width: 640px) {
+    body { padding: 1rem; }
+    pre { font-size: .7rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Premortem — Adunata / The Gathering</h1>
+  <dl class="meta" style="margin-top:1rem;">
+    <div>
+      <dt>Data revisione</dt>
+      <dd>2026-05-12</dd>
+    </div>
+    <div>
+      <dt>Branch</dt>
+      <dd><code>dev</code></dd>
+    </div>
+    <div>
+      <dt>Repo</dt>
+      <dd><code>~/MBPro/CursorProject/TheGathering</code></dd>
+    </div>
+    <div>
+      <dt>Tipo</dt>
+      <dd>Revisione statica contro sorgente locale</dd>
+    </div>
+  </dl>
+  <p style="color:var(--muted);font-size:.85rem;margin-top:.5rem;">
+    Revisione premortem corroborata contro sorgente locale. Non è una security audit completa su database live. Le evidenze provengono da sorgente, migrazioni, tipi Supabase, documenti di stato e comandi di verifica.
+  </p>
+</header>
+
+<!-- ============================================================ -->
+<section id="verification">
+<h2>Verifica Eseguita</h2>
+<p>Comandi eseguiti il 2026-05-12:</p>
+
+<table data-table="verification-results">
+<thead><tr><th>Comando</th><th>Esito</th></tr></thead>
+<tbody>
+  <tr>
+    <td><code>npm run build</code></td>
+    <td class="pass">PASS</td>
+  </tr>
+  <tr>
+    <td><code>npm run lint</code></td>
+    <td class="fail">FAIL — 1 errore, 53 warning</td>
+  </tr>
+  <tr>
+    <td><code>npm run test:game</code></td>
+    <td class="pass">PASS — 3 file, 24 test</td>
+  </tr>
+  <tr>
+    <td><code>npm run test:goblinai</code></td>
+    <td class="pass">PASS — 4 file, 19 test</td>
+  </tr>
+  <tr>
+    <td><code>npm run test:proxy-pdf</code></td>
+    <td class="pass">PASS — 14 test</td>
+  </tr>
+</tbody>
+</table>
+
+<h3>Corroborazione statica</h3>
+<ul>
+  <li><code>cards.id</code> nasce <code>uuid</code> nella migration iniziale; <code>src/types/supabase.ts</code> lo tipizza <code>number</code></li>
+  <li><code>src/app/(app)/profile/page.tsx</code> chiama <code>DELETE /api/account</code> — route non esiste</li>
+  <li><code>src/app/api/comments/[id]/route.ts</code> cancella commenti filtrando solo per <code>id</code></li>
+  <li>Funzioni batch <code>SECURITY DEFINER</code> aggiornano righe per ID senza ownership check interno</li>
+  <li><code>vercel.json</code> schedula solo <code>daily-sync</code>; <code>update-prices</code> resta fallback manuale</li>
+  <li>Tutti i test browser Playwright sono <code>test.skip()</code></li>
+</ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="thesis">
+<h2>Tesi</h2>
+<div class="thesis">
+  <p>Se Adunata fallisce, probabilmente non sarà per assenza di feature. Fallirà per una combinazione di:</p>
+  <ol>
+    <li>schema e tipi divergenti</li>
+    <li>route mutative non abbastanza difese</li>
+    <li>feature real-time complesse non coperte da test end-to-end</li>
+    <li>operatività fragile su cron, dati Scryfall, Supabase e provider AI</li>
+    <li>grandi componenti client difficili da modificare senza regressioni</li>
+  </ol>
+  <p style="margin-top:.75rem;color:var(--muted);">
+    Superficie attuale: deck builder, collection, proxy PDF, goldfish, multiplayer 1v1, profili, social light, GoblinAI.
+    La superficie di rischio è più grande della rete di test.
+  </p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="risks-p0">
+<h2>Rischi P0 <span class="badge badge-p0">Critical</span></h2>
+
+<!-- Risk 1 -->
+<article class="risk-card p0 resolved" data-risk="1" data-severity="p0" data-category="security" data-effort="low" data-status="fixed" data-fixed-date="2026-05-21" data-fixed-commit="57f94d4">
+  <div class="risk-id">Risk 1 — Delete commenti senza ownership <span class="badge badge-fixed">FIXED</span></div>
+  <h3>Delete commenti senza ownership nel route handler</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Cancellazione potenziale di commenti altrui</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/app/api/comments/[id]/route.ts:72-75</code></div>
+  </div>
+
+  <pre>// PRIMA (vulnerabile)
+await supabase
+  .from('deck_comments')
+  .delete()
+  .eq('id', commentId)
+
+// DOPO (fix)
+await supabase
+  .from('deck_comments')
+  .delete()
+  .eq('id', commentId)
+  .eq('user_id', user.id)</pre>
+
+  <div class="field">
+    <div class="field-label">Nota</div>
+    <div class="field-value">Il <code>PATCH</code> nella stessa route già usava <code>.eq('user_id', user.id)</code>. L'omissione nel <code>DELETE</code> era accidentale. Fix applicato il 2026-05-21.</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Stato</div>
+    <div class="field-value" style="color:var(--ok);">Risolto — commit <code>666b0aa</code></div>
+  </div>
+</article>
+
+<!-- Risk 2 -->
+<article class="risk-card p0" data-risk="2" data-severity="p0" data-category="data-integrity" data-effort="medium">
+  <div class="risk-id">Risk 2 — Tipi Supabase divergenti dal DB</div>
+  <h3>Tipi Supabase divergenti dal DB</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Bug silenziosi su FK, confronti, RPC e action data</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>cards.id</code> è <code>uuid</code> nella migration iniziale; <code>src/types/supabase.ts</code> dice <code>id: number</code></div>
+  </div>
+
+  <p>Cast correttivi già presenti nel codice:</p>
+  <ul>
+    <li><code>src/components/cards/CardBrowser.tsx</code> — commento "cards.id is uuid at runtime; the TS types claim number"</li>
+    <li><code>src/app/api/collection/route.ts</code> — commento analogo</li>
+    <li><code>src/lib/game/engine.ts</code> — action data con <code>cardId: number</code> in più handler, a runtime gli ID sono UUID</li>
+  </ul>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Rigenerare i tipi dal DB live (<code>supabase gen types</code>), committarli, eliminare cast e tipi inline sbagliati. Fare prima di refactor grossi del game engine o collection.</div>
+  </div>
+</article>
+
+<!-- Risk 3 -->
+<article class="risk-card p0" data-risk="3" data-severity="p0" data-category="missing-endpoint" data-effort="low">
+  <div class="risk-id">Risk 3 — Route account deletion mancante</div>
+  <h3>Route account deletion mancante</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">UI promette una cancellazione account che non può funzionare</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/app/(app)/profile/page.tsx:182</code> chiama <code>/api/account</code>; nessuna route corrispondente in <code>src/app/api</code></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Implementare <code>DELETE /api/account</code> con service role e cancellazione utente Supabase, oppure rimuovere/disabilitare il bottone. La pagina privacy dice che la cancellazione è richiedibile via email — allineare anche la UX.</div>
+  </div>
+</article>
+
+<!-- Risk 4 -->
+<article class="risk-card p0" data-risk="4" data-severity="p0" data-category="ci-quality" data-effort="low">
+  <div class="risk-id">Risk 4 — Lint non verde su codice spedibile</div>
+  <h3>Lint non verde su codice spedibile</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">CI debole e regressioni React/Next non bloccate</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>npm run lint</code> fallisce con errore <code>react-hooks/set-state-in-effect</code> in <code>src/components/goblinai/GoblinAIHistoryDropdown.tsx:42</code></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Sistemare l'errore lint subito. Decidere quali warning accettare esplicitamente e quali diventano budget tecnico.</div>
+  </div>
+</article>
+</section>
+
+<!-- ============================================================ -->
+<section id="risks-high">
+<h2>Rischi Alti <span class="badge badge-high">High</span></h2>
+
+<!-- Risk 5 -->
+<article class="risk-card high" data-risk="5" data-severity="high" data-category="database" data-effort="medium">
+  <div class="risk-id">Risk 5 — Migrazioni non autosufficienti</div>
+  <h3>Migrazioni non autosufficienti rispetto ai tipi e al codice</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Fresh install, preview DB o recovery da zero possono fallire</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value">I tipi includono <code>deck_comments</code>, <code>deck_likes</code>, <code>card_likes</code>, <code>game_log</code>, <code>sync_metadata</code> — le migrazioni locali hanno indici/alter/RPC che le usano, ma nessun <code>CREATE TABLE</code>.</div>
+  </div>
+
+  <details>
+    <summary>Esempi</summary>
+    <ul>
+      <li><code>supabase/migrations/20260508050000_performance_indexes.sql</code> crea indici su <code>deck_comments</code>, <code>deck_likes</code>, <code>card_likes</code>, <code>game_log</code></li>
+      <li><code>supabase/migrations/20260415100000_game_log_type.sql</code> altera <code>game_log</code></li>
+      <li>Nessuna migration locale crea quelle tabelle</li>
+    </ul>
+  </details>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Fare diff live → migration, o documentare esplicitamente quali tabelle sono state create fuori migration e ricostruirle. Prerequisito per affidabilità operativa.</div>
+  </div>
+</article>
+
+<!-- Risk 6 -->
+<article class="risk-card high" data-risk="6" data-severity="high" data-category="security" data-effort="medium">
+  <div class="risk-id">Risk 6 — RPC SECURITY DEFINER senza ownership check</div>
+  <h3>RPC <code>SECURITY DEFINER</code> senza ownership check interno</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Un bug applicativo può trasformarsi in scrittura cross-user</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>supabase/migrations/20260508060000_batch_update_rpcs.sql</code></div>
+  </div>
+
+  <p>Funzioni interessate:</p>
+  <ul>
+    <li><code>batch_update_deck_card_sections</code></li>
+    <li><code>batch_update_user_cards_quantity</code></li>
+    <li><code>batch_update_deck_card_quantities</code></li>
+  </ul>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Aggiungere parametri <code>p_user_id</code> / <code>p_deck_id</code> e join/check interni contro owner. In alternativa spostare le funzioni in schema non esposto e restringere grant.</div>
+  </div>
+</article>
+
+<!-- Risk 7 -->
+<article class="risk-card high" data-risk="7" data-severity="high" data-category="security" data-effort="medium">
+  <div class="risk-id">Risk 7 — Route pubbliche con service role per scrivere cards</div>
+  <h3>Route pubbliche usano service role per scrivere <code>cards</code></h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Abuso di Scryfall fallback, pressione su DB e bypass RLS intenzionale ma ampio</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>createAdminClient()</code> in:
+      <code>src/app/api/cards/search/route.ts</code>,
+      <code>src/app/api/cards/lookup/route.ts</code>,
+      <code>src/app/api/cards/printings/route.ts</code>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Rate limit su tutte le route Scryfall-backed, cap per richiesta, timeout, logging strutturato e risposta degradabile. Valutare una RPC stretta invece del service role diretto nelle route pubbliche.</div>
+  </div>
+</article>
+
+<!-- Risk 8 -->
+<article class="risk-card high" data-risk="8" data-severity="high" data-category="security" data-effort="medium">
+  <div class="risk-id">Risk 8 — Rate limiting fragile e copertura incompleta</div>
+  <h3>Rate limiting fragile e copertura incompleta</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Abuso di endpoint mutativi o costosi</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/lib/rate-limit.ts</code> disabilita tutto se mancano <code>KV_REST_API_URL</code> / <code>KV_REST_API_TOKEN</code>; in produzione stampa solo warning.</div>
+  </div>
+
+  <details>
+    <summary>Endpoint mutativi senza rate limiting evidente</summary>
+    <ul>
+      <li><code>POST /api/lobbies</code></li>
+      <li><code>POST /api/lobbies/join</code></li>
+      <li><code>POST /api/lobbies/invite</code></li>
+      <li><code>POST /api/game/[id]/action</code></li>
+      <li><code>POST/PUT/DELETE /api/decks/[id]/cards</code></li>
+      <li><code>POST /api/collection/bulk-add</code></li>
+      <li><code>POST /api/collection/bulk-import</code></li>
+      <li>likes/commenti</li>
+    </ul>
+  </details>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Rate limiting fail-closed almeno in produzione per endpoint AI/Scryfall/bulk. Aggiungere limiti mutativi per user ID.</div>
+  </div>
+</article>
+
+<!-- Risk 9 -->
+<article class="risk-card high" data-risk="9" data-severity="high" data-category="correctness" data-effort="high">
+  <div class="risk-id">Risk 9 — Game state real-time difficile da rendere corretto</div>
+  <h3>Game state real-time difficile da rendere corretto</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Partite inconsistenti, azioni perse, log fuori ordine</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/components/play/PlayGame.tsx</code> ~2044 linee; <code>src/app/api/game/[id]/action/route.ts</code> gestisce OCC solo per il percorso normale.</div>
+  </div>
+
+  <ul>
+    <li>La route usa <code>process_game_action</code> con <code>p_expected_seq</code> per le azioni normali</li>
+    <li>Azioni log-only (<code>library_view</code>, <code>peak</code>, <code>chat_message</code>) chiamano la RPC senza <code>p_expected_seq</code></li>
+    <li><code>concede</code> segue un percorso separato dalla RPC OCC</li>
+    <li><code>DELETE /api/lobbies/[id]</code> contiene un secondo percorso di concessione/chiusura partita</li>
+  </ul>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Unificare tutte le mutazioni di partita dietro una sola transazione/RPC con OCC, incluse chat/log-only/concede. Aggiungere test route-level sulle collisioni.</div>
+  </div>
+</article>
+
+<!-- Risk 10 -->
+<article class="risk-card high" data-risk="10" data-severity="high" data-category="testing" data-effort="medium">
+  <div class="risk-id">Risk 10 — Copertura e2e praticamente assente</div>
+  <h3>Copertura e2e praticamente assente</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Regressioni UI e auth non rilevate prima del deploy</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>tests/goblinai/goblinai-ui.spec.ts</code> contiene solo <code>test.skip()</code></div>
+  </div>
+
+  <p>Test esistenti coprono sottoinsiemi: game (priority/log helpers), GoblinAI (router/keyword), proxy PDF (layout/raster). Nessun flusso completo.</p>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Aggiungere smoke suite Playwright minima: login mock o sessione test, search card, add-to-deck, import decklist, collection import, create/join lobby, one game action.</div>
+  </div>
+</article>
+</section>
+
+<!-- ============================================================ -->
+<section id="risks-mid">
+<h2>Rischi Medi <span class="badge badge-mid">Medium</span></h2>
+
+<!-- Risk 11 -->
+<article class="risk-card mid" data-risk="11" data-severity="mid" data-category="ai" data-effort="medium">
+  <div class="risk-id">Risk 11 — GoblinAI: single provider, no timeout, no streaming</div>
+  <h3>GoblinAI: single provider, no timeout esplicito, no streaming</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">UX bloccante e disponibilità legata a DeepSeek</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/lib/goblinai/deepseek.ts</code> fa <code>fetch</code> diretto a <code>https://api.deepseek.com/chat/completions</code>, poi <code>await res.json()</code></div>
+  </div>
+
+  <p>Positivi: chiave server-side, 503 se manca, token persistiti.</p>
+  <p>Rischi: nessun <code>AbortSignal</code> / timeout; nessuno streaming; nessun provider fallback; prompt con interpolazione diretta.</p>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Timeout, delimitatori input, fallback provider o AI Gateway, streaming dopo aver stabilizzato le route.</div>
+  </div>
+</article>
+
+<!-- Risk 12 -->
+<article class="risk-card mid" data-risk="12" data-severity="mid" data-category="ai" data-effort="medium">
+  <div class="risk-id">Risk 12 — Prompt injection</div>
+  <h3>Prompt injection: rischio comportamentale, non data leak immediato</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Risposte fuori policy, step di restatement bypassato, allucinazioni di regole</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/lib/goblinai/prompts.ts</code> interpola direttamente <code>context.message</code>, <code>confirmedRestatement</code> e <code>userCorrection</code></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Delimitatori espliciti, istruzione anti-injection dopo il blocco utente, output validator leggero per citazioni/regole.</div>
+  </div>
+</article>
+
+<!-- Risk 13 -->
+<article class="risk-card mid" data-risk="13" data-severity="mid" data-category="security" data-effort="low">
+  <div class="risk-id">Risk 13 — Conversazioni GoblinAI: RLS ok, ma senza difesa in profondità</div>
+  <h3>Conversazioni GoblinAI protette da RLS ma senza filtro difensivo</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Difesa in profondità insufficiente</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>GET /api/assistant/conversations</code> seleziona senza <code>.eq('user_id', user.id)</code>; <code>DELETE /api/assistant/conversations/[id]</code> controlla solo <code>id</code></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Aggiungere <code>.eq('user_id', user.id)</code> in tutte le route conversazioni, anche se RLS già attivo.</div>
+  </div>
+</article>
+
+<!-- Risk 14 -->
+<article class="risk-card mid" data-risk="14" data-severity="mid" data-category="operations" data-effort="medium">
+  <div class="risk-id">Risk 14 — daily-sync carica bulk Scryfall in memoria</div>
+  <h3><code>daily-sync</code> carica il bulk Scryfall in memoria</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">OOM futuro o timeout se il payload cresce</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/app/api/cron/daily-sync/route.ts</code> usa <code>await dlRes.text()</code> e <code>JSON.parse(text)</code></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Portare <code>daily-sync</code> allo streaming parser o consolidare i due endpoint.</div>
+  </div>
+</article>
+
+<!-- Risk 15 -->
+<article class="risk-card mid" data-risk="15" data-severity="mid" data-category="operations" data-effort="low">
+  <div class="risk-id">Risk 15 — Cron e runbook non espliciti</div>
+  <h3>Cron e runbook non sono abbastanza espliciti</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Dati carte/prezzi stale senza segnale chiaro</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>vercel.json</code> schedula solo <code>/api/cron/daily-sync</code>; <code>/api/cron/update-prices</code> resta fallback manuale. Documentazione disallineata.</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Aggiornare docs operative: quale cron è schedulato, quale è fallback, come verificare freshness, cosa fare se Scryfall o Supabase falliscono.</div>
+  </div>
+</article>
+
+<!-- Risk 16 -->
+<article class="risk-card mid" data-risk="16" data-severity="mid" data-category="ux" data-effort="medium">
+  <div class="risk-id">Risk 16 — Errori DB/API esposti o silenziati male</div>
+  <h3>Errori DB/API spesso esposti o silenziati male</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">UX opaca e dettagli interni al client</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value">Molte route tornano <code>error.message</code> direttamente; molte azioni client fanno <code>console.error</code> o rollback minimo senza toast globale.</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Normalizzare error responses pubbliche, loggare dettagli server-side con correlation ID, introdurre toast/error banner per mutation failure.</div>
+  </div>
+</article>
+
+<!-- Risk 17 -->
+<article class="risk-card mid" data-risk="17" data-severity="mid" data-category="tech-debt" data-effort="low">
+  <div class="risk-id">Risk 17 — Next 16: convenzione middleware deprecata</div>
+  <h3>Next 16: convenzione <code>middleware</code> deprecata</h3>
+
+  <div class="field">
+    <div class="field-label">Impatto</div>
+    <div class="field-value">Non rompe oggi, ma è debito di upgrade</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>npm run build</code> mostra warning: "The middleware file convention is deprecated. Please use proxy instead."</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Migrare <code>src/middleware.ts</code> al nuovo pattern <code>proxy</code>.</div>
+  </div>
+</article>
+</section>
+
+<!-- ============================================================ -->
+<section id="risks-maintainability">
+<h2>Rischi di Manutenibilità <span class="badge badge-maint">Maintenance</span></h2>
+
+<!-- Risk 18 -->
+<article class="risk-card maint" data-risk="18" data-severity="maint" data-category="maintainability" data-effort="high">
+  <div class="risk-id">Risk 18 — PlayGame.tsx troppo grande</div>
+  <h3><code>PlayGame.tsx</code> è troppo grande (2044 linee)</h3>
+
+  <div class="field">
+    <div class="field-label">Ordine refactor consigliato</div>
+    <div class="field-value">
+      <ol>
+        <li>Estrarre data loading/realtime</li>
+        <li>Estrarre dispatch/sendAction e rollback</li>
+        <li>Estrarre zone actions</li>
+        <li>Estrarre goldfish/bot loop</li>
+        <li>Aggiungere test prima dei refactor successivi</li>
+      </ol>
+    </div>
+  </div>
+</article>
+
+<!-- Risk 19 -->
+<article class="risk-card maint" data-risk="19" data-severity="maint" data-category="maintainability" data-effort="medium">
+  <div class="risk-id">Risk 19 — Game engine: no-op silenziosi e contatori denormalizzati</div>
+  <h3>Game engine: no-op silenziosi e contatori denormalizzati</h3>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>applyAction</code> ritorna <code>s</code> nel <code>default</code>; <code>handCount</code> e <code>libraryCount</code> mantenuti manualmente.</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Azioni sconosciute devono lanciare <code>ActionRejectedError</code>. Aggiungere invariant test che confrontano contatori e array dopo ogni handler.</div>
+  </div>
+</article>
+
+<!-- Risk 20 -->
+<article class="risk-card maint" data-risk="20" data-severity="maint" data-category="maintainability" data-effort="medium">
+  <div class="risk-id">Risk 20 — Bot loop: guardia semantica incompleta</div>
+  <h3>Bot loop: limite presente (100 iterazioni), ma guardia semantica incompleta</h3>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value"><code>src/lib/game/bot.ts:30-31</code> ha il limite. Durante il turno del bot, il codice auto-passa per l'umano senza controllare <code>config.type === 'ghost'</code>.</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Restringere auto-pass al ghost o introdurre policy esplicita per bot non-ghost.</div>
+  </div>
+</article>
+
+<!-- Risk 21 -->
+<article class="risk-card maint" data-risk="21" data-severity="maint" data-category="maintainability" data-effort="low">
+  <div class="risk-id">Risk 21 — apply-preset ignora il preset ricevuto</div>
+  <h3><code>apply-preset</code> ignora davvero il preset ricevuto</h3>
+
+  <pre>const key: PresetKey = body.preset === 'commander' ? 'commander' : 'commander'</pre>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Validare <code>body.preset</code> contro <code>PRESETS</code>, tornare 400 per chiavi sconosciute.</div>
+  </div>
+</article>
+
+<!-- Risk 22 -->
+<article class="risk-card maint" data-risk="22" data-severity="maint" data-category="maintainability" data-effort="low">
+  <div class="risk-id">Risk 22 — Duplicazione shuffle e tipi action data deboli</div>
+  <h3>Duplicazione shuffle e tipi action data deboli</h3>
+
+  <div class="field">
+    <div class="field-label">Evidenza</div>
+    <div class="field-value">Fisher-Yates ripetuto in più handler; action data castata inline in molti punti.</div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Helper <code>shuffleInPlace</code>, schema/type guard per <code>GameAction.data</code> per azioni critiche.</div>
+  </div>
+</article>
+</section>
+
+<!-- ============================================================ -->
+<section id="risks-mobile">
+<h2>Rischi UX Mobile <span class="badge badge-mobile" style="background:var(--tag-mobile)">UX</span></h2>
+
+<div class="risk-card mobile" data-risk="ux-mobile" data-severity="mid" data-category="ux">
+  <ul>
+    <li>Molte superfici card-heavy usano <code>&lt;img&gt;</code> invece di <code>next/image</code></li>
+    <li>Diverse griglie e action bar dense per schermi sotto 360px</li>
+    <li>Modello long-press/right-click potente ma costoso cognitivamente</li>
+    <li>Assenza di error UI globale rende le failure mobile confuse</li>
+  </ul>
+
+  <div class="field">
+    <div class="field-label">Fix raccomandato</div>
+    <div class="field-value">Test manuale su viewport 360×740 e 390×844, poi Playwright screenshot smoke per card browser, deck editor, game board, GoblinAI.</div>
+  </div>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="priorities">
+<h2>Priorità Operativa</h2>
+
+<table class="priority-table" data-table="priority-matrix">
+<thead>
+  <tr>
+    <th>#</th>
+    <th>Azione</th>
+    <th>Categoria</th>
+    <th>Impatto</th>
+    <th>Sforzo</th>
+  </tr>
+</thead>
+<tbody>
+  <tr data-priority="1" data-status="fixed">
+    <td>1</td>
+    <td><s>Fix delete commenti con ownership + test</s></td>
+    <td>Sicurezza dati</td>
+    <td class="pass" style="text-decoration:line-through">P0</td>
+    <td><span class="badge badge-fixed">Fatto</span></td>
+  </tr>
+  <tr data-priority="2">
+    <td>2</td>
+    <td>Rigenerare tipi Supabase e correggere <code>cards.id</code></td>
+    <td>Integrità dati</td>
+    <td class="pass">P0</td>
+    <td>Medio</td>
+  </tr>
+  <tr data-priority="3">
+    <td>3</td>
+    <td>Implementare/rimuovere <code>/api/account</code></td>
+    <td>UX/trust</td>
+    <td class="pass">P0</td>
+    <td>Basso</td>
+  </tr>
+  <tr data-priority="4">
+    <td>4</td>
+    <td>Rendere <code>npm run lint</code> verde</td>
+    <td>Qualità release</td>
+    <td class="pass">P0</td>
+    <td>Basso</td>
+  </tr>
+  <tr data-priority="5">
+    <td>5</td>
+    <td>Ricostruire migration mancanti da DB live</td>
+    <td>Recovery</td>
+    <td class="warn">High</td>
+    <td>Medio</td>
+  </tr>
+  <tr data-priority="6">
+    <td>6</td>
+    <td>Hardening RPC <code>SECURITY DEFINER</code></td>
+    <td>Sicurezza DB</td>
+    <td class="warn">High</td>
+    <td>Medio</td>
+  </tr>
+  <tr data-priority="7">
+    <td>7</td>
+    <td>Rate limit su route mutative/Scryfall-backed</td>
+    <td>Abuse/DoS</td>
+    <td class="warn">High</td>
+    <td>Medio</td>
+  </tr>
+  <tr data-priority="8">
+    <td>8</td>
+    <td>E2E smoke Playwright minima</td>
+    <td>Regressioni</td>
+    <td class="warn">High</td>
+    <td>Medio</td>
+  </tr>
+  <tr data-priority="9">
+    <td>9</td>
+    <td>Unificare mutazioni game con OCC</td>
+    <td>Correttezza</td>
+    <td class="warn">High</td>
+    <td>Alto</td>
+  </tr>
+  <tr data-priority="10">
+    <td>10</td>
+    <td>Timeout/fallback/delimitatori GoblinAI</td>
+    <td>Affidabilità AI</td>
+    <td class="warn">Mid</td>
+    <td>Medio</td>
+  </tr>
+  <tr data-priority="11">
+    <td>11</td>
+    <td>Streaming/cron memory cleanup</td>
+    <td>Operatività</td>
+    <td class="warn">Mid</td>
+    <td>Medio</td>
+  </tr>
+  <tr data-priority="12">
+    <td>12</td>
+    <td>Refactor guidato da test di <code>PlayGame</code></td>
+    <td>Manutenibilità</td>
+    <td class="warn">Maint</td>
+    <td>Alto</td>
+  </tr>
+</tbody>
+</table>
+</section>
+
+<!-- ============================================================ -->
+<section id="decision">
+<h2>Decisione Finale</h2>
+
+<div class="thesis">
+  <p><strong>Prima di aggiungere nuove feature, fare una fase di hardening breve e misurabile:</strong></p>
+  <ol>
+    <li>Chiudere i buchi P0</li>
+    <li>Rendere CI verde</li>
+    <li>Riallineare schema/tipi/migration</li>
+    <li>Aggiungere 5–7 smoke e2e</li>
+    <li>Mettere health/freshness su sync carte e AI</li>
+  </ol>
+  <p style="margin-top:.75rem;">
+    Dopo questi interventi, il progetto diventa molto più adatto a iterare. Senza, ogni nuova feature aumenta il costo di diagnosi dei bug esistenti.
+  </p>
+</div>
+</section>
+
+</body>
+</html>
