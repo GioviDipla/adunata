@@ -328,7 +328,12 @@ function deriveProxyImageUrls(
   if (rasterPreset === 'ultra' || rasterPreset === 'epic') {
     urls.push(upscaled2xImageUrl(card, face))
   }
-  urls.push(...scryfallUrls)
+  // ULTRA/EPIC use only upscaled R2 images — no Scryfall fallback.
+  // If the upscaled asset isn't ready, the card will be skipped with a warning
+  // instead of silently printing at lower quality.
+  if (rasterPreset !== 'ultra' && rasterPreset !== 'epic') {
+    urls.push(...scryfallUrls)
+  }
   return [...new Set(urls)]
 }
 

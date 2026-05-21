@@ -190,7 +190,7 @@ export default function AddCardSearch({
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setIsOpen(true)}
           placeholder={isTokenSearch
-            ? "Search tokens (Soldier, Treasure, Emblem...)"
+            ? "Search TOKEN ONLY"
             : "Search cards to add..."
           }
           className="w-full rounded-lg border border-border bg-bg-card py-2.5 pl-9 pr-3 text-sm text-font-primary placeholder:text-font-muted transition-colors focus:border-bg-accent focus:outline-none focus:ring-2 focus:ring-bg-accent/20"

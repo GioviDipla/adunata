@@ -5,14 +5,20 @@ import { CARD_GRID_COLUMNS } from '@/lib/supabase/columns'
 
 export async function GET(request: NextRequest) {
   const name = request.nextUrl.searchParams.get('name')
+  const isTokenSearch = request.nextUrl.searchParams.get('type') === 'token'
 
   if (!name || name.trim().length === 0) {
     return NextResponse.json({ printings: [] })
   }
 
   try {
-    // Search Scryfall for all printings using exact name match
-    const result = await searchCards(`!"${name.trim()}" unique:prints`)
+    // Search Scryfall for all printings using exact name match.
+    // Tokens share names with regular cards (Soldier, Treasure, ...) so the
+    // exact-name match alone resolves to the creature/artifact, not the
+    // token printings. Adding t:token (with the other extras) scopes the
+    // search to token-shaped objects.
+    const prefix = isTokenSearch ? '(t:token OR t:emblem OR t:dungeon OR t:plane OR t:scheme) ' : ''
+    const result = await searchCards(`${prefix}!"${name.trim()}" unique:prints`)
 
     if (result.data.length === 0) {
       return NextResponse.json({ printings: [] })

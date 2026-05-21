@@ -4,6 +4,22 @@ Solo cose ancora da fare. Completati rimossi (tanto git ricorda).
 
 ---
 
+## [R2-CORS] Configurare CORS sul bucket R2
+
+Quando: dopo aver verificato che l'API key R2 corrente non ha permessi PutBucketCors.
+Cosa fare:
+1. Vai su Cloudflare Dashboard → R2 → adunata-card-images-hd → Settings → CORS
+2. Aggiungi regola CORS:
+   - Allowed Origins: `*`
+   - Allowed Methods: `GET`, `HEAD`
+   - Allowed Headers: `*`
+   - Max Age: 86400
+Dove inserire il risultato: già applicato — verifica che funzioni con `curl -sI -H "Origin: https://adunata.studiob35.com" "https://cdn.adunata.studiob35.com/scryfall/test" | grep access-control`
+
+Nota: il proxy server-side in `/api/card-image/upscaled` (2026-05-21) ha già risolto il problema CORS lato client. Questo passo è per permettere accesso diretto alle immagini R2 dal browser senza passare per il server Next.js.
+
+---
+
 ## [UPSCALE-WORKER] — Worker asincrono per immagini Ultra
 
 **Comportamento:** in produzione Vercel non genera immagini con Real-ESRGAN. Quando Ultra trova immagini mancanti, accoda righe `queued` in Supabase; un worker locale o dedicato deve processarle.
