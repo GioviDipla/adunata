@@ -804,23 +804,11 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
             onCardClick={setSelectedDetailCard}
             onQuantityChange={handleQuantityChange}
             onRemove={handleRemove}
-            onToggleCommander={
-              activeTab !== 'tokens' && activeTab !== 'removed'
-                ? handleToggleCommander
-                : undefined
-            }
-            onMoveToBoard={activeTab !== 'tokens' ? handleMoveToBoard : undefined}
-            onSectionChange={
-              activeTab === 'removed' ? undefined : handleSectionChange
-            }
-            onTagsChange={
-              activeTab === 'removed' ? undefined : handleTagsChange
-            }
-            onToggleFoil={
-              activeTab !== 'tokens' && activeTab !== 'removed'
-                ? handleToggleFoil
-                : undefined
-            }
+            onToggleCommander={activeTab !== 'removed' ? handleToggleCommander : undefined}
+            onMoveToBoard={activeTab !== 'removed' ? handleMoveToBoard : undefined}
+            onSectionChange={activeTab === 'removed' ? undefined : handleSectionChange}
+            onTagsChange={activeTab === 'removed' ? undefined : handleTagsChange}
+            onToggleFoil={activeTab !== 'removed' ? handleToggleFoil : undefined}
             overlayByCardId={overlayByCardId}
           />
           {activeTab === 'removed' && (
