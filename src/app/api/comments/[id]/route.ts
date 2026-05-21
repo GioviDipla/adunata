@@ -73,6 +73,7 @@ export async function DELETE(
     .from('deck_comments')
     .delete()
     .eq('id', commentId)
+    .eq('user_id', user.id)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
