@@ -24,6 +24,7 @@ interface CardEntry {
 }
 
 interface ProxyPrintModalProps {
+  deckId: string
   deckName: string
   cards: CardEntry[]
   userName: string
@@ -366,7 +367,7 @@ function getPreviewImage(card: CardRow): string | null {
   return card.image_normal || card.image_small
 }
 
-export default function ProxyPrintModal({ deckName, cards, userName, onClose }: ProxyPrintModalProps) {
+export default function ProxyPrintModal({ deckId, deckName, cards, userName, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
   const [presetId, setPresetId] = useState<PrintPresetId>(DEFAULT_PRESET_ID)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -807,27 +808,14 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
 
   const handlePrintOrder = useCallback(async () => {
     setSendingOrder(true)
-    setGenerationPhase('idle')
     setOrderFeedback(null)
     try {
-      const blob = await buildPdfBlob()
-      if (!blob) {
-        setOrderFeedback({ type: 'error', text: 'Impossibile generare il PDF (nessuna carta valida).' })
-        return
-      }
-      const pdfBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          const result = reader.result as string
-          resolve(result.slice(result.indexOf(',') + 1))
-        }
-        reader.readAsDataURL(blob.blob)
-      })
       const sourceCards = showPreview ? expandedOrder : selectedCards
       const entries = showPreview
         ? groupExpandedToEntries(sourceCards as ExpandedSlot[])
         : (sourceCards as CardEntry[])
       const decklist = buildMoxfieldDecklist(entries)
+      const shareLink = `${window.location.origin}/decks/${deckId}`
 
       const res = await fetch('/api/print-order', {
         method: 'POST',
@@ -836,7 +824,7 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
           userName,
           deckName,
           decklist,
-          pdfBase64,
+          shareLink,
           timestamp: new Date().toISOString(),
         }),
       })
@@ -852,10 +840,9 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
       const text = err instanceof Error ? err.message : 'Errore sconosciuto durante invio ordine.'
       setOrderFeedback({ type: 'error', text })
     } finally {
-      setGenerationPhase('idle')
       setSendingOrder(false)
     }
-  }, [buildPdfBlob, buildMoxfieldDecklist, groupExpandedToEntries, deckName, userName, onClose, showPreview, expandedOrder, selectedCards])
+  }, [buildMoxfieldDecklist, groupExpandedToEntries, deckId, deckName, userName, onClose, showPreview, expandedOrder, selectedCards])
 
   const pages = outputMode === 'direct-poker'
     ? (calibrationMode ? 1 : totalCards)
@@ -1598,8 +1585,8 @@ export default function ProxyPrintModal({ deckName, cards, userName, onClose }: 
                     <Send size={14} />
                   )}
                   {sendingOrder
-                    ? generationPhase === 'preparing-images' ? 'Preparing Ultra...' : 'Sending...'
-                    : 'Print at StudioB35'}
+                    ? 'Sending...'
+                    : 'Stampa con servizio proxy Adunata!'}
                 </button>
               </div>
             </div>

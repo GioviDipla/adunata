@@ -936,6 +936,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
       {/* Proxy print modal */}
       {showProxyPrint && (
         <ProxyPrintModal
+          deckId={deck.id}
           deckName={deckName}
           cards={statsCards}
           userName={currentUserName}
