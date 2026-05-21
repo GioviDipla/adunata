@@ -7,6 +7,9 @@ import { enforceLimit, getClientId, searchLimiter } from '@/lib/rate-limit'
 const LOCAL_LANGS = new Set(['en', 'it'])
 const ALLOWED_LANGS = new Set(['en', 'it', 'es', 'fr', 'de', 'pt', 'ja', 'ko', 'ru', 'zhs', 'zht'])
 
+const TOKEN_DB_OR = 'type_line.ilike.%Token%,type_line.ilike.%Emblem%,type_line.ilike.%Dungeon%,type_line.ilike.%Plane%,type_line.ilike.%Scheme%,layout.eq.token,layout.eq.double_faced_token,layout.eq.emblem'
+const TOKEN_SCRY_PREFIX = '(t:token OR t:emblem OR t:dungeon OR t:plane OR t:scheme) '
+
 /**
  * Card search API.
  *
@@ -23,6 +26,7 @@ export async function GET(request: NextRequest) {
   const rawLang = request.nextUrl.searchParams.get('lang') ?? 'en'
   const lang = ALLOWED_LANGS.has(rawLang) ? rawLang : 'en'
   const upscaledOnly = request.nextUrl.searchParams.get('upscaled') === '1'
+  const isTokenSearch = request.nextUrl.searchParams.get('type') === 'token'
 
   if (!q || q.trim().length < 2) {
     return NextResponse.json({ cards: [] })
@@ -44,6 +48,7 @@ export async function GET(request: NextRequest) {
         .ilike(column, `%${query}%`)
         .limit(10)
 
+      if (isTokenSearch) localQuery = localQuery.or(TOKEN_DB_OR)
       if (upscaledOnly) localQuery = localQuery.eq('has_upscaled_2x', true)
 
       const { data: localCards } = await localQuery
@@ -57,12 +62,13 @@ export async function GET(request: NextRequest) {
     // local languages we run EN + IT in parallel so a typo on one side
     // can still land via the other.
     const scryQueries: string[] = []
+    const prefix = isTokenSearch ? TOKEN_SCRY_PREFIX : ''
     if (lang === 'en') {
-      scryQueries.push(query, `lang:it ${query}`)
+      scryQueries.push(`${prefix}${query}`, `${prefix}lang:it ${query}`)
     } else if (lang === 'it') {
-      scryQueries.push(query, `lang:it ${query}`)
+      scryQueries.push(`${prefix}${query}`, `${prefix}lang:it ${query}`)
     } else {
-      scryQueries.push(`lang:${lang} ${query}`)
+      scryQueries.push(`${prefix}lang:${lang} ${query}`)
     }
 
     const results = await Promise.allSettled(scryQueries.map((q) => searchCards(q)))
@@ -138,6 +144,7 @@ export async function GET(request: NextRequest) {
       .ilike(column, `%${query}%`)
       .limit(10)
 
+    if (isTokenSearch) fallbackQuery = fallbackQuery.or(TOKEN_DB_OR)
     if (upscaledOnly) fallbackQuery = fallbackQuery.eq('has_upscaled_2x', true)
 
     const { data: fallback } = await fallbackQuery
