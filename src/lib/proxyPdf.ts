@@ -91,11 +91,13 @@ export const PRINT_RASTER_PRESETS: Record<PrintRasterPreset, PrintRasterPresetOp
     dpi: 600,
     jpegQuality: 0.98,
     bleedJpegQuality: 0.94,
+    allowUpscale: true,
   },
   epic: {
     dpi: 1200,
     jpegQuality: 0.99,
     bleedJpegQuality: 0.96,
+    allowUpscale: true,
   },
 }
 
@@ -103,8 +105,8 @@ export const DIRECT_PRINT_RASTER_PRESETS: Record<DirectPrintRasterPreset, PrintR
   fast: { dpi: 240, jpegQuality: 0.82, maxWidthPx: 800, maxHeightPx: 1100 },
   standard: { dpi: 300, jpegQuality: 0.88, maxWidthPx: 800, maxHeightPx: 1100 },
   high: { dpi: 360, jpegQuality: 0.9, maxWidthPx: 1000, maxHeightPx: 1400 },
-  ultra: { dpi: 600, jpegQuality: 0.98 },
-  epic: { dpi: 1200, jpegQuality: 0.99 },
+  ultra: { dpi: 600, jpegQuality: 0.98, allowUpscale: true },
+  epic: { dpi: 1200, jpegQuality: 0.99, allowUpscale: true },
 }
 
 export function defaultDirectPokerRasterPreset(): DirectPrintRasterPreset {

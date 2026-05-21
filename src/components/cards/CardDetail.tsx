@@ -270,7 +270,12 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
 
     setLoadingPrintings(true)
     try {
-      const res = await fetch(`/api/cards/printings?name=${encodeURIComponent(card.name)}`)
+      const typeLine = (card.type_line ?? '').toLowerCase()
+      const isToken = /\b(token|emblem|dungeon|plane|scheme)\b/.test(typeLine)
+      const url = isToken
+        ? `/api/cards/printings?name=${encodeURIComponent(card.name)}&type=token`
+        : `/api/cards/printings?name=${encodeURIComponent(card.name)}`
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
         setPrintings(data.printings ?? [])

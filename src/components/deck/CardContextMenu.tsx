@@ -56,6 +56,7 @@ export default function CardContextMenu({
   onClose,
 }: CardContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const isTokenSource = currentBoard === 'tokens'
 
   // Body scroll lock + Escape. Matches the pattern used by the card browser's
   // context menu so a stray touch-scroll on mobile can't drag the page behind
@@ -86,10 +87,12 @@ export default function CardContextMenu({
   }, [onClose])
 
   // Panel dimensions vary with which optional rows are present.
+  // For token sources, hide commander / foil / sections regardless of whether
+  // the parent supplied the handlers — those actions don't make sense for tokens.
   const hasQuantity = onQuantityChange != null && quantity != null
-  const hasCommander = onToggleCommander != null
-  const hasFoil = onToggleFoil != null
-  const hasSections = onMoveToSection != null && Array.isArray(sections)
+  const hasCommander = !isTokenSource && onToggleCommander != null
+  const hasFoil = !isTokenSource && onToggleFoil != null
+  const hasSections = !isTokenSource && onMoveToSection != null && Array.isArray(sections)
   const sectionItems = hasSections ? sections!.length + 1 : 0 // +1 for "Uncategorized"
   const menuWidth = hasSections ? 260 : 220
   let menuHeight = 60 // move-to header + gap
@@ -185,7 +188,7 @@ export default function CardContextMenu({
       )}
 
       <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-font-muted">
-        Move to
+        {isTokenSource ? 'Add to deck' : 'Move to'}
       </div>
       {otherBoards.map((board) => (
         <button
