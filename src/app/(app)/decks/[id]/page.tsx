@@ -132,6 +132,11 @@ export default async function DeckDetailPage({
     is_collapsed: s.is_collapsed ?? false,
   }))
 
+  const { data: currentProfile } = user
+    ? await supabase.from('profiles').select('display_name').eq('id', user.id).single()
+    : { data: null }
+  const currentUserName = currentProfile?.display_name ?? user?.email?.split('@')[0] ?? 'Unknown'
+
   const isOwner = !!user && deck.user_id === user.id
   const visibility = (deck.visibility as 'private' | 'public') ?? 'private'
 
@@ -162,6 +167,7 @@ export default async function DeckDetailPage({
         deck={deck}
         initialCards={formattedCards}
         initialSections={sections}
+        currentUserName={currentUserName}
       />
     )
   }
@@ -184,6 +190,7 @@ export default async function DeckDetailPage({
       ownerUsername={ownerProfile.username}
       ownerDisplayName={ownerProfile.display_name}
       viewerId={user?.id ?? null}
+              currentUserName={currentUserName}
     />
   )
 }

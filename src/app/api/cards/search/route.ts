@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')
   const rawLang = request.nextUrl.searchParams.get('lang') ?? 'en'
   const lang = ALLOWED_LANGS.has(rawLang) ? rawLang : 'en'
+  const upscaledOnly = request.nextUrl.searchParams.get('upscaled') === '1'
 
   if (!q || q.trim().length < 2) {
     return NextResponse.json({ cards: [] })
@@ -37,11 +38,15 @@ export async function GET(request: NextRequest) {
     // Only hit the DB for languages we store locally.
     if (LOCAL_LANGS.has(lang)) {
       const column = lang === 'it' ? 'name_it' : 'name'
-      const { data: localCards } = await supabase
+      let localQuery = supabase
         .from('cards')
         .select(CARD_GRID_COLUMNS)
         .ilike(column, `%${query}%`)
         .limit(10)
+
+      if (upscaledOnly) localQuery = localQuery.eq('has_upscaled_2x', true)
+
+      const { data: localCards } = await localQuery
 
       if (localCards && localCards.length >= 5) {
         return NextResponse.json({ cards: localCards, source: 'database' })
@@ -108,10 +113,14 @@ export async function GET(request: NextRequest) {
       name_it: italianNameByKey.get(c.name) ?? null,
     }))
 
-    const { data: upserted } = await supabase
+    let upsertQuery = supabase
       .from('cards')
       .upsert(toUpsert, { onConflict: 'scryfall_id' })
       .select(CARD_GRID_COLUMNS)
+
+    if (upscaledOnly) upsertQuery = upsertQuery.eq('has_upscaled_2x', true)
+
+    const { data: upserted } = await upsertQuery
 
     return NextResponse.json({
       cards: upserted ?? toUpsert,
@@ -123,11 +132,15 @@ export async function GET(request: NextRequest) {
 
     // Fallback to whatever local match we can make.
     const column = lang === 'it' ? 'name_it' : 'name'
-    const { data: fallback } = await supabase
+    let fallbackQuery = supabase
       .from('cards')
       .select(CARD_GRID_COLUMNS)
       .ilike(column, `%${query}%`)
       .limit(10)
+
+    if (upscaledOnly) fallbackQuery = fallbackQuery.eq('has_upscaled_2x', true)
+
+    const { data: fallback } = await fallbackQuery
 
     return NextResponse.json({ cards: fallback ?? [], source: 'fallback' })
   }

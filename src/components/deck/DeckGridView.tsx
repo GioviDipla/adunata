@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Crown, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
+import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import type { Database } from '@/types/supabase'
 
 const LONG_PRESS_MS = 350
@@ -187,6 +188,9 @@ export default function DeckGridView({
                 <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-bg-yellow/90 text-bg-dark backdrop-blur-sm">
                   <Sparkles className="h-3 w-3" />
                 </div>
+              )}
+              {entry.card.has_upscaled_2x && (
+                <UpscaledBadge className={`absolute right-1.5 ${entry.board === 'removed' && onMoveToBoard ? 'bottom-8' : 'bottom-1.5'}`} />
               )}
               </div>
             ) : (

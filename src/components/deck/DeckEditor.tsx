@@ -30,6 +30,7 @@ import DeckSectionsPanel from './DeckSectionsPanel'
 import SidebarCards, { type SidebarPanel } from './SidebarCards'
 import VisibilityToggle from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
+import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
 
@@ -61,11 +62,12 @@ interface DeckEditorProps {
   deck: DeckRow
   initialCards: DeckCardEntry[]
   initialSections?: SectionRow[]
+  currentUserName: string
 }
 
 type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens' | 'removed'
 
-export default function DeckEditor({ deck, initialCards, initialSections = [] }: DeckEditorProps) {
+export default function DeckEditor({ deck, initialCards, initialSections = [], currentUserName }: DeckEditorProps) {
   const router = useRouter()
   const [cards, setCards] = useState<DeckCardEntry[]>(initialCards)
   const [sections, setSections] = useState<SectionRow[]>(initialSections)
@@ -889,7 +891,12 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
                         className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover border-b border-border/30 last:border-0"
                       >
                         {card.image_small && (
-                          <img src={card.image_small} alt={card.name} className="h-12 w-auto rounded" />
+                          <span className="relative shrink-0">
+                            <img src={card.image_small} alt={card.name} className="h-12 w-auto rounded" />
+                            {card.has_upscaled_2x && (
+                              <UpscaledBadge className="absolute -bottom-0.5 -right-1 scale-75" />
+                            )}
+                          </span>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-font-primary truncate">{card.name}</div>
@@ -1055,6 +1062,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [] }:
         <ProxyPrintModal
           deckName={deckName}
           cards={statsCards}
+          userName={currentUserName}
           onClose={() => setShowProxyPrint(false)}
         />
       )}

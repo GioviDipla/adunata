@@ -6,6 +6,7 @@ import { Minus, Plus, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
+import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import { useLongPress } from '@/lib/hooks/useLongPress'
 import { formatPreferredPrice } from '@/lib/utils/price'
 import type { Database } from '@/types/supabase'
@@ -319,6 +320,9 @@ function DeckCardImpl({
             alt={card.name}
             className="h-auto w-56 rounded-lg shadow-2xl"
           />
+          {card.has_upscaled_2x && (
+            <UpscaledBadge className="absolute bottom-1.5 right-1.5" />
+          )}
         </div>
       )}
 

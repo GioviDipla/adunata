@@ -6,6 +6,21 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type CardImageBatchStatus =
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'completed_with_errors'
+  | 'failed'
+  | 'cancelled'
+
+export type CardImageAssetStatus =
+  | 'queued'
+  | 'processing'
+  | 'ready'
+  | 'failed'
+  | 'cancelled'
+
 export interface Database {
   public: {
     Tables: {
@@ -52,6 +67,7 @@ export interface Database {
           has_dies_trigger: boolean
           has_end_step_trigger: boolean
           has_cast_trigger: boolean
+          has_upscaled_2x: boolean
         }
         Insert: {
           id?: number
@@ -95,6 +111,7 @@ export interface Database {
           has_dies_trigger?: boolean
           has_end_step_trigger?: boolean
           has_cast_trigger?: boolean
+          has_upscaled_2x?: boolean
         }
         Update: {
           id?: number
@@ -138,8 +155,152 @@ export interface Database {
           has_dies_trigger?: boolean
           has_end_step_trigger?: boolean
           has_cast_trigger?: boolean
+          has_upscaled_2x?: boolean
         }
         Relationships: []
+      }
+      card_image_batches: {
+        Row: {
+          id: string
+          created_by: string
+          label: string | null
+          status: CardImageBatchStatus
+          target_profile: string
+          total_jobs: number
+          completed_jobs: number
+          failed_jobs: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          created_by: string
+          label?: string | null
+          status?: CardImageBatchStatus
+          target_profile?: string
+          total_jobs?: number
+          completed_jobs?: number
+          failed_jobs?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          created_by?: string
+          label?: string | null
+          status?: CardImageBatchStatus
+          target_profile?: string
+          total_jobs?: number
+          completed_jobs?: number
+          failed_jobs?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'card_image_batches_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      card_image_assets: {
+        Row: {
+          id: string
+          batch_id: string | null
+          card_id: string
+          scryfall_id: string
+          face_index: number
+          source_url: string
+          storage_path: string
+          status: CardImageAssetStatus
+          target_profile: string
+          model: string
+          scale: number
+          target_dpi: number
+          width_px: number | null
+          height_px: number | null
+          bytes: number | null
+          mime_type: string | null
+          checksum: string | null
+          attempts: number
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          batch_id?: string | null
+          card_id: string
+          scryfall_id: string
+          face_index?: number
+          source_url: string
+          storage_path: string
+          status?: CardImageAssetStatus
+          target_profile?: string
+          model?: string
+          scale?: number
+          target_dpi?: number
+          width_px?: number | null
+          height_px?: number | null
+          bytes?: number | null
+          mime_type?: string | null
+          checksum?: string | null
+          attempts?: number
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          batch_id?: string | null
+          card_id?: string
+          scryfall_id?: string
+          face_index?: number
+          source_url?: string
+          storage_path?: string
+          status?: CardImageAssetStatus
+          target_profile?: string
+          model?: string
+          scale?: number
+          target_dpi?: number
+          width_px?: number | null
+          height_px?: number | null
+          bytes?: number | null
+          mime_type?: string | null
+          checksum?: string | null
+          attempts?: number
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'card_image_assets_batch_id_fkey'
+            columns: ['batch_id']
+            isOneToOne: false
+            referencedRelation: 'card_image_batches'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'card_image_assets_card_id_fkey'
+            columns: ['card_id']
+            isOneToOne: false
+            referencedRelation: 'cards'
+            referencedColumns: ['id']
+          },
+        ]
       }
       sync_log: {
         Row: {

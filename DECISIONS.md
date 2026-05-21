@@ -154,3 +154,11 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 - **`scrollbar-gutter: stable` rimosso da `html`** — riservava sempre uno spazio a destra; combinato con scrollbar autohide di macOS/iOS produceva un flicker percepito tra pagine corte e lunghe. Sostituito con utility opt-in `.scrollbar-stable` da applicare al singolo container quando serve.
 - **`touch-action: manipulation` rimosso da `html, body`** — global cascade in conflitto con `touch-action: pan-x | none` element-level (mano, drag handle). Default browser è già adeguato per app PWA-like.
 - **`.fixed.inset-0 { padding-top: env(safe-area-inset-top) }` LASCIATO IN PLACE** — selettore globale usato da ~20 modali correttamente. La proposta del piano di scoparlo a `.safe-area-overlay` opt-in era un cambio massivo a basso valore: i modali vogliono tutti il safe-area-top. Skip.
+
+## 2026-05-20 — Migrazione `card-images-hd` su Cloudflare R2
+
+**Scelta:** Spostato bucket immagini HD upscalate da Supabase Storage a Cloudflare R2, esposto via custom domain `cdn.adunata.studiob35.com`. Route `/api/card-image/upscaled` ora restituisce 302 redirect verso il CDN invece di streamare i byte attraverso il route handler. La colonna `card_image_assets.storage_path` resta chiave canonica: gli oggetti sono copiati su R2 con la stessa key, nessuna migration di schema.
+
+**Perché:** Bucket cresciuto a 5.2 GB su Free tier Supabase (limite 1 GB); proiezione catalogo completo ~700 GB. R2 ha storage a $0.015/GB e **zero egress**, contro $0.021/GB storage + $0.09/GB egress su Supabase Pro. Su 700 GB + 500 GB egress al mese: ~$10 R2 vs ~$85 Supabase. Vercel Blob considerato ma egress non gratis ($0.03-0.05/GB) e legato al piano Vercel.
+
+**Trade-off:** Auth/RLS sul file non più disponibili (R2 pubblico via CDN). OK perché immagini carte sono dati Scryfall pubblici, non gated. Per file futuri privati per-utente (es. PDF deck personali) restare su Supabase Storage. Cold-cache TTFB peggiora di 1 hop (302 + GET CDN) ma `s-maxage=31536000` su Vercel/CDN rende trascurabile dopo il primo hit.
