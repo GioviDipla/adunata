@@ -55,6 +55,7 @@ export default function DeckCardActionSheet({
   isFoil,
   onToggleFoil,
 }: Props) {
+  const isTokenSource = currentBoard === 'tokens'
   const [sectionId, setSectionId] = useState<string | null>(currentSectionId)
 
   useEffect(() => {
@@ -81,9 +82,11 @@ export default function DeckCardActionSheet({
     onSectionChange?.(deckCardId, id)
   }
 
-  const otherBoards = (['main', 'sideboard', 'maybeboard', 'tokens'] as const).filter(
-    (b) => b !== currentBoard,
-  )
+  const otherBoards = (
+    isTokenSource
+      ? (['main', 'sideboard', 'maybeboard'] as const)
+      : (['main', 'sideboard', 'maybeboard', 'tokens'] as const)
+  ).filter((b) => b !== currentBoard)
 
   return (
     <>
@@ -116,47 +119,49 @@ export default function DeckCardActionSheet({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
-          {/* Section picker — radio list */}
-          <section className="mb-4">
-            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
-              Section
-            </h4>
-            <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-bg-cell">
-              <li>
-                <button
-                  onClick={() => pickSection(null)}
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-font-secondary hover:bg-bg-hover"
-                >
-                  <span className="flex h-4 w-4 items-center justify-center">
-                    {sectionId == null && <Check className="h-4 w-4 text-font-accent" />}
-                  </span>
-                  Uncategorized
-                </button>
-              </li>
-              {sections.map((s) => (
-                <li key={s.id}>
+          {/* Section picker — radio list (hidden for token sources) */}
+          {!isTokenSource && (
+            <section className="mb-4">
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+                Section
+              </h4>
+              <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-bg-cell">
+                <li>
                   <button
-                    onClick={() => pickSection(s.id)}
-                    className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-font-primary hover:bg-bg-hover"
+                    onClick={() => pickSection(null)}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-font-secondary hover:bg-bg-hover"
                   >
                     <span className="flex h-4 w-4 items-center justify-center">
-                      {sectionId === s.id && (
-                        <Check className="h-4 w-4 text-font-accent" />
-                      )}
+                      {sectionId == null && <Check className="h-4 w-4 text-font-accent" />}
                     </span>
-                    <span
-                      className="h-3 w-3 rounded-full"
-                      style={{ background: s.color ?? '#475569' }}
-                    />
-                    <span className="truncate">{s.name}</span>
+                    Uncategorized
                   </button>
                 </li>
-              ))}
-            </ul>
-          </section>
+                {sections.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      onClick={() => pickSection(s.id)}
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-font-primary hover:bg-bg-hover"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center">
+                        {sectionId === s.id && (
+                          <Check className="h-4 w-4 text-font-accent" />
+                        )}
+                      </span>
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ background: s.color ?? '#475569' }}
+                      />
+                      <span className="truncate">{s.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-          {/* Foil toggle */}
-          {onToggleFoil && (
+          {/* Foil toggle (hidden for token sources) */}
+          {!isTokenSource && onToggleFoil && (
             <section className="mb-4">
               <button
                 onClick={() => {
@@ -175,25 +180,27 @@ export default function DeckCardActionSheet({
             </section>
           )}
 
-          {/* Tag editor */}
-          <section className="mb-4">
-            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
-              Tags
-            </h4>
-            <div className="rounded-lg border border-border bg-bg-cell p-2">
-              <TagEditor
-                initialTags={currentTags}
-                suggestions={tagSuggestions}
-                onChange={(next) => onTagsChange?.(deckCardId, next)}
-              />
-            </div>
-          </section>
+          {/* Tag editor (hidden for token sources) */}
+          {!isTokenSource && (
+            <section className="mb-4">
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
+                Tags
+              </h4>
+              <div className="rounded-lg border border-border bg-bg-cell p-2">
+                <TagEditor
+                  initialTags={currentTags}
+                  suggestions={tagSuggestions}
+                  onChange={(next) => onTagsChange?.(deckCardId, next)}
+                />
+              </div>
+            </section>
+          )}
 
-          {/* Move to board */}
+          {/* Move / Add to board */}
           {onMoveToBoard && (
             <section className="mb-4">
               <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-font-muted">
-                Move to
+                {isTokenSource ? 'Add to deck' : 'Move to'}
               </h4>
               <div className="grid grid-cols-2 gap-2">
                 {otherBoards.map((b) => (
