@@ -9,6 +9,7 @@ import type { Database } from '@/types/supabase'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import CardGrid from './CardGrid'
 import CardContextMenu from './CardContextMenu'
+import UpscaledBadge from './UpscaledBadge'
 
 // CardDetail mounts only when a card is opened — defer the chunk so the
 // initial /cards paint doesn't ship modal + printings panel + Scryfall
@@ -99,6 +100,7 @@ export default function CardBrowser({
   // Likes + context menu
   const [likedIds, setLikedIds] = useState<Set<string>>(() => new Set(initialLikedIds))
   const [showLikedOnly, setShowLikedOnly] = useState(false)
+  const [showUpscaledOnly, setShowUpscaledOnly] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ card: Card; x: number; y: number } | null>(null)
 
   // Language dropdown for the search bar. 'en' and 'it' hit the local DB
@@ -189,13 +191,13 @@ export default function CardBrowser({
     selectedColors, commanderIdentity, selectedTypes, typeMode,
     selectedRarity, cmcMin, cmcMax, selectedSet,
     debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy,
-    colorMode,
+    colorMode, showUpscaledOnly,
   })
   filtersRef.current = {
     selectedColors, commanderIdentity, selectedTypes, typeMode,
     selectedRarity, cmcMin, cmcMax, selectedSet,
     debouncedCreatureType, debouncedKeyword, showLikedOnly, likedIds, sortBy,
-    colorMode,
+    colorMode, showUpscaledOnly,
   }
 
   const buildQuery = useCallback(
@@ -276,6 +278,10 @@ export default function CardBrowser({
       if (filters.showLikedOnly) {
         const ids = filters.likedIds.size > 0 ? Array.from(filters.likedIds) : ['00000000-0000-0000-0000-000000000000']
         query = query.in('id', ids as unknown as number[])
+      }
+
+      if (filters.showUpscaledOnly) {
+        query = query.eq('has_upscaled_2x', true)
       }
 
       if (filters.selectedTypes.length === 1) {
@@ -361,7 +367,7 @@ export default function CardBrowser({
       if (shouldFallback) {
         try {
           controller = new AbortController()
-          const url = `/api/cards/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(searchLang)}`
+          const url = `/api/cards/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(searchLang)}${showUpscaledOnly ? '&upscaled=1' : ''}`
           const res = await fetch(url, { signal: controller.signal })
           if (!cancelled && res.ok) {
             const json = await res.json()
@@ -387,7 +393,7 @@ export default function CardBrowser({
       debouncedSearch || selectedColors.length > 0 || commanderIdentity.length > 0 ||
       selectedTypes.length > 0 || selectedRarity || cmcMin !== '' || cmcMax !== '' ||
       selectedSet || debouncedCreatureType.trim() || debouncedKeyword.trim() ||
-      showLikedOnly || !isDefaultSort
+      showLikedOnly || showUpscaledOnly || !isDefaultSort
 
     if (hasFilters) {
       fetchCards()
@@ -398,7 +404,7 @@ export default function CardBrowser({
     }
 
     return () => { cancelled = true; controller?.abort(); loadMoreAbortRef.current?.abort() }
-  }, [debouncedSearch, searchLang, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, isDefaultSort, buildQuery, initialCards])
+  }, [debouncedSearch, searchLang, selectedColors, commanderIdentity, selectedTypes, selectedRarity, cmcMin, cmcMax, selectedSet, debouncedCreatureType, debouncedKeyword, showLikedOnly, showUpscaledOnly, isDefaultSort, buildQuery, initialCards])
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
@@ -496,13 +502,13 @@ export default function CardBrowser({
     setSelectedRarity(''); setCmcMin(''); setCmcMax('')
     setSelectedSet(''); setCreatureType(''); setSelectedKeyword('')
     setSetSearch(''); setColorMode('or'); setTypeMode('and')
-    setShowLikedOnly(false)
+    setShowLikedOnly(false); setShowUpscaledOnly(false)
   }
 
   const activeFilterCount = [
     searchText, selectedColors.length > 0, commanderIdentity.length > 0,
     selectedTypes.length > 0, selectedRarity, cmcMin, cmcMax, selectedSet,
-    creatureType, selectedKeyword, showLikedOnly,
+    creatureType, selectedKeyword, showLikedOnly, showUpscaledOnly,
   ].filter(Boolean).length
 
   return (
@@ -653,8 +659,8 @@ export default function CardBrowser({
             </div>
           </div>
 
-          {/* Liked-only toggle */}
-          <div>
+          {/* Quick toggles */}
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setShowLikedOnly((v) => !v)}
@@ -675,6 +681,19 @@ export default function CardBrowser({
                   {likedIds.size}
                 </span>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowUpscaledOnly((v) => !v)}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                showUpscaledOnly
+                  ? 'bg-bg-accent/20 text-font-accent ring-1 ring-bg-accent/40'
+                  : 'bg-bg-card border border-border text-font-secondary hover:text-font-primary'
+              }`}
+              title={showUpscaledOnly ? 'Show all cards' : 'Show only cards with an upscaled image'}
+            >
+              <UpscaledBadge />
+              Upscaled only
             </button>
           </div>
 

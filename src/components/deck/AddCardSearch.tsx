@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Search, Plus } from 'lucide-react'
+import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -148,11 +149,16 @@ export default function AddCardSearch({
               }`}
             >
               {card.image_small && (
-                <img
-                  src={card.image_small}
-                  alt={card.name}
-                  className="h-10 w-auto rounded"
-                />
+                <span className="relative shrink-0">
+                  <img
+                    src={card.image_small}
+                    alt={card.name}
+                    className="h-10 w-auto rounded"
+                  />
+                  {card.has_upscaled_2x && (
+                    <UpscaledBadge className="absolute -bottom-0.5 -right-1 scale-75" />
+                  )}
+                </span>
               )}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-font-primary">

@@ -27,6 +27,7 @@ interface DeckViewProps {
   ownerUsername: string
   ownerDisplayName: string
   viewerId: string | null
+  currentUserName: string
 }
 
 export default function DeckView({
@@ -36,6 +37,7 @@ export default function DeckView({
   ownerUsername,
   ownerDisplayName,
   viewerId,
+  currentUserName,
 }: DeckViewProps) {
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
   const [copied, setCopied] = useState(false)
@@ -367,6 +369,7 @@ export default function DeckView({
         <ProxyPrintModal
           deckName={deck.name}
           cards={cards}
+          userName={currentUserName}
           onClose={() => setShowProxyPrint(false)}
         />
       )}

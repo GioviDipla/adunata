@@ -14,12 +14,12 @@
  *  Keep `image_normal` so the hover-preview (desktop) can use it without an extra fetch.
  *  `name_it` is included so the client can rank Italian-name matches locally. */
 export const CARD_GRID_COLUMNS =
-  'id, name, name_it, mana_cost, type_line, image_small, image_normal, prices_eur, prices_usd, cmc, rarity, set_code, color_identity, released_at'
+  'id, name, name_it, mana_cost, type_line, image_small, image_normal, prices_eur, prices_usd, cmc, rarity, set_code, color_identity, released_at, has_upscaled_2x'
 
 /** In-game card reference: engine, battlefield, hand, zones. No prices, no legalities, no search_vector.
  *  Includes pre-computed phase-trigger flags so the UI can highlight triggers at O(1). */
 export const CARD_GAME_COLUMNS =
-  'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, power, toughness, keywords, produced_mana, layout, card_faces, has_upkeep_trigger, has_etb_trigger, has_attacks_trigger, has_dies_trigger, has_end_step_trigger, has_cast_trigger'
+  'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, power, toughness, keywords, produced_mana, layout, card_faces, has_upkeep_trigger, has_etb_trigger, has_attacks_trigger, has_dies_trigger, has_end_step_trigger, has_cast_trigger, has_upscaled_2x'
 
 /** GoblinAI rules assistant: oracle-level fields for grounding context */
 export const CARD_GOBLINAI_COLUMNS =
@@ -29,11 +29,11 @@ export const CARD_GOBLINAI_COLUMNS =
  *  `flavor_name` is carried so the bulk importer can index just-upserted UB reprints
  *  under both the canonical and flavor name in its in-memory resolution maps. */
 export const CARD_DECK_COLUMNS =
-  'id, scryfall_id, name, flavor_name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, released_at'
+  'id, scryfall_id, name, flavor_name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, released_at, has_upscaled_2x'
 
 /** CardDetail modal: deck columns + legalities. Everything except search_vector and timestamps. */
 export const CARD_DETAIL_COLUMNS =
-  'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, image_art_crop, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, released_at, legalities'
+  'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, image_art_crop, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, released_at, legalities, has_upscaled_2x'
 
 // ── decks ─────────────────────────────────────────────────────────────────
 

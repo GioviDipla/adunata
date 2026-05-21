@@ -64,6 +64,11 @@ test('print raster presets keep existing caps and add ultra', () => {
     jpegQuality: 0.98,
     bleedJpegQuality: 0.94,
   })
+  assert.deepEqual(plain(proxyPdf.PRINT_RASTER_PRESETS.epic), {
+    dpi: 1200,
+    jpegQuality: 0.99,
+    bleedJpegQuality: 0.96,
+  })
 })
 
 test('ultra can use higher limits without inventing pixels beyond the source', () => {
@@ -135,6 +140,10 @@ test('direct poker raster presets target card-sized JPEGs in increasing weight o
     dpi: 600,
     jpegQuality: 0.98,
   })
+  assert.deepEqual(plain(proxyPdf.DIRECT_PRINT_RASTER_PRESETS.epic), {
+    dpi: 1200,
+    jpegQuality: 0.99,
+  })
 
   const fast = proxyPdf.printRasterDimensions({
     bleedWmm: 63,
@@ -156,14 +165,21 @@ test('direct poker raster presets target card-sized JPEGs in increasing weight o
     bleedHmm: 88,
     ...proxyPdf.DIRECT_PRINT_RASTER_PRESETS.ultra,
   })
+  const epic = proxyPdf.printRasterDimensions({
+    bleedWmm: 63,
+    bleedHmm: 88,
+    ...proxyPdf.DIRECT_PRINT_RASTER_PRESETS.epic,
+  })
 
   assert.deepEqual(plain(fast), { width: 595, height: 831 })
   assert.deepEqual(plain(standard), { width: 744, height: 1039 })
   assert.deepEqual(plain(high), { width: 893, height: 1247 })
   assert.deepEqual(plain(ultra), { width: 1488, height: 2079 })
+  assert.deepEqual(plain(epic), { width: 2976, height: 4157 })
   assert.ok(fast.width * fast.height < standard.width * standard.height)
   assert.ok(standard.width * standard.height < high.width * high.height)
   assert.ok(high.width * high.height < ultra.width * ultra.height)
+  assert.ok(ultra.width * ultra.height < epic.width * epic.height)
 })
 
 test('direct poker default raster preset is high, not ultra', () => {
