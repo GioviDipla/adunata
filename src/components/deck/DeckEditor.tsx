@@ -19,8 +19,6 @@ import {
   BarChart3,
 } from 'lucide-react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { CARD_GAME_COLUMNS } from '@/lib/supabase/columns'
 import { Button } from '@/components/ui/Button'
 import DeckStatsBar from './DeckStatsBar'
 import AddCardSearch from './AddCardSearch'
@@ -30,7 +28,6 @@ import DeckSectionsPanel from './DeckSectionsPanel'
 import SidebarCards, { type SidebarPanel } from './SidebarCards'
 import VisibilityToggle from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
-import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
 
@@ -181,72 +178,6 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
       setShowImport(true)
     }
   }, [deck.id])
-  const [tokenSearch, setTokenSearch] = useState('')
-  const [tokenSearchResults, setTokenSearchResults] = useState<CardRow[]>([])
-  const [searchingTokens, setSearchingTokens] = useState(false)
-
-  // Search tokens from DB + Scryfall
-  useEffect(() => {
-    if (tokenSearch.trim().length < 2) {
-      setTokenSearchResults([])
-      return
-    }
-    const controller = new AbortController()
-    const timeout = setTimeout(async () => {
-      setSearchingTokens(true)
-      try {
-        const supabase = createClient()
-        const { data: localTokens } = await supabase
-          .from('cards')
-          .select(CARD_GAME_COLUMNS)
-          .or('type_line.ilike.%Token%,type_line.ilike.%Dungeon%,type_line.ilike.%Emblem%,type_line.ilike.%Plane%,type_line.ilike.%Scheme%,layout.eq.token,layout.eq.double_faced_token,layout.eq.emblem')
-          .ilike('name', `%${tokenSearch.trim()}%`)
-          .limit(10)
-
-        if (controller.signal.aborted) return
-
-        if (localTokens && localTokens.length >= 3) {
-          setTokenSearchResults(localTokens as unknown as CardRow[])
-          setSearchingTokens(false)
-          return
-        }
-
-        const res = await fetch(
-          `https://api.scryfall.com/cards/search?q=(t:token+OR+t:dungeon+OR+t:emblem+OR+t:plane+OR+t:scheme)+${encodeURIComponent(tokenSearch.trim())}&unique=cards`,
-          { signal: controller.signal }
-        )
-        if (res.ok) {
-          const data = await res.json()
-          const scryfallTokens = (data.data ?? []).slice(0, 10).map((c: Record<string, unknown>) => ({
-            id: c.id,
-            scryfall_id: c.id as string,
-            name: c.name,
-            type_line: c.type_line,
-            power: c.power ?? null,
-            toughness: c.toughness ?? null,
-            colors: c.colors ?? [],
-            color_identity: c.color_identity ?? [],
-            image_small: c.image_uris ? (c.image_uris as Record<string, string>).small : (c.card_faces as unknown[])?.[0] ? ((c.card_faces as Record<string, unknown>[])[0].image_uris as Record<string, string>)?.small ?? null : null,
-            image_normal: c.image_uris ? (c.image_uris as Record<string, string>).normal : (c.card_faces as unknown[])?.[0] ? ((c.card_faces as Record<string, unknown>[])[0].image_uris as Record<string, string>)?.normal ?? null : null,
-            oracle_text: c.oracle_text ?? null,
-            keywords: c.keywords ?? [],
-            set_code: c.set ?? '',
-            set_name: c.set_name ?? '',
-            collector_number: c.collector_number ?? '',
-            rarity: c.rarity ?? '',
-            mana_cost: c.mana_cost ?? null,
-            cmc: c.cmc ?? 0,
-            layout: c.layout ?? null,
-          }))
-          if (!controller.signal.aborted) {
-            setTokenSearchResults([...((localTokens ?? []) as CardRow[]), ...scryfallTokens])
-          }
-        }
-      } catch { /* ignore abort */ }
-      if (!controller.signal.aborted) setSearchingTokens(false)
-    }, 400)
-    return () => { controller.abort(); clearTimeout(timeout) }
-  }, [tokenSearch])
 
   // Extract commander cards
   const commanderCards = useMemo(
@@ -573,40 +504,6 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
     })
   }, [])
 
-  const handleAddTokenWithSave = useCallback(async (card: CardRow, board: string) => {
-    handleCardAdded(card, board)
-    // Use upsert endpoint — the card may not exist in DB yet (Scryfall result)
-    const scryfallId = (card as Record<string, unknown>).scryfall_id as string | undefined
-    await fetch(`/api/decks/${deck.id}/cards/add-with-upsert`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        scryfall_id: scryfallId || String(card.id),
-        board,
-        card_data: {
-          name: card.name,
-          mana_cost: card.mana_cost,
-          cmc: card.cmc,
-          type_line: card.type_line,
-          oracle_text: card.oracle_text,
-          colors: card.colors,
-          color_identity: card.color_identity,
-          rarity: card.rarity,
-          set_code: card.set_code,
-          set_name: card.set_name,
-          collector_number: card.collector_number,
-          image_small: card.image_small,
-          image_normal: card.image_normal,
-          image_art_crop: card.image_art_crop,
-          power: card.power,
-          toughness: card.toughness,
-          keywords: card.keywords,
-          layout: (card as Record<string, unknown>).layout ?? null,
-        },
-      }),
-    })
-  }, [deck.id, handleCardAdded])
-
   async function saveName() {
     if (!editingName.trim()) return
     setDeckName(editingName)
@@ -863,56 +760,6 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
               )
             })}
           </div>
-
-          {activeTab === 'tokens' && (
-            <div className="mb-3">
-              {/* Token search bar */}
-              <div className="mb-3">
-                <input
-                  value={tokenSearch}
-                  onChange={(e) => setTokenSearch(e.target.value)}
-                  placeholder="Search tokens (e.g. Soldier, Zombie, Treasure)..."
-                  className="w-full rounded-lg bg-bg-cell px-3 py-2 text-sm text-font-primary placeholder:text-font-muted outline-none focus:ring-1 focus:ring-bg-accent"
-                />
-              </div>
-
-              {/* Search results */}
-              {tokenSearch.trim().length >= 2 && (
-                <div className="max-h-60 overflow-y-auto rounded-lg border border-border bg-bg-card">
-                  {searchingTokens ? (
-                    <div className="flex items-center justify-center py-4 text-sm text-font-muted">Searching...</div>
-                  ) : tokenSearchResults.length === 0 ? (
-                    <div className="py-4 text-center text-sm text-font-muted">No tokens found</div>
-                  ) : (
-                    tokenSearchResults.map((card) => (
-                      <button
-                        key={card.id}
-                        onClick={() => handleAddTokenWithSave(card, 'tokens')}
-                        className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover border-b border-border/30 last:border-0"
-                      >
-                        {card.image_small && (
-                          <span className="relative shrink-0">
-                            <img src={card.image_small} alt={card.name} className="h-12 w-auto rounded" />
-                            {card.has_upscaled_2x && (
-                              <UpscaledBadge className="absolute -bottom-0.5 -right-1 scale-75" />
-                            )}
-                          </span>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-font-primary truncate">{card.name}</div>
-                          <div className="text-[10px] text-font-muted">
-                            {card.type_line}
-                            {card.power && card.toughness ? ` · ${card.power}/${card.toughness}` : ''}
-                          </div>
-                        </div>
-                        <Plus className="h-4 w-4 shrink-0 text-font-accent" />
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           {overlayOn && overlayData && (
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs">
