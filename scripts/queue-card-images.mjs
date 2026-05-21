@@ -31,6 +31,8 @@ function parseArgs(argv) {
     collectorNumber: args.get('collector-number') ? String(args.get('collector-number')) : null,
     cardId: args.get('card-id') ? String(args.get('card-id')) : null,
     scryfallId: args.get('scryfall-id') ? String(args.get('scryfall-id')) : null,
+    type: args.get('type') ? String(args.get('type')) : null,
+    upscaled: args.get('upscaled') ? String(args.get('upscaled')) : null,
     includeBasicLands: args.get('include-basic-lands') === true,
     dryRun: args.get('dry-run') === true,
   }
@@ -116,6 +118,8 @@ async function selectCards(options) {
   if (options.setCode) query = query.eq('set_code', options.setCode)
   if (options.collectorNumber) query = query.eq('collector_number', options.collectorNumber)
   if (options.q) query = query.ilike('name', `%${options.q}%`)
+  if (options.type) query = query.ilike('type_line', `%${options.type}%`)
+  if (options.upscaled === 'false') query = query.eq('has_upscaled_2x', false)
   if (!options.includeBasicLands) query = query.not('type_line', 'ilike', '%Basic Land%')
 
   const { data, error } = await query

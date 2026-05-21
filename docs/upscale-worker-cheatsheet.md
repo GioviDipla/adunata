@@ -143,6 +143,8 @@ Stop. Le righe restano `status='queued'` finché un worker (o un run one-shot) l
 | `--set=<code>` | `--set=fdn` | Tutti i 3-letter Scryfall set code (vedi `select distinct set_code from cards`) |
 | `--collector-number=<n>` | `--collector-number=001 --set=fdn` | Singola carta numerata, combinato con `--set` |
 | `--q=<sostringa>` | `--q="dragon"` | `name ILIKE '%dragon%'` |
+| `--type=<sostringa>` | `--type=elf` | `type_line ILIKE '%elf%'` (subtype o supertipo) |
+| `--upscaled=<bool>` | `--upscaled=false` | Solo carte senza upscale ready (`has_upscaled_2x = false`) |
 | `--card-id=<uuid>` | `--card-id=abc...` | Riga `cards.id` esatta |
 | `--scryfall-id=<uuid>` | `--scryfall-id=def...` | Riga `cards.scryfall_id` esatta |
 | `--include-basic-lands` | (flag) | Default ESCLUDE Plains/Island/Swamp/Mountain/Forest |
@@ -170,6 +172,15 @@ npm run queue:card-images -- --set=fdn --limit=10000 --include-basic-lands
 
 # Solo basic Plains di Foundations
 npm run queue:card-images -- --set=fdn --q=plains --include-basic-lands
+
+# Tutti gli elfi (qualunque set)
+npm run queue:card-images -- --type=elf --limit=10000
+
+# Tutti gli incantesimi (Enchantment)
+npm run queue:card-images -- --type=enchantment --limit=10000
+
+# Solo carte NON ancora upscalate (daily catch-up)
+npm run queue:card-images -- --upscaled=false --limit=10000
 ```
 
 L'upsert ignora duplicati: ri-accodare un set non rifa due volte le carte già `ready`.
