@@ -368,6 +368,7 @@ export default function DeckView({
 
       {showProxyPrint && (
         <ProxyPrintModal
+          deckId={deck.id}
           deckName={deck.name}
           cards={cards}
           userName={currentUserName}
