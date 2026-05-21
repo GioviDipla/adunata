@@ -33,7 +33,7 @@ export const CARD_DECK_COLUMNS =
 
 /** CardDetail modal: deck columns + legalities. Everything except search_vector and timestamps. */
 export const CARD_DETAIL_COLUMNS =
-  'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, image_art_crop, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, released_at, legalities, has_upscaled_2x'
+  'id, scryfall_id, name, mana_cost, cmc, type_line, oracle_text, colors, color_identity, rarity, set_code, set_name, collector_number, image_small, image_normal, image_art_crop, power, toughness, keywords, produced_mana, layout, card_faces, prices_eur, prices_eur_foil, prices_usd, prices_usd_foil, cardmarket_uri, released_at, legalities, has_upscaled_2x'
 
 // ── decks ─────────────────────────────────────────────────────────────────
 
