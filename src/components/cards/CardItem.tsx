@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Heart } from 'lucide-react'
 import type { Database } from '@/types/supabase'
@@ -21,20 +21,6 @@ interface CardItemProps {
 const CardItem = memo(function CardItem({ card, liked, onSelect, onContextAction }: CardItemProps) {
   const [showPreview, setShowPreview] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
-    }
-  }, [])
-
-  const clearPendingClick = () => {
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current)
-      clickTimerRef.current = null
-    }
-  }
 
   // When `onContextAction` is wired, swap the gestures: tap opens the
   // context menu (Add to deck / Like / Share), long-press / right-click
@@ -50,44 +36,32 @@ const CardItem = memo(function CardItem({ card, liked, onSelect, onContextAction
     <div
       ref={rootRef}
       className="group relative cursor-pointer"
-      onClick={(e) => {
-        if (longPress.wasLongPress()) return
-        if (onContextAction) {
-          const { clientX, clientY } = e
-          clearPendingClick()
-          clickTimerRef.current = setTimeout(() => {
-            clickTimerRef.current = null
-            // Anchor the menu at the click position when present, otherwise
-            // fall back to the centre of the tile (touch/synthetic events).
-            if (clientX || clientY) {
-              onContextAction(card, clientX, clientY)
-            } else {
-              const rect = rootRef.current?.getBoundingClientRect()
-              if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
-              else onContextAction(card, 0, 0)
-            }
-          }, 220)
-        } else {
-          onSelect(card)
-        }
-      }}
-      onDoubleClick={(e) => {
-        if (!onContextAction) return
-        e.preventDefault()
-        e.stopPropagation()
-        clearPendingClick()
-        onSelect(card)
-      }}
       onContextMenu={(e) => {
         if (!onContextAction) return
         e.preventDefault()
-        clearPendingClick()
-        // Right-click in cards-browser mode opens detail (was: context).
         onSelect(card)
       }}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
       {...longPress.handlers}
+      onPointerUp={(e) => {
+        // Let long-press cancel its timer first.
+        longPress.handlers.onPointerUp?.()
+        if (longPress.wasLongPress()) return
+        if (e.button !== 0) return
+        if (onContextAction) {
+          const { clientX, clientY } = e
+          if (clientX || clientY) {
+            onContextAction(card, clientX, clientY)
+          } else {
+            const rect = rootRef.current?.getBoundingClientRect()
+            if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
+            else onContextAction(card, 0, 0)
+          }
+        } else {
+          onSelect(card)
+        }
+      }}
     >
       {/* Card image — `image_normal` (488×680), same as DeckGridView. next/image
        *  downscales via `sizes` so the actual bytes on the wire match the rendered size. */}
