@@ -46,6 +46,12 @@ export interface ScryfallCard {
   keywords?: string[]
   produced_mana?: string[]
   released_at?: string
+  purchase_uris?: {
+    cardmarket?: string
+    tcgplayer?: string
+    cardhoarder?: string
+    [key: string]: string | undefined
+  }
 }
 
 export interface ScryfallCardFace {
@@ -269,6 +275,7 @@ export function mapScryfallCard(card: ScryfallCard): CardInsert {
     prices_usd_foil: isNaN(priceUsdFoil as number) ? null : priceUsdFoil,
     prices_eur: isNaN(priceEur as number) ? null : priceEur,
     prices_eur_foil: isNaN(priceEurFoil as number) ? null : priceEurFoil,
+    cardmarket_uri: card.purchase_uris?.cardmarket ?? null,
     released_at: card.released_at ?? null,
     legalities: card.legalities ?? null,
     power: card.power ?? frontFace?.power ?? null,

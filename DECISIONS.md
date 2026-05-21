@@ -162,3 +162,17 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 **Perché:** Bucket cresciuto a 5.2 GB su Free tier Supabase (limite 1 GB); proiezione catalogo completo ~700 GB. R2 ha storage a $0.015/GB e **zero egress**, contro $0.021/GB storage + $0.09/GB egress su Supabase Pro. Su 700 GB + 500 GB egress al mese: ~$10 R2 vs ~$85 Supabase. Vercel Blob considerato ma egress non gratis ($0.03-0.05/GB) e legato al piano Vercel.
 
 **Trade-off:** Auth/RLS sul file non più disponibili (R2 pubblico via CDN). OK perché immagini carte sono dati Scryfall pubblici, non gated. Per file futuri privati per-utente (es. PDF deck personali) restare su Supabase Storage. Cold-cache TTFB peggiora di 1 hop (302 + GET CDN) ma `s-maxage=31536000` su Vercel/CDN rende trascurabile dopo il primo hit.
+
+## 2026-05-21 — Link Cardmarket da `purchase_uris.cardmarket` invece di slug locale
+
+**Scelta:** Aggiunta colonna `cards.cardmarket_uri TEXT` popolata dal bulk-sync con `card.purchase_uris.cardmarket` da Scryfall. Helper `cardmarketUrl()` in `CardDetail.tsx` preferisce questa URL (con `/en/` → `/it/` swap e strip dei query param UTM di Scryfall) e usa lo slugifier solo come fallback per righe non ancora backfilled.
+
+**Perché:** Lo slug naïve `slugify(set_name)/slugify(card.name)` falliva su:
+- Caratteri unicode (Æther Vial, Lim-Dûl's Vault) — non venivano translitterati
+- Em-dash / en-dash nei titoli set (`Magic: The Gathering—Commander`)
+- Nomi set Scryfall ≠ titoli Cardmarket (Universes Beyond, promo, Secret Lair, collector booster variants, Commander decks suffix...) — irreconciliabili con regex
+- Token e double-faced cards con regole di join specifiche per Cardmarket
+
+Scryfall risolve già ogni printing → URL Cardmarket corretto (`purchase_uris.cardmarket`). Usarlo elimina la classe di bug.
+
+**Effetti collaterali:** Bulk-sync ora richiede `stream-json` perché il file `default_cards` ha superato 512 MB (V8 max string) e `readFileSync(..., 'utf-8')` overflowa con `ERR_STRING_TOO_LONG`. Parser streaming = drop di RAM-spike + futureproof per quando il catalogo cresce ancora. Slugifier fallback migliorato (translittera Æ→Ae, Œ→Oe, Ø→O, ß→ss, normalizza diacritici NFKD, em/en dash → `-`, curly quotes) per ridurre 404 anche sui cards non ancora backfilled.
