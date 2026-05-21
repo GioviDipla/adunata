@@ -744,6 +744,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
               deckId={deck.id}
               onCardAdded={handleCardAdded}
               currentBoard={activeTab}
+              onPreviewCard={setSelectedDetailCard}
             />
           </div>
 
