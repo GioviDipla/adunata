@@ -26,19 +26,51 @@ interface CardFace {
 
 /**
  * Build a Cardmarket product URL for a specific printing.
- * Real format: /it/Magic/Products/Singles/{Set-Slug}/{Card-Slug}
- * Example: "Emeritus of Ideation // Ancestral Recall" in "Secrets of Strixhaven"
- *   → .../Products/Singles/Secrets-of-Strixhaven/Emeritus-of-Ideation-Ancestral-Recall
- * Double-faced cards keep both faces joined (the `//` is treated as whitespace).
- * Without a set, fall back to Cardmarket's search so the link still resolves.
+ *
+ * Authoritative path: Scryfall's `purchase_uris.cardmarket`, stored as
+ * `cardmarket_uri` on the card row at bulk-sync time. Scryfall already maps
+ * every printing to its correct Cardmarket product page, which is the only
+ * reliable way to handle all the slug edge cases — Æ → Ae transliteration,
+ * diacritic stripping, em-dashes, double-faced card joining rules, promo /
+ * collector booster / Universes Beyond set-name variants, and the many sets
+ * whose Cardmarket title is not a 1:1 transformation of the Scryfall title.
+ *
+ * Fallback: best-effort slug for cards synced before the column was
+ * populated. Worst case it lands on a 404 — but the Unicode-aware slugifier
+ * fixes the bulk of historical breakage (Æther Vial, Lim-Dûl's Vault, etc.).
  */
-function cardmarketUrl(card: { name: string; set_name?: string | null }): string {
+function cardmarketUrl(card: { name: string; set_name?: string | null; cardmarket_uri?: string | null }): string {
+  if (card.cardmarket_uri) {
+    // Swap locale to Italian; keep the query string — Scryfall's URL relies
+    // on `?idProduct=N` for canonical printings and `?searchString=…` for
+    // variants without a dedicated product page. Only the UTM tracking
+    // params are noise, so strip those selectively.
+    try {
+      const u = new URL(card.cardmarket_uri)
+      u.pathname = u.pathname.replace(/^\/en\//, '/it/')
+      for (const k of ['utm_campaign', 'utm_medium', 'utm_source', 'referrer']) {
+        u.searchParams.delete(k)
+      }
+      return u.toString()
+    } catch {
+      return card.cardmarket_uri
+    }
+  }
+
   const slugify = (s: string) =>
     s
-      .replace(/[,'":!?.()]/g, '')
-      .replace(/\s*\/\/\s*/g, ' ')
+      .replace(/\s*\/\/\s*/g, ' ')                            // DFC `//` → space
+      .replace(/[ÆǼ]/g, 'Ae').replace(/[æǽ]/g, 'ae')          // Æther → Aether
+      .replace(/[Œ]/g, 'Oe').replace(/[œ]/g, 'oe')
+      .replace(/[Ø]/g, 'O').replace(/[ø]/g, 'o')
+      .replace(/[ß]/g, 'ss')
+      .normalize('NFKD').replace(/[̀-ͯ]/g, '')      // strip combining diacritics
+      .replace(/[—–]/g, '-')                        // em-dash / en-dash → hyphen
+      .replace(/[‘’“”]/g, '')             // curly quotes
+      .replace(/[,'":!?.()&]/g, '')
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
 
   const cardSlug = slugify(card.name)
   if (card.set_name) {
