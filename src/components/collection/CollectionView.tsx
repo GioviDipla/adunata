@@ -62,6 +62,7 @@ export interface CollectionCard {
   prices_eur: number | null
   prices_usd: number | null
   released_at?: string | null
+  has_upscaled_2x?: boolean | null
 }
 
 export interface CollectionItem {

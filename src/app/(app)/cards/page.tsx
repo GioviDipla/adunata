@@ -65,7 +65,7 @@ export default async function CardsPage() {
           .from('user_cards')
           .select(
             `id, quantity, foil, language, condition, acquired_price_eur,
-             card:cards!card_id(id, scryfall_id, name, name_it, mana_cost, type_line, image_small, image_normal, cmc, rarity, set_code, color_identity, prices_eur, prices_usd, released_at)`,
+             card:cards!card_id(id, scryfall_id, name, name_it, mana_cost, type_line, image_small, image_normal, cmc, rarity, set_code, color_identity, prices_eur, prices_usd, released_at, has_upscaled_2x)`,
             { count: 'exact' },
           )
           .eq('user_id', user.id)

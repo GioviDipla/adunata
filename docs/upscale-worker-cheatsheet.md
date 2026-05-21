@@ -1,234 +1,305 @@
-# Upscale Worker — Cheat Sheet
+# Upscale Worker — Manuale Operativo
 
-Pipeline che genera immagini HD (Real-ESRGAN 2x) per le carte e le salva su Cloudflare R2.
+Tutto quello che serve sapere per accendere/spegnere il worker e accodare lavoro. Vai direttamente alla ricetta che ti serve.
 
-```
-┌─ Client ────────────────────────────────────────────────────────────┐
-│  GET /api/card-image/upscaled?...        → 302 redirect a R2 CDN    │
-│  POST /api/card-image/upscaled (batch)   → accoda missing in DB     │
-└──────────────────────────────────────────────────────────────────────┘
-                            │ INSERT card_image_assets(status='queued')
-                            ▼
-┌─ Supabase Postgres ─────────────────────────────────────────────────┐
-│  table card_image_assets: queue + metadata (storage_path canonico)  │
-└──────────────────────────────────────────────────────────────────────┘
-                            ▲ SELECT queued / processing
-                            │ UPDATE status=ready
-┌─ Worker locale (Mac) ───────────────────────────────────────────────┐
-│  node scripts/upscale-card-images.mjs                               │
-│    1) selectAssets → claim                                          │
-│    2) download source da Scryfall                                   │
-│    3) realesrgan-ncnn-vulkan -s 2                                   │
-│    4) PutObject → R2 (chiave = storage_path)                        │
-│    5) UPDATE card_image_assets SET status='ready'                   │
-└──────────────────────────────────────────────────────────────────────┘
-```
+> Tutti i comandi si lanciano dalla root del repo: `~/MBPro/CursorProject/TheGathering`.
 
 ---
 
-## Env vars rilevanti
+## Come funziona (30 secondi)
 
-| Var | Dove | Cosa fa |
-|---|---|---|
-| `CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND` | Vercel + `.env.local` | Master switch dell'accodamento automatico via API. `true` (default) accoda missing asset al volo, `false` disabilita |
-| `REALESRGAN_BIN` | `.env.local` (Mac) | Path assoluto a `realesrgan-ncnn-vulkan` |
-| `REALESRGAN_MODEL_PATH` | `.env.local` (Mac) | Path a cartella `models/` |
-| `REALESRGAN_MODEL` | opzionale | Default `realesr-animevideov3`. Alternativa "epic": `realesrgan-x4plus` |
-| `REALESRGAN_TILE_SIZE` | opzionale | Default `0` (auto). Riduci a 256/512 se GPU OOM |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | tutti | Worker carica su R2 |
-| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SECRET_KEY` | tutti | Worker legge/aggiorna queue |
+```
+[Client web] ──POST──> [Vercel /api/card-image/upscaled]
+                                │
+                                │ INSERT card_image_assets (status='queued')
+                                ▼
+                       [Tabella Supabase: coda]
+                                ▲
+                                │ SELECT queued / claim / UPDATE ready
+                                │
+                          [Worker sul Mac]
+                                │
+                                ▼
+                       [Real-ESRGAN 2x → PNG]
+                                │
+                                ▼
+                        [Upload su Cloudflare R2]
+                                │
+                                ▼
+              [Client riceve 302 verso cdn.adunata...]
+```
+
+Due cose indipendenti, entrambe devono essere "on" perché un utente ottenga un'immagine HD nuova:
+
+1. **Server (Vercel)** — `CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=true` → quando un client chiede un'immagine HD non ancora pronta, viene messa in coda.
+2. **Worker (Mac)** — script Node.js che gira sul tuo Mac, polla la coda Supabase, fa girare Real-ESRGAN, carica il PNG su R2.
+
+Se il server è on ma il worker non gira → la coda cresce ma nessuno lavora.
+Se il worker gira ma il server è off → la coda non cresce, ma se ci sono job vecchi residui vengono comunque processati.
 
 ---
 
-## Master switch accodamento on-demand (server-side)
+## Worker locale (sul Mac)
 
-L'accodamento on-demand è ciò che fa il route handler `POST /api/card-image/upscaled` quando il client chiede carte HD non ancora pronte.
+### Accendi il worker — modalità on-demand continua (caso normale)
 
-### Accendere
-
-```bash
-# locale
-printf "true" > /dev/stdout && echo CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=true >> .env.local
-
-# Vercel — un ambiente alla volta
-printf "true" | vercel env add CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND production --yes
-printf "true" | vercel env add CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND preview --yes
-printf "true" | vercel env add CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND development --yes
-```
-
-### Spegnere
-
-```bash
-# Vercel dashboard → Project Settings → Environment Variables → edit a "false" + redeploy
-# OPPURE da CLI: rimuovi e ri-aggiungi
-vercel env rm CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND production --yes
-printf "false" | vercel env add CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND production --yes
-```
-
-Valori riconosciuti come "off": `0` `false` `off` `no` `disabled` (case-insensitive). Tutto il resto = on.
-
-Comportamento quando off:
-- `POST /api/card-image/upscaled` risponde con item `status:'disabled'` per ogni richiesta.
-- Le carte già `ready` continuano a essere servite normalmente.
-- Le carte già `queued`/`processing` continuano (non vengono cancellate).
-
----
-
-## Worker — run one-shot
-
-Processa N asset poi esce. Usato per drenare backlog senza tenere il processo aperto.
-
-```bash
-node scripts/upscale-card-images.mjs --limit=25
-# oppure
-npm run upscale:card-images -- --limit=25
-```
-
-### Flag
-
-| Flag | Default | Cosa fa |
-|---|---|---|
-| `--limit=N` | `25` | Massimo asset processati per run |
-| `--profile=hd-2x` | `hd-2x` | Profilo target (unico supportato) |
-| `--asset-id=<uuid>` | — | Forza esatto asset, ignora coda |
-| `--dry-run` | off | Stampa cosa farebbe, niente upload/UPDATE |
-| `--keep-temp` | off | Non cancella `.tmp/upscale-card-images/<id>/` |
-| `--stale-after-min=N` | `30` | Asset `processing` con `locked_at` più vecchio = ri-claimato |
-| `--max-attempts=N` | `3` | Asset con `attempts >= N` saltati (status `failed`) |
-| `--worker-id=<str>` | `<hostname>-<pid>` | Tag per `locked_by` |
-| `--concurrency=N` | `1` | Parsato ma ignorato — worker sequenziale |
-
----
-
-## Worker — modalità watch (daemon)
-
-Polla la coda all'infinito. Modalità tipica del Mac sempre acceso.
+Il worker resta in piedi, polla ogni 30 secondi, processa fino a 10 carte per ciclo.
 
 ```bash
 npm run upscale:card-images:watch -- --limit=10 --poll-interval-sec=30
-# equivalente a:
-node scripts/upscale-card-images.mjs --watch --limit=10 --poll-interval-sec=30
 ```
 
-### Flag aggiuntivi
+Lascialo in un terminale aperto. Il Mac deve essere acceso e online.
 
-| Flag | Default | Cosa fa |
-|---|---|---|
-| `--watch` | — | Attiva loop |
-| `--poll-interval-sec=N` | `30` | Pausa tra cicli **solo se** ultimo ciclo non ha trovato asset. Se trovati → cicla subito |
+### Spegni il worker
 
-### Stop
+Dal terminale dove gira:
 
 ```
 Ctrl+C
 ```
 
-Asset in `processing` resteranno tali finché `--stale-after-min` non scade e un altro worker li ri-claima. Volendo, query manuale per liberare subito:
-
-```sql
-update public.card_image_assets
-set status = 'queued', locked_at = null, locked_by = null
-where status = 'processing' and locked_by = '<worker-id>';
-```
-
----
-
-## Accodare manualmente — `scripts/queue-card-images.mjs`
-
-Inserisce in `card_image_assets` righe `queued` per carte già nel DB, senza passare dall'API. Utile per pre-warmare un set o uno specifico mazzo.
+Da un altro terminale (se hai chiuso quella finestra):
 
 ```bash
-node scripts/queue-card-images.mjs --set=fdn --limit=400
-# oppure
-npm run queue:card-images -- --set=fdn --limit=400
+pkill -f upscale-card-images.mjs
 ```
 
-### Flag
+### Verifica che sia vivo
 
-| Flag | Default | Cosa fa |
+```bash
+pgrep -fl upscale-card-images.mjs
+```
+
+Vedi un PID + comando = vivo. Output vuoto = spento.
+
+---
+
+## Upscale di un singolo set
+
+Il worker non filtra per set. Il flow è:
+
+> 1. accoda le carte del set in coda Supabase
+> 2. lascia che il worker (o un run one-shot) le processi
+
+### Accoda tutto un set (senza limite)
+
+```bash
+npm run queue:card-images -- --set=fdn --limit=10000
+```
+
+Il `--limit` qui è il numero di carte considerate dal DB `cards`, non un cap reale. Mettilo grande quanto basta a coprire il set (Final Fantasy = ~400 carte, set normali 250–300, supplementari fino a 700).
+
+Verifica conteggio:
+
+```bash
+npm run queue:card-images -- --set=fdn --limit=10000 --dry-run
+```
+
+`--dry-run` non scrive niente, stampa cosa farebbe.
+
+### Accoda un set con limite reale
+
+```bash
+npm run queue:card-images -- --set=fdn --limit=50
+```
+
+Accoda le **prime 50** carte del set (ordine alfabetico per `name asc`).
+
+### Processa il set appena accodato (one-shot, poi esci)
+
+```bash
+npm run upscale:card-images -- --limit=400
+```
+
+Il worker prende fino a 400 asset dalla coda (qualunque set), li processa, esce. Se vuoi *solo* quel set, accoda solo quel set prima (la coda contiene solo carte di quel set se così è stata popolata).
+
+### Processa il set in background (modalità watch)
+
+Se è un set grosso e vuoi che vada per ore:
+
+```bash
+npm run upscale:card-images:watch -- --limit=20 --poll-interval-sec=15
+```
+
+Aumenta `--limit` se hai GPU potente (più job per ciclo) e riduci `--poll-interval-sec` se vuoi reazione più veloce.
+
+### Solo accoda (senza processare)
+
+```bash
+npm run queue:card-images -- --set=fdn --limit=10000
+```
+
+Stop. Le righe restano `status='queued'` finché un worker (o un run one-shot) le pesca.
+
+---
+
+## Filtri di accodamento
+
+`scripts/queue-card-images.mjs` accetta:
+
+| Flag | Esempio | Significato |
 |---|---|---|
-| `--limit=N` | `25` | Numero carte considerate |
-| `--offset=N` | `0` | Offset paginazione su `cards.name asc` |
-| `--profile=hd-2x` | `hd-2x` | Solo hd-2x supportato |
-| `--q=<str>` | — | `ilike '%str%'` sul nome carta |
-| `--set=<code>` | — | Filtra per `set_code` |
-| `--collector-number=<n>` | — | Filtra per `collector_number` (combina con `--set`) |
-| `--card-id=<uuid>` | — | Single card (PK) |
-| `--scryfall-id=<uuid>` | — | Single card (scryfall id) |
-| `--include-basic-lands` | off | Default esclude basic land |
-| `--dry-run` | off | Stampa righe che inserirebbe, niente write |
+| `--set=<code>` | `--set=fdn` | Tutti i 3-letter Scryfall set code (vedi `select distinct set_code from cards`) |
+| `--collector-number=<n>` | `--collector-number=001 --set=fdn` | Singola carta numerata, combinato con `--set` |
+| `--q=<sostringa>` | `--q="dragon"` | `name ILIKE '%dragon%'` |
+| `--card-id=<uuid>` | `--card-id=abc...` | Riga `cards.id` esatta |
+| `--scryfall-id=<uuid>` | `--scryfall-id=def...` | Riga `cards.scryfall_id` esatta |
+| `--include-basic-lands` | (flag) | Default ESCLUDE Plains/Island/Swamp/Mountain/Forest |
+| `--limit=<N>` | `--limit=500` | Quante carte considerare dal DB (default 25) |
+| `--offset=<N>` | `--offset=500` | Salta le prime N (per paginare) |
+| `--dry-run` | (flag) | Stampa righe che inserirebbe, NON scrive |
 
-Upsert con `onConflict: 'card_id,face_index,target_profile' ignoreDuplicates: true` → non sovrascrive righe esistenti `ready`/`processing`.
+### Ricette pronte
 
----
+```bash
+# Tutte le carte di Foundations
+npm run queue:card-images -- --set=fdn --limit=10000
 
-## Riprovare i `failed`
+# Tutti i dragoni (qualunque set)
+npm run queue:card-images -- --q=dragon --limit=10000
 
-Worker salta asset con `attempts >= max-attempts`. Per ricondurli in coda:
+# Una singola carta da Scryfall ID
+npm run queue:card-images -- --scryfall-id=2b7e8e07-b3ff-496e-923f-42d703f20a1e
 
-```sql
-update public.card_image_assets
-set status = 'queued', attempts = 0, last_error = null, locked_at = null, locked_by = null
-where status = 'failed';
+# Foundations escluse basic lands
+npm run queue:card-images -- --set=fdn --limit=10000  # già esclude di default
+
+# Foundations INCLUSE basic lands
+npm run queue:card-images -- --set=fdn --limit=10000 --include-basic-lands
+
+# Solo basic Plains di Foundations
+npm run queue:card-images -- --set=fdn --q=plains --include-basic-lands
 ```
 
-Filtri utili:
-- `and target_profile = 'hd-2x'`
-- `and updated_at < now() - interval '1 day'`
-- `and last_error ilike '%timeout%'`
+L'upsert ignora duplicati: ri-accodare un set non rifa due volte le carte già `ready`.
 
 ---
 
-## Ispezione coda (SQL)
+## Server-side: on/off accodamento on-demand
+
+Master switch su Vercel. Se è `false`, gli utenti che chiedono un'immagine HD non ancora pronta ricevono `disabled` invece di vedere la carta aggiunta in coda.
+
+### Spegni (es. durante manutenzione, niente nuovi job)
+
+```bash
+vercel env rm CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND production --yes
+printf "false" | vercel env add CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND production --yes
+vercel --prod  # redeploy
+```
+
+### Riaccendi
+
+```bash
+vercel env rm CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND production --yes
+printf "true" | vercel env add CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND production --yes
+vercel --prod
+```
+
+In locale: edita `.env.local` riga `CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=true|false` e ricarica il dev server.
+
+**Nota**: questo NON ferma il worker. Le carte già in coda continuano a essere processate. Per stop totale → spegni anche il worker (vedi sopra).
+
+---
+
+## Ispezione coda (SQL veloci)
+
+Da `mcp__plugin_supabase_supabase__execute_sql` o Studio:
 
 ```sql
 -- Conteggio per stato
-select status, count(*) from public.card_image_assets group by status order by 2 desc;
+SELECT status, count(*) FROM public.card_image_assets GROUP BY status ORDER BY 2 DESC;
 
--- Quanti pronti per il client
-select count(*) from public.card_image_assets
-where status='ready' and storage_path is not null and target_profile='hd-2x';
+-- Cosa c'è da fare
+SELECT count(*) FROM public.card_image_assets WHERE status = 'queued';
 
--- Asset stuck in processing
-select id, locked_by, locked_at, attempts, last_error
-from public.card_image_assets
-where status='processing' and locked_at < now() - interval '30 min';
+-- Cosa è in lavorazione adesso
+SELECT id, locked_by, locked_at, attempts FROM public.card_image_assets
+WHERE status = 'processing';
+
+-- Conta ready per set (richiede join su cards)
+SELECT c.set_code, count(*) FROM public.card_image_assets a
+JOIN public.cards c ON c.id = a.card_id
+WHERE a.status='ready' GROUP BY 1 ORDER BY 2 DESC LIMIT 20;
 
 -- Top errori
-select last_error, count(*) from public.card_image_assets
-where status='failed' group by 1 order by 2 desc limit 20;
+SELECT last_error, count(*) FROM public.card_image_assets
+WHERE status='failed' GROUP BY 1 ORDER BY 2 DESC LIMIT 20;
 ```
 
 ---
 
-## Disabilitare worker temporaneamente
+## Riprovare i fallimenti
 
-| Cosa fermare | Come |
-|---|---|
-| Solo accodamento on-demand (server) | `CARD_IMAGE_UPSCALE_QUEUE_ON_DEMAND=false` + redeploy Vercel |
-| Worker locale (Mac) | `Ctrl+C` sul processo `--watch`, oppure `pkill -f upscale-card-images.mjs` |
-| Tutto | combinare le due |
+Il worker salta gli asset con `attempts >= 3`. Per rimetterli in coda:
 
-La coda esistente non viene cancellata; alla riaccensione riparte da dove era.
+```sql
+-- Tutti i failed
+UPDATE public.card_image_assets
+SET status='queued', attempts=0, last_error=null, locked_at=null, locked_by=null
+WHERE status='failed';
+
+-- Solo failed di un set
+UPDATE public.card_image_assets a
+SET status='queued', attempts=0, last_error=null, locked_at=null, locked_by=null
+FROM public.cards c
+WHERE a.card_id=c.id AND a.status='failed' AND c.set_code='fdn';
+
+-- Solo failed con errore di timeout
+UPDATE public.card_image_assets
+SET status='queued', attempts=0, last_error=null, locked_at=null, locked_by=null
+WHERE status='failed' AND last_error ILIKE '%timeout%';
+```
+
+### Sbloccare asset stuck in "processing"
+
+Capita se il worker crasha senza rilasciare il lock. Aspetti 30 minuti (auto-stale), oppure forzi:
+
+```sql
+UPDATE public.card_image_assets
+SET status='queued', locked_at=null, locked_by=null
+WHERE status='processing';
+```
 
 ---
 
-## Costo / throughput indicativi
+## Tutti i flag del worker (`scripts/upscale-card-images.mjs`)
 
-- Real-ESRGAN 2x su Mac (Apple Silicon GPU): ~2–4 s per carta @ `realesr-animevideov3`, ~10–20 s @ `realesrgan-x4plus`.
-- Output PNG ~6 MB per carta. 832 carte = ~5 GB.
-- R2 storage: $0.015/GB·mese, **zero egress**.
-- Backlog 30k carte → ~30–60 ore di worker continuo a model `animevideov3`.
-
----
-
-## Troubleshooting rapido
-
-| Sintomo | Causa probabile | Fix |
+| Flag | Default | Cosa fa |
 |---|---|---|
-| Worker logga `Missing R2 env` | `.env.local` non sourceato o vars mancanti | Controlla `grep ^R2_ .env.local` |
-| `realesrgan exited 1: vkAllocateMemory failed` | GPU OOM con tile auto | `REALESRGAN_TILE_SIZE=256` |
-| `source download failed: HTTP 404` | URL Scryfall stale per quella carta | Lascia che `--max-attempts` la marchi failed; rilancia bulk sync per ricostruire `image_normal` |
-| Tutti `failed: write EPROTO ... SSL alert 40` verso R2 | Account ID errato (es. hai messo Token ID `cfat_...`) | Sostituisci con vero Account ID hex 32-char da dashboard Cloudflare |
-| Client 404 su asset `ready` | R2 key mancante (migrazione incompleta) | `node scripts/verify-r2-migration.mjs` poi ri-run `migrate-card-images-to-r2.mjs` |
-| Asset bloccato in `processing` | Worker crashato senza release lock | Aspetta `--stale-after-min`, oppure UPDATE manuale (vedi sopra) |
+| `--watch` | off | Modalità daemon, polla all'infinito |
+| `--poll-interval-sec=N` | `30` | Pausa tra cicli quando coda vuota |
+| `--limit=N` | `25` | Max asset per ciclo |
+| `--profile=hd-2x` | `hd-2x` | Unico profilo supportato |
+| `--asset-id=<uuid>` | — | Forza esattamente quell'asset, ignora coda |
+| `--dry-run` | off | Mostra cosa farebbe, non scrive |
+| `--keep-temp` | off | Non cancella `.tmp/upscale-card-images/<id>/` |
+| `--stale-after-min=N` | `30` | Soglia per ri-claimare asset stuck |
+| `--max-attempts=N` | `3` | Salta asset oltre N tentativi |
+| `--worker-id=<str>` | `<hostname>-<pid>` | Tag in `locked_by` per identificare worker |
+| `--concurrency=N` | `1` | **Ignorato** — worker è sequenziale |
+
+---
+
+## Troubleshooting
+
+| Sintomo | Causa | Fix |
+|---|---|---|
+| Worker logga `Missing R2 env` | `.env.local` non caricato o vars mancanti | `grep ^R2_ .env.local` — devono esserci 5 valori |
+| Worker logga `Missing REALESRGAN_BIN` | binario non configurato | Verifica path in `.env.local` |
+| `realesrgan exited 1: vkAllocateMemory failed` | GPU OOM | In `.env.local`: `REALESRGAN_TILE_SIZE=256` (o 128) |
+| `source download failed: HTTP 404` | URL Scryfall stale | Lascia che `--max-attempts` lo marchi failed, poi rilancia bulk sync (`npm run sync:cards`) |
+| Tutti `failed: write EPROTO ... SSL alert 40` | Account ID R2 errato | Sostituisci `R2_ACCOUNT_ID` in `.env.local` con il vero Account ID hex 32-char (non Token ID `cfat_...`) |
+| Client riceve 404 su carta `ready` | Oggetto R2 mancante | `node scripts/verify-r2-migration.mjs` poi `node scripts/migrate-card-images-to-r2.mjs` se ci sono gap |
+| Asset bloccato in `processing` per ore | Worker crashato senza rilasciare lock | Aspetta 30 min (auto-stale) o UPDATE manuale (sopra) |
+| Coda cresce ma nessuno processa | Worker spento | `pgrep -fl upscale-card-images.mjs` per verificare |
+| Worker processa ma coda non scende | Stai accodando più velocemente di quanto processa | Aumenta `--limit` del worker o aspetta |
+
+---
+
+## Costi / throughput
+
+- Real-ESRGAN 2x su Apple Silicon: ~2–4 s per carta con `realesr-animevideov3` (default), ~10–20 s con `realesrgan-x4plus`.
+- Output PNG ~6 MB per carta.
+- R2: $0.015/GB·mese storage, **zero egress**. 5 GB = $0.08/mese.
+- Catalogo intero (30k carte): ~30–60 ore worker continuo, ~180 GB storage = $2.70/mese.
