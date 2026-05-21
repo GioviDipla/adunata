@@ -11,10 +11,15 @@ import { createClient } from '@supabase/supabase-js'
 import { config } from 'dotenv'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs'
+import { unlinkSync, existsSync, createReadStream, createWriteStream } from 'fs'
 import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
-import { createWriteStream } from 'fs'
+import streamArrayModule from 'stream-json/streamers/stream-array.js'
+
+// `withParserAsStream` returns a real Node Transform stream that combines
+// the SAX parser and array streamer — emits `{key, value}` per element so
+// we never hold the full JSON array in memory.
+const { withParserAsStream } = streamArrayModule
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__dirname, '..', '.env.local') })
@@ -92,6 +97,7 @@ function mapCard(card) {
     prices_usd_foil: isNaN(puf) ? null : puf,
     prices_eur: isNaN(pe) ? null : pe,
     prices_eur_foil: isNaN(pef) ? null : pef,
+    cardmarket_uri: card.purchase_uris?.cardmarket ?? null,
     released_at: card.released_at ?? null,
     legalities: card.legalities ?? null,
     power: card.power ?? ff?.power ?? null,
@@ -138,34 +144,40 @@ async function main() {
   await pipeline(Readable.fromWeb(dlRes.body), countStream, createWriteStream(TMP_FILE))
   console.log(` — done`)
 
-  // Step 2: Parse JSON (whole file — ~163MB fits in memory)
-  console.log(`📖 Parsing JSON...`)
-  const raw = readFileSync(TMP_FILE, 'utf-8')
-  const allCards = JSON.parse(raw)
-  console.log(`   ${allCards.length.toLocaleString()} cards in bulk data`)
-
-  // Step 3: Map & filter
-  const mapped = []
-  let skipped = 0
-  for (const card of allCards) {
-    if (SKIP_LAYOUTS.has(card.layout)) { skipped++; continue }
-    mapped.push(mapCard(card))
-  }
-  console.log(`   ${mapped.length.toLocaleString()} to upsert (${skipped} tokens/emblems skipped)`)
-
-  // Step 4: Upsert in batches
+  // Step 2: Stream-parse JSON. The default_cards bulk file is now >512 MB,
+  // past V8's max string length, so `readFileSync(..., 'utf-8')` overflows
+  // (`ERR_STRING_TOO_LONG`). stream-json emits one object at a time, so we
+  // map, filter, and flush batches without ever holding the full JSON in
+  // memory.
+  console.log(`📖 Stream-parsing JSON & upserting...`)
   const BATCH = 500
   let upserted = 0
   let errors = 0
+  let skipped = 0
+  let total = 0
   const t0 = Date.now()
+  let buffer = []
 
-  for (let i = 0; i < mapped.length; i += BATCH) {
-    const batch = mapped.slice(i, i + BATCH)
+  async function flush() {
+    if (!buffer.length) return
+    const batch = buffer
+    buffer = []
     const { error } = await supabase.from('cards').upsert(batch, { onConflict: 'scryfall_id', ignoreDuplicates: false })
-    if (error) { console.error(`\n  ❌ batch ${i}: ${error.message}`); errors++ }
+    if (error) { console.error(`\n  ❌ batch at ${upserted}: ${error.message}`); errors++ }
     else { upserted += batch.length }
-    process.stdout.write(`\r  📊 ${upserted.toLocaleString()} / ${mapped.length.toLocaleString()} upserted (${((Date.now()-t0)/1000).toFixed(0)}s)`)
+    process.stdout.write(`\r  📊 ${upserted.toLocaleString()} upserted (${skipped} skipped, ${((Date.now()-t0)/1000).toFixed(0)}s)`)
   }
+
+  const pipelineStream = createReadStream(TMP_FILE).pipe(withParserAsStream())
+
+  for await (const { value: card } of pipelineStream) {
+    total++
+    if (SKIP_LAYOUTS.has(card.layout)) { skipped++; continue }
+    buffer.push(mapCard(card))
+    if (buffer.length >= BATCH) await flush()
+  }
+  await flush()
+  console.log(`\n   ${total.toLocaleString()} cards processed`)
 
   // Cleanup
   try { unlinkSync(TMP_FILE) } catch {}
