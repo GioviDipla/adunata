@@ -18,6 +18,7 @@ export default function AddCardSearch({
   onCardAdded,
   currentBoard,
 }: AddCardSearchProps) {
+  const isTokenSearch = currentBoard === 'tokens'
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CardRow[]>([])
   const [isOpen, setIsOpen] = useState(false)
@@ -42,7 +43,10 @@ export default function AddCardSearch({
     abortRef.current = controller
     setLoading(true)
     try {
-      const res = await fetch(`/api/cards/search?q=${encodeURIComponent(searchQuery)}`, {
+      const url = isTokenSearch
+        ? `/api/cards/search?q=${encodeURIComponent(searchQuery)}&type=token`
+        : `/api/cards/search?q=${encodeURIComponent(searchQuery)}`
+      const res = await fetch(url, {
         signal: controller.signal,
       })
       if (controller.signal.aborted) return
@@ -58,7 +62,7 @@ export default function AddCardSearch({
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }
-  }, [])
+  }, [isTokenSearch])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -127,7 +131,10 @@ export default function AddCardSearch({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setIsOpen(true)}
-          placeholder="Search cards to add..."
+          placeholder={isTokenSearch
+            ? "Search tokens (Soldier, Treasure, Emblem...)"
+            : "Search cards to add..."
+          }
           className="w-full rounded-lg border border-border bg-bg-card py-2.5 pl-9 pr-3 text-sm text-font-primary placeholder:text-font-muted transition-colors focus:border-bg-accent focus:outline-none focus:ring-2 focus:ring-bg-accent/20"
         />
         {loading && (
@@ -153,10 +160,10 @@ export default function AddCardSearch({
                   <img
                     src={card.image_small}
                     alt={card.name}
-                    className="h-10 w-auto rounded"
+                    className="h-12 w-auto rounded"
                   />
                   {card.has_upscaled_2x && (
-                    <UpscaledBadge className="absolute -bottom-0.5 -right-1 scale-75" />
+                    <UpscaledBadge className="absolute -bottom-0.5 -right-1 scale-90" />
                   )}
                 </span>
               )}
