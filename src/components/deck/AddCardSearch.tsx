@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Search, Plus } from 'lucide-react'
 import UpscaledBadge from '@/components/cards/UpscaledBadge'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -11,12 +12,69 @@ interface AddCardSearchProps {
   deckId: string
   onCardAdded: (card: CardRow, board: string) => void
   currentBoard: string
+  onPreviewCard?: (card: CardRow) => void
+}
+
+function ResultRow({
+  card,
+  selected,
+  onAdd,
+  onPreview,
+}: {
+  card: CardRow
+  selected: boolean
+  onAdd: () => void
+  onPreview?: (card: CardRow) => void
+}) {
+  const longPress = useLongPress({
+    onLongPress: () => onPreview?.(card),
+  })
+  return (
+    <button
+      type="button"
+      {...longPress.handlers}
+      onClick={() => {
+        if (longPress.wasLongPress()) return
+        onAdd()
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onPreview?.(card)
+      }}
+      className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-bg-hover ${
+        selected ? 'bg-bg-hover' : ''
+      }`}
+    >
+      {card.image_small && (
+        <span className="relative shrink-0">
+          <img
+            src={card.image_small}
+            alt={card.name}
+            className="h-12 w-auto rounded"
+          />
+          {card.has_upscaled_2x && (
+            <UpscaledBadge className="absolute -bottom-0.5 -right-1 scale-90" />
+          )}
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium text-font-primary">
+          {card.name}
+        </div>
+        <div className="truncate text-xs text-font-muted">
+          {card.type_line} {card.mana_cost && `· ${card.mana_cost}`}
+        </div>
+      </div>
+      <Plus className="h-4 w-4 shrink-0 text-font-muted" />
+    </button>
+  )
 }
 
 export default function AddCardSearch({
   deckId,
   onCardAdded,
   currentBoard,
+  onPreviewCard,
 }: AddCardSearchProps) {
   const isTokenSearch = currentBoard === 'tokens'
   const [query, setQuery] = useState('')
@@ -148,35 +206,13 @@ export default function AddCardSearch({
       {isOpen && (
         <div className="absolute top-full left-0 z-50 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-xl">
           {results.map((card, i) => (
-            <button
+            <ResultRow
               key={card.id}
-              onClick={() => addCard(card)}
-              className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-bg-hover ${
-                i === selectedIndex ? 'bg-bg-hover' : ''
-              }`}
-            >
-              {card.image_small && (
-                <span className="relative shrink-0">
-                  <img
-                    src={card.image_small}
-                    alt={card.name}
-                    className="h-12 w-auto rounded"
-                  />
-                  {card.has_upscaled_2x && (
-                    <UpscaledBadge className="absolute -bottom-0.5 -right-1 scale-90" />
-                  )}
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-font-primary">
-                  {card.name}
-                </div>
-                <div className="truncate text-xs text-font-muted">
-                  {card.type_line} {card.mana_cost && `· ${card.mana_cost}`}
-                </div>
-              </div>
-              <Plus className="h-4 w-4 shrink-0 text-font-muted" />
-            </button>
+              card={card}
+              selected={i === selectedIndex}
+              onAdd={() => addCard(card)}
+              onPreview={onPreviewCard}
+            />
           ))}
         </div>
       )}
