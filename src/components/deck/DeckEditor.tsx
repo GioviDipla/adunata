@@ -282,6 +282,46 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
 
   const handleMoveToBoard = useCallback(
     async (cardId: number, fromBoard: string, toBoard: string) => {
+      // Source = tokens, target ≠ tokens: CLONE (POST) — keep the token row.
+      if (fromBoard === 'tokens' && toBoard !== 'tokens') {
+        const sourceEntry = cards.find(
+          (c) => c.card.id === cardId && c.board === 'tokens'
+        )
+        setCards((prev) => {
+          const existing = prev.find(
+            (c) => c.card.id === cardId && c.board === toBoard
+          )
+          if (existing) {
+            return prev.map((c) =>
+              c.card.id === cardId && c.board === toBoard
+                ? { ...c, quantity: c.quantity + 1 }
+                : c
+            )
+          }
+          if (!sourceEntry) return prev
+          return [
+            ...prev,
+            {
+              id: `temp-${Date.now()}`,
+              card: sourceEntry.card,
+              quantity: 1,
+              board: toBoard,
+            },
+          ]
+        })
+        await fetch(`/api/decks/${deck.id}/cards`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            card_id: cardId,
+            quantity: 1,
+            board: toBoard,
+          }),
+        })
+        return
+      }
+
+      // Default: MOVE
       setCards((prev) =>
         prev.map((c) =>
           c.card.id === cardId && c.board === fromBoard
@@ -299,7 +339,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
         }),
       })
     },
-    [deck.id]
+    [deck.id, cards]
   )
 
   const handleToggleCommander = useCallback(
