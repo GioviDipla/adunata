@@ -18,7 +18,7 @@ import type { SectionRow } from '@/types/deck'
 type CardRow = Database['public']['Tables']['cards']['Row']
 type DeckRow = Database['public']['Tables']['decks']['Row']
 
-type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'stats'
+type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens' | 'stats'
 
 interface DeckViewProps {
   deck: DeckRow
@@ -132,6 +132,7 @@ export default function DeckView({
       main: cards.filter((c) => c.board === 'main').reduce((s, c) => s + c.quantity, 0),
       sideboard: cards.filter((c) => c.board === 'sideboard').reduce((s, c) => s + c.quantity, 0),
       maybeboard: cards.filter((c) => c.board === 'maybeboard').reduce((s, c) => s + c.quantity, 0),
+      tokens: cards.filter((c) => c.board === 'tokens').reduce((s, c) => s + c.quantity, 0),
       stats: null,
     }),
     [cards],
@@ -260,7 +261,7 @@ export default function DeckView({
 
           {/* Board tabs — 'stats' tab is mobile-only; desktop has the sidebar. */}
           <div className="mb-3 flex gap-1 rounded-lg bg-bg-cell p-1">
-            {(['main', 'sideboard', 'maybeboard', 'stats'] as BoardTab[]).map((tab) => {
+            {(['main', 'sideboard', 'maybeboard', 'tokens', 'stats'] as BoardTab[]).map((tab) => {
               const isStats = tab === 'stats'
               return (
                 <button
@@ -275,10 +276,10 @@ export default function DeckView({
                   }`}
                 >
                   <span className="sm:hidden">
-                    {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : 'Stats'}
+                    {tab === 'main' ? 'Main' : tab === 'sideboard' ? 'Side' : tab === 'maybeboard' ? 'Maybe' : tab === 'tokens' ? 'Tkns' : 'Stats'}
                   </span>
                   <span className="hidden sm:inline">
-                    {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : 'Stats'}
+                    {tab === 'main' ? 'Main Deck' : tab === 'sideboard' ? 'Sideboard' : tab === 'maybeboard' ? 'Maybeboard' : tab === 'tokens' ? 'Tokens' : 'Stats'}
                   </span>
                   {tabCounts[tab] != null && (
                     <span className="ml-1 text-[10px] sm:text-xs text-font-muted">

@@ -6,6 +6,7 @@ import { useLongPress } from '@/lib/hooks/useLongPress'
 import { formatPreferredPrice } from '@/lib/utils/price'
 import ManaCost from '@/components/cards/ManaCost'
 import type { CollectionItem, CollectionCard } from './CollectionView'
+import UpscaledBadge from '@/components/cards/UpscaledBadge'
 
 interface Props {
   item: CollectionItem
@@ -139,6 +140,9 @@ export default function CollectionTile({
           )}
         </div>
 
+        {item.card.has_upscaled_2x && (
+          <UpscaledBadge className="absolute bottom-1.5 right-1.5" />
+        )}
       </div>
 
       {/* Card info — name + mana cost row + type, like CardItem */}
