@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     userName: string
     deckName: string
     decklist: string
-    pdfBase64: string
+    shareLink: string
     timestamp: string
   }
   try {
@@ -17,9 +17,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { userName, deckName, decklist, pdfBase64, timestamp } = body
+  const { userName, deckName, decklist, shareLink, timestamp } = body
 
-  if (!userName || !deckName || !decklist || !pdfBase64 || !timestamp) {
+  if (!userName || !deckName || !decklist || !shareLink || !timestamp) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
@@ -29,8 +29,6 @@ export async function POST(request: Request) {
   }
 
   const resend = new Resend(resendApiKey)
-
-  const pdfBuffer = Buffer.from(pdfBase64, 'base64')
 
   const requestedAt = new Date(timestamp).toLocaleString('it-IT', {
     timeZone: 'Europe/Rome',
@@ -53,18 +51,13 @@ export async function POST(request: Request) {
     <tr><td style="padding: 4px 12px 4px 0; font-weight: bold; width: 100px;">Utente</td><td>${escapeHtml(userName)}</td></tr>
     <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Deck</td><td>${escapeHtml(deckName)}</td></tr>
     <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Data</td><td>${requestedAt}</td></tr>
+    <tr><td style="padding: 4px 12px 4px 0; font-weight: bold;">Link</td><td><a href="${escapeHtml(shareLink)}">${escapeHtml(shareLink)}</a></td></tr>
   </table>
   <h3>Decklist</h3>
   <pre style="background: #f5f5f5; padding: 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap;">${escapeHtml(decklist)}</pre>
-  <p style="color: #666; font-size: 12px; margin-top: 16px;">PDF proxy allegato a questa email.</p>
+  <p style="color: #666; font-size: 12px; margin-top: 16px;">Link di condivisione deck incluso. Stampa disponibile tramite servizio proxy Adunata.</p>
 </body>
 </html>`,
-      attachments: [
-        {
-          filename: `${deckName.replace(/[^a-zA-Z0-9_-]/g, '_')}-proxies.pdf`,
-          content: pdfBuffer,
-        },
-      ],
     })
 
     return NextResponse.json({ success: true })
