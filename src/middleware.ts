@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import { type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
@@ -10,7 +10,14 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname = '/goblinai'
   }
 
-  return await updateSession(request)
+  // Expose the current pathname to RSC layouts via a request header so
+  // they can make path-aware decisions (the deck-detail layout, for
+  // instance, allows anon access to public/unlisted decks while every
+  // other (app) route still gates on auth).
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', request.nextUrl.pathname)
+
+  return await updateSession(request, requestHeaders)
 }
 
 export const config = {
