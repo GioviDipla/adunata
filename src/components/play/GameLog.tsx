@@ -61,7 +61,7 @@ export default function GameLog({
     <div
       className={
         isSide
-          ? 'flex h-full w-80 shrink-0 flex-col border-l border-border bg-bg-card'
+          ? 'absolute inset-y-0 right-0 flex w-80 flex-col border-l border-border bg-bg-card'
           : 'border-t border-border bg-bg-card'
       }
     >

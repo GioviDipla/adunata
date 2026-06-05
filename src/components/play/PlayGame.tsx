@@ -1378,7 +1378,9 @@ export default function PlayGame(props: PlayGameProps) {
   return (
     <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
     <div
-      className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark"
+      className={`fixed inset-0 z-40 flex flex-col overflow-hidden bg-bg-dark ${
+        !isGoldfish ? 'lg:pr-80' : ''
+      }`}
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       {/* Top header — back link (goldfish only) + GoblinAI launcher in the
