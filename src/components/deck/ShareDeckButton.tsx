@@ -13,10 +13,11 @@ interface ShareDeckButtonProps {
   visibility: 'private' | 'unlisted' | 'public'
   isOwner: boolean
   /** Called after the deck was flipped via the share flow (we promote
-   *  private decks to public so the recipient can open the link), so
-   *  the parent can sync its local state (e.g. the VisibilityToggle
-   *  pill) without a round-trip refresh. */
-  onVisibilityChanged?: (next: 'public') => void
+   *  private decks to unlisted so the recipient can open the link
+   *  without the deck appearing in public listings), so the parent can
+   *  sync its local state (e.g. the visibility dropdown) without a
+   *  round-trip refresh. */
+  onVisibilityChanged?: (next: 'unlisted') => void
   /** When true, renders the compact label-less icon variant used in
    *  tight toolbars. */
   compact?: boolean
@@ -47,16 +48,16 @@ export default function ShareDeckButton({
     try {
       if (isOwner && visibility === 'private') {
         const ok = window.confirm(
-          `"${deckName}" è privato. Per condividerlo serve renderlo pubblico. Procedere?`,
+          `"${deckName}" è privato. Per condividerlo verrà reso "unlisted" (visibile solo a chi ha il link, non listato sul tuo profilo). Procedere?`,
         )
         if (!ok) return
         const res = await fetch(`/api/decks/${deckId}/visibility`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ visibility: 'public' }),
+          body: JSON.stringify({ visibility: 'unlisted' }),
         })
         if (!res.ok) return
-        onVisibilityChanged?.('public')
+        onVisibilityChanged?.('unlisted')
       }
 
       const url = `${window.location.origin}/decks/${deckId}`
