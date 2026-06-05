@@ -132,6 +132,26 @@ npm run queue:card-images -- --set=fdn --limit=10000
 
 Stop. Le righe restano `status='queued'` finché un worker (o un run one-shot) le pesca.
 
+### Accoda carte dai mazzi utenti (`--from-decks`)
+
+Invece di selezionare dal catalogo globale `cards`, prende le carte distinte presenti in qualunque `deck_cards` (qualsiasi mazzo, qualsiasi utente) e accoda solo quelle non ancora upscalate.
+
+```bash
+# Dry-run: vedi quante carte dei mazzi mancano all'appello
+npm run queue:card-images -- --from-decks --limit=10000 --dry-run
+
+# Accoda i primi 500
+npm run queue:card-images -- --from-decks --limit=500
+
+# Accoda TUTTE (con --limit abbastanza grande)
+npm run queue:card-images -- --from-decks --limit=10000
+
+# Paginazione: salta primi 500, prendi prossimi 500
+npm run queue:card-images -- --from-decks --limit=500 --offset=500
+```
+
+Funziona con `--dry-run`, `--limit`, `--offset`. **Non** compatibile con filtri per set, nome, tipo (usa già `deck_cards` come fonte). Carte già `ready` vengono automaticamente escluse. Carte già in coda (`queued`/`processing`/`failed`) vengono saltate dall'upsert.
+
 ---
 
 ## Filtri di accodamento
@@ -150,6 +170,7 @@ Stop. Le righe restano `status='queued'` finché un worker (o un run one-shot) l
 | `--include-basic-lands` | (flag) | Default ESCLUDE Plains/Island/Swamp/Mountain/Forest |
 | `--limit=<N>` | `--limit=500` | Quante carte considerare dal DB (default 25) |
 | `--offset=<N>` | `--offset=500` | Salta le prime N (per paginare) |
+| `--from-decks` | (flag) | Invece di cercare in `cards`, prende solo carte presenti in almeno un deck utente (`deck_cards`). Filtra automaticamente quelle già upscalate (`status='ready'`). Compatibile con `--limit` e `--offset`. |
 | `--dry-run` | (flag) | Stampa righe che inserirebbe, NON scrive |
 
 ### Ricette pronte
@@ -181,6 +202,15 @@ npm run queue:card-images -- --type=enchantment --limit=10000
 
 # Solo carte NON ancora upscalate (daily catch-up)
 npm run queue:card-images -- --upscaled=false --limit=10000
+
+# Tutte le carte nei mazzi utenti non ancora upscalate (primi 100)
+npm run queue:card-images -- --from-decks --limit=100
+
+# Accoda TUTTE le carte dei mazzi in una volta sola
+npm run queue:card-images -- --from-decks --limit=10000
+
+# Dry-run per vedere quante carte dei mazzi mancano
+npm run queue:card-images -- --from-decks --limit=10000 --dry-run
 ```
 
 L'upsert ignora duplicati: ri-accodare un set non rifa due volte le carte già `ready`.

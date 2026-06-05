@@ -33,6 +33,7 @@ function parseArgs(argv) {
     scryfallId: args.get('scryfall-id') ? String(args.get('scryfall-id')) : null,
     type: args.get('type') ? String(args.get('type')) : null,
     upscaled: args.get('upscaled') ? String(args.get('upscaled')) : null,
+    fromDecks: args.get('from-decks') === true,
     includeBasicLands: args.get('include-basic-lands') === true,
     dryRun: args.get('dry-run') === true,
   }
@@ -106,6 +107,62 @@ function buildCardImageStoragePath({ scryfallId, faceName, profile }) {
   return `scryfall/${scryfallId[0]}/${scryfallId[1]}/${scryfallId}/${faceName}@${scaleSuffix}.png`
 }
 
+async function selectCardsFromDecks(options) {
+  const FETCH_PAGE = 1000
+  const allCardIds = []
+  let rangeStart = 0
+  while (true) {
+    const { data: chunk, error: idError } = await supabase
+      .from('deck_cards')
+      .select('card_id')
+      .range(rangeStart, rangeStart + FETCH_PAGE - 1)
+      .limit(FETCH_PAGE)
+    if (idError) throw idError
+    if (!chunk || chunk.length === 0) break
+    allCardIds.push(...chunk.map(r => r.card_id))
+    if (chunk.length < FETCH_PAGE) break
+    rangeStart += FETCH_PAGE
+  }
+
+  const distinctIds = [...new Set(allCardIds)]
+  if (distinctIds.length === 0) return []
+
+  const IN_CHUNK = 300
+  const upscaledIds = new Set()
+  for (let i = 0; i < distinctIds.length; i += IN_CHUNK) {
+    const chunk = distinctIds.slice(i, i + IN_CHUNK)
+    const { data: chunkData, error: chunkError } = await supabase
+      .from('card_image_assets')
+      .select('card_id')
+      .eq('target_profile', options.profile)
+      .eq('status', 'ready')
+      .not('storage_path', 'is', null)
+      .in('card_id', chunk)
+    if (chunkError) throw chunkError
+    for (const r of (chunkData ?? [])) upscaledIds.add(r.card_id)
+  }
+
+  const missingIds = distinctIds.filter(id => !upscaledIds.has(id))
+  if (missingIds.length === 0) return []
+
+  const paginated = missingIds.slice(options.offset, options.offset + options.limit)
+  if (paginated.length === 0) return []
+
+  const cards = []
+  for (let i = 0; i < paginated.length; i += IN_CHUNK) {
+    const chunk = paginated.slice(i, i + IN_CHUNK)
+    const { data: chunkData, error } = await supabase
+      .from('cards')
+      .select('id,scryfall_id,name,type_line,set_code,collector_number,image_normal,card_faces')
+      .in('id', chunk)
+      .order('name', { ascending: true })
+    if (error) throw error
+    cards.push(...(chunkData ?? []))
+  }
+  cards.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+  return cards
+}
+
 async function selectCards(options) {
   let query = supabase
     .from('cards')
@@ -155,14 +212,14 @@ function assetsForCards(cards, options) {
 const options = parseArgs(process.argv.slice(2))
 if (options.profile !== 'hd-2x') throw new Error(`Unsupported profile: ${options.profile}`)
 
-const cards = await selectCards(options)
+const cards = options.fromDecks ? await selectCardsFromDecks(options) : await selectCards(options)
 const rows = assetsForCards(cards, options)
 
 if (options.dryRun) {
   for (const row of rows) {
     console.log(JSON.stringify(row))
   }
-  console.log(`cards=${cards.length} assets=${rows.length}`)
+  console.log(`cards=${cards.length} assets=${rows.length} from_decks=${options.fromDecks}`)
   process.exit(0)
 }
 
@@ -179,4 +236,4 @@ const { error } = await supabase
   })
 
 if (error) throw error
-console.log(`cards=${cards.length} assets=${rows.length} queued=${rows.length}`)
+console.log(`cards=${cards.length} assets=${rows.length} queued=${rows.length} from_decks=${options.fromDecks}`)
