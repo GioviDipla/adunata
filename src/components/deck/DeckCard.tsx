@@ -190,12 +190,13 @@ function DeckCardImpl({
       onMouseLeave={() => setShowPreview(false)}
       style={{ touchAction: 'manipulation' }}
     >
-      {/* Quantity controls */}
+      {/* Quantity controls — desktop only. On mobile editing happens
+          through the tap context menu / action sheet. */}
       <div className="flex items-center gap-0.5 sm:gap-1">
         {onQuantityChange && (
           <button
             onClick={() => onQuantityChange(card.id, quantity - 1, board)}
-            className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+            className="hidden sm:flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
             aria-label="Decrease quantity"
           >
             <Minus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
@@ -207,7 +208,7 @@ function DeckCardImpl({
         {onQuantityChange && (
           <button
             onClick={() => onQuantityChange(card.id, quantity + 1, board)}
-            className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
+            className="hidden sm:flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
             aria-label="Increase quantity"
           >
             <Plus className="h-2.5 w-2.5 sm:h-3 sm:w-3" />

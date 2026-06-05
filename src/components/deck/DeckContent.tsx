@@ -36,17 +36,20 @@ export interface DeckCardEntry {
   tags?: string[]
   /** Manual ordering within a section. */
   position_in_section?: number | null
+  /** When the card was added to the deck (ISO timestamp). */
+  createdAt?: string
 }
 
 type ViewMode = 'list' | 'grid' | 'text'
 type GroupMode = 'section' | 'type' | 'none'
-type SortMode = 'cmc' | 'name' | 'price' | 'released'
+type SortMode = 'cmc' | 'name' | 'price' | 'released' | 'added'
 
 const SORT_LABELS: Record<SortMode, string> = {
   cmc: 'Mana Cost',
   name: 'Name',
   price: 'Price',
   released: 'Newest',
+  added: 'Last Added',
 }
 
 const GROUP_LABELS: Record<GroupMode, string> = {
@@ -293,6 +296,10 @@ export default function DeckContent({
       case 'released':
         return (a, b) =>
           (b.card.released_at ?? '').localeCompare(a.card.released_at ?? '') ||
+          a.card.name.localeCompare(b.card.name)
+      case 'added':
+        return (a, b) =>
+          (b.createdAt ?? '').localeCompare(a.createdAt ?? '') ||
           a.card.name.localeCompare(b.card.name)
       case 'cmc':
       default:

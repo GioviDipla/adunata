@@ -30,13 +30,8 @@ function ResultRow({
     onLongPress: () => onPreview?.(card),
   })
   return (
-    <button
-      type="button"
+    <div
       {...longPress.handlers}
-      onClick={() => {
-        if (longPress.wasLongPress()) return
-        onAdd()
-      }}
       onContextMenu={(e) => {
         e.preventDefault()
         onPreview?.(card)
@@ -57,16 +52,33 @@ function ResultRow({
           )}
         </span>
       )}
-      <div className="min-w-0 flex-1">
+      <button
+        type="button"
+        onClick={() => {
+          if (longPress.wasLongPress()) return
+          onPreview?.(card)
+        }}
+        className="min-w-0 flex-1 cursor-pointer text-left"
+      >
         <div className="truncate text-sm font-medium text-font-primary">
           {card.name}
         </div>
         <div className="truncate text-xs text-font-muted">
           {card.type_line} {card.mana_cost && `· ${card.mana_cost}`}
         </div>
-      </div>
-      <Plus className="h-4 w-4 shrink-0 text-font-muted" />
-    </button>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onAdd()
+        }}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-bg-cell text-font-muted transition-colors hover:bg-bg-accent hover:text-font-white"
+        aria-label={`Add ${card.name}`}
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+    </div>
   )
 }
 
@@ -143,6 +155,11 @@ export default function AddCardSearch({
   }, [])
 
   async function addCard(card: CardRow) {
+    // Close dropdown immediately — don't wait for the API call
+    setIsOpen(false)
+    setQuery('')
+    inputRef.current?.focus()
+
     const res = await fetch(`/api/decks/${deckId}/cards`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -155,9 +172,6 @@ export default function AddCardSearch({
 
     if (res.ok) {
       onCardAdded(card, currentBoard)
-      setQuery('')
-      setIsOpen(false)
-      inputRef.current?.focus()
     }
   }
 

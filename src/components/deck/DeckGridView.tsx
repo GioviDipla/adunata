@@ -241,9 +241,10 @@ export default function DeckGridView({
               </button>
             )}
 
-            {/* Hover overlay with actions */}
+            {/* Hover overlay with actions — desktop only. On mobile all
+                editing happens through the tap context menu. */}
             {!readOnly && (
-              <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-bg-dark/90 via-bg-dark/60 to-transparent p-2 pt-8 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="hidden sm:flex absolute inset-x-0 bottom-0 flex-col gap-1 bg-gradient-to-t from-bg-dark/90 via-bg-dark/60 to-transparent p-2 pt-8 opacity-0 transition-opacity group-hover:opacity-100">
                 <span className="mb-1 truncate text-xs font-medium text-font-primary">
                   {entry.card.name}
                 </span>

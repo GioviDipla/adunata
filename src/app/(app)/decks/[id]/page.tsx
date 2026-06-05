@@ -165,6 +165,7 @@ export default async function DeckDetailPage({
       section_id: dc.section_id ?? null,
       tags: dc.tags ?? [],
       position_in_section: dc.position_in_section ?? null,
+      createdAt: dc.created_at,
     }))
 
   if (isOwner) {

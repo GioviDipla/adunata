@@ -53,6 +53,8 @@ interface DeckCardEntry {
   section_id?: string | null
   tags?: string[]
   position_in_section?: number | null
+  /** When the card was added to the deck (ISO timestamp). */
+  createdAt?: string
 }
 
 interface DeckEditorProps {
