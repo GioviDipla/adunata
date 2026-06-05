@@ -868,7 +868,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
             card is collapsible via its header chevron. Defaults: stats
             first, sections second. */}
         <div className="hidden lg:block w-80 shrink-0">
-          <div className="sticky top-6">
+          <div className="sticky top-6 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <SidebarCards
               deckId={deck.id}
               panels={[
