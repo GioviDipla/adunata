@@ -596,9 +596,9 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
   }, [commanderCards])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
+    <div className="mx-auto flex max-w-7xl flex-col px-4 py-4 sm:py-6 h-screen overflow-hidden">
       {/* Header */}
-      <div className="mb-4 sm:mb-6">
+      <div className="shrink-0 mb-4 sm:mb-6">
         <div className="flex items-center gap-2 sm:gap-3">
           {isEditingName ? (
             <div className="flex items-center gap-2">
@@ -720,10 +720,10 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
         </div>
       </div>
 
-      {/* Two-panel layout */}
-      <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
+      {/* Two-panel layout — fills remaining viewport height, each panel scrolls independently */}
+      <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row flex-1 min-h-0">
         {/* Left panel: Card list */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-y-auto">
           {/* Compact stats bar */}
           <div className="mb-3 sm:mb-4">
             <DeckStatsBar
@@ -866,9 +866,8 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
         {/* Right panel: stats + sections — only on lg+. Order is user-
             persistable via SidebarCards (drag handle on hover), and each
             card is collapsible via its header chevron. Defaults: stats
-            first, sections second. */}
-        <div className="hidden lg:block w-80 shrink-0">
-          <div className="sticky top-6 max-h-[calc(100vh-2rem)] overflow-y-auto">
+            first, sections second. Scrolls independently from the card list. */}
+        <div className="hidden lg:block w-80 shrink-0 overflow-y-auto">
             <SidebarCards
               deckId={deck.id}
               panels={[
@@ -923,7 +922,6 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
               ]}
             />
           </div>
-        </div>
       </div>
 
       {/* Export modal */}
