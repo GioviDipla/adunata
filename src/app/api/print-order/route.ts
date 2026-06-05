@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 
-const ADMIN_EMAIL = 'amministrazione@studiob35.com'
+const FROM_EMAIL = 'amministrazione@studiob35.com'
+const TO_EMAIL = 'servizioproxy@studiob35.com'
 
 export async function POST(request: Request) {
   let body: {
@@ -41,8 +42,8 @@ export async function POST(request: Request) {
 
   try {
     await resend.emails.send({
-      from: 'Adunata Print Orders <orders@adunata.studiob35.com>',
-      to: [ADMIN_EMAIL],
+      from: `Adunata <${FROM_EMAIL}>`,
+      to: [TO_EMAIL],
       subject: `Print Order: ${deckName} — ${userName}`,
       html: `<html>
 <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
