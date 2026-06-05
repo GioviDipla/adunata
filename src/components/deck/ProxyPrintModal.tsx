@@ -446,7 +446,8 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null)
   const [previewPage, setPreviewPage] = useState(0)
   const [sendingOrder, setSendingOrder] = useState(false)
-  const [orderFeedback, setOrderFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
+  const [orderFeedback, setOrderFeedback] = useState<{ type: 'error'; text: string } | null>(null)
+  const [orderSuccess, setOrderSuccess] = useState(false)
   const [skipWarning, setSkipWarning] = useState<number>(0)
 
 
@@ -829,8 +830,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
         const msg = (err as { error?: string }).error ?? `HTTP ${res.status}`
         throw new Error(msg)
       }
-      setOrderFeedback({ type: 'success', text: 'Ordine inviato a StudioB35. Riceverai conferma via email.' })
-      setTimeout(() => onClose(), 2500)
+      setOrderSuccess(true)
     } catch (err) {
       console.error('[print-order]', err)
       const text = err instanceof Error ? err.message : 'Errore sconosciuto durante invio ordine.'
@@ -1513,13 +1513,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
           {/* Footer */}
           <div className="shrink-0 border-t border-border bg-bg-surface px-3 py-2" onClick={(e) => e.stopPropagation()}>
             {orderFeedback && (
-              <div
-                className={`mb-2 rounded-md border px-3 py-2 text-xs ${
-                  orderFeedback.type === 'success'
-                    ? 'border-green-500/40 bg-green-500/10 text-green-300'
-                    : 'border-red-500/40 bg-red-500/10 text-red-300'
-                }`}
-              >
+              <div className="mb-2 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
                 {orderFeedback.text}
               </div>
             )}
@@ -1579,6 +1573,38 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
           </div>
         </div>
       )})()}
+
+      {orderSuccess && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 px-4"
+          onClick={onClose}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-2xl border border-border bg-bg-surface p-6 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="mb-3 text-lg font-bold text-font-primary">
+              Grazie!
+            </h2>
+            <p className="mb-2 text-sm text-font-secondary">
+              Abbiamo inoltrato la richiesta al nostro laboratorio. Nelle
+              prossime ore riceverai una risposta per email su tempi e costi.
+            </p>
+            <p className="mb-5 text-base font-bold text-font-accent">
+              Intanto... ADUNATAAAAAAAAAA!
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-bg-accent px-4 py-2.5 text-sm font-bold text-font-white transition-colors hover:bg-bg-accent/80"
+            >
+              Chiudi
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
