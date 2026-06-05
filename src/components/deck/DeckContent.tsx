@@ -299,7 +299,7 @@ export default function DeckContent({
           a.card.name.localeCompare(b.card.name)
       case 'added':
         return (a, b) =>
-          (b.createdAt ?? '').localeCompare(a.createdAt ?? '') ||
+          (new Date(b.createdAt ?? 0).getTime() || 0) - (new Date(a.createdAt ?? 0).getTime() || 0) ||
           a.card.name.localeCompare(b.card.name)
       case 'cmc':
       default:

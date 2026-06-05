@@ -143,10 +143,14 @@ export default function AddCardSearch({
     }
   }, [query, searchCards])
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (but not when clicking inside a
+  // modal/dialog — e.g. the CardDetail preview opened from a search result).
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        const target = e.target as Element
+        // Don't close if clicking inside a modal/dialog (CardDetail, etc.)
+        if (target.closest('[role="dialog"]') || target.closest('.fixed.inset-0')) return
         setIsOpen(false)
       }
     }
