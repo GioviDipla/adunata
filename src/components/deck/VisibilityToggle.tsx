@@ -115,14 +115,15 @@ export default function VisibilityToggle({
   const CurrentIcon = current.Icon
 
   return (
-    <div ref={wrapperRef} className="relative inline-flex flex-col gap-1">
+    <div ref={wrapperRef} className="relative inline-flex items-center">
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
         disabled={pending}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-primary transition-colors hover:bg-bg-hover disabled:opacity-60"
+        title={current.description}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-primary transition-colors hover:bg-bg-hover disabled:opacity-60"
       >
         <CurrentIcon className={`h-3.5 w-3.5 ${current.iconClass}`} />
         <span>{current.label}</span>
@@ -133,18 +134,12 @@ export default function VisibilityToggle({
         )}
       </button>
 
-      {/* Inline description of the current selection — replaces the
-          previous title-attr / hover-only explainer. */}
-      <span className="text-[10px] leading-snug text-font-muted">
-        {current.description}
-      </span>
-
-      {error && <span className="text-[10px] text-bg-red">{error}</span>}
+      {error && <span className="ml-2 text-[10px] text-bg-red">{error}</span>}
 
       {open && (
         <ul
           role="listbox"
-          className="absolute left-0 top-full z-30 mt-1 w-72 max-w-[80vw] rounded-xl border border-border bg-bg-surface p-1 shadow-2xl"
+          className="absolute left-0 top-full z-30 mt-1 w-64 max-w-[80vw] rounded-xl border border-border bg-bg-surface p-1 shadow-2xl"
         >
           {OPTIONS.map((opt) => {
             const Icon = opt.Icon
