@@ -1,16 +1,22 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { Copy, Check, Globe, Printer, Library, ClipboardCopy, Plus } from 'lucide-react'
+import { Globe, Link as LinkIcon, Printer, Library, ClipboardCopy, Plus, Download } from 'lucide-react'
 import DeckContent, { type DeckCardEntry } from './DeckContent'
 import ProxyPrintModal from './ProxyPrintModal'
 import AddToCollectionModal from './AddToCollectionModal'
 import ShareDeckButton from './ShareDeckButton'
+import AuthRequiredDialog from './AuthRequiredDialog'
 import DeckStats from './DeckStats'
 import DeckStatsBar from './DeckStatsBar'
 import DeckEngagement from './DeckEngagement'
 import CardDetail from '@/components/cards/CardDetail'
+
+// DeckExport pulls jspdf and other heavy deps — lazy-load to keep the
+// visitor view light. Same pattern used in DeckEditor.
+const DeckExport = dynamic(() => import('./DeckExport'), { ssr: false })
 import { useDeckOverlay } from '@/lib/hooks/useDeckOverlay'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
@@ -28,6 +34,10 @@ interface DeckViewProps {
   ownerDisplayName: string
   viewerId: string | null
   currentUserName: string
+  /** Empty string when the visitor is anonymous. The Proxy gate makes
+   *  sure the modal never opens without an authenticated user, so the
+   *  modal always sees a real address. */
+  currentUserEmail: string
 }
 
 export default function DeckView({
@@ -38,13 +48,14 @@ export default function DeckView({
   ownerDisplayName,
   viewerId,
   currentUserName,
+  currentUserEmail,
 }: DeckViewProps) {
   const [selectedDetailCard, setSelectedDetailCard] = useState<CardRow | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [copyError, setCopyError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<BoardTab>('main')
   const [showExpandedStats, setShowExpandedStats] = useState(false)
   const [showProxyPrint, setShowProxyPrint] = useState(false)
+  const [showAuthRequired, setShowAuthRequired] = useState(false)
+  const [showExport, setShowExport] = useState(false)
   const [showAddToCollection, setShowAddToCollection] = useState(false)
   const [overlayOn, setOverlayOn] = useState(false)
   const [overlayToast, setOverlayToast] = useState<string | null>(null)
@@ -138,27 +149,6 @@ export default function DeckView({
     [cards],
   )
 
-  async function copyDeckList() {
-    const lines = cards
-      .filter((c) => c.board === 'main' || c.board === 'commander')
-      .map((c) => `${c.quantity} ${c.card.name}`)
-      .join('\n')
-    const sideLines = cards
-      .filter((c) => c.board === 'sideboard')
-      .map((c) => `${c.quantity} ${c.card.name}`)
-    const full = sideLines.length > 0
-      ? `${lines}\n\nSideboard\n${sideLines.join('\n')}`
-      : lines
-    try {
-      await navigator.clipboard.writeText(full)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (e) {
-      setCopyError(e instanceof Error ? e.message : 'Clipboard blocked')
-      setTimeout(() => setCopyError(null), 3000)
-    }
-  }
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
       {/* Header */}
@@ -170,9 +160,15 @@ export default function DeckView({
           <span className="shrink-0 rounded-full bg-bg-cell px-2 py-0.5 text-[10px] sm:px-3 sm:py-1 sm:text-xs font-medium text-font-secondary">
             {deck.format}
           </span>
-          <span className="flex items-center gap-1 rounded-full bg-bg-green/20 px-2 py-0.5 text-[10px] font-bold text-bg-green">
-            <Globe className="h-3 w-3" /> Public
-          </span>
+          {deck.visibility === 'unlisted' ? (
+            <span className="flex items-center gap-1 rounded-full bg-bg-blue/20 px-2 py-0.5 text-[10px] font-bold text-bg-blue">
+              <LinkIcon className="h-3 w-3" /> Unlisted
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 rounded-full bg-bg-green/20 px-2 py-0.5 text-[10px] font-bold text-bg-green">
+              <Globe className="h-3 w-3" /> Public
+            </span>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -187,17 +183,16 @@ export default function DeckView({
           </Link>
 
           <button
-            onClick={copyDeckList}
+            onClick={() => setShowExport(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-secondary transition-colors hover:bg-bg-hover"
           >
-            {copied ? (
-              <><Check className="h-3.5 w-3.5 text-bg-green" /> Copied</>
-            ) : (
-              <><Copy className="h-3.5 w-3.5" /> Copy list</>
-            )}
+            <Download className="h-3.5 w-3.5" /> Export
           </button>
           <button
-            onClick={() => setShowProxyPrint(true)}
+            onClick={() => {
+              if (!viewerId) setShowAuthRequired(true)
+              else setShowProxyPrint(true)
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-bg-surface px-3 py-1.5 text-xs font-medium text-font-secondary transition-colors hover:bg-bg-hover"
           >
             <Printer className="h-3.5 w-3.5" /> Proxy
@@ -216,7 +211,7 @@ export default function DeckView({
           <ShareDeckButton
             deckId={deck.id}
             deckName={deck.name}
-            visibility="public"
+            visibility={(deck.visibility as 'private' | 'unlisted' | 'public') ?? 'public'}
             isOwner={false}
           />
           <button
@@ -232,9 +227,6 @@ export default function DeckView({
             <span className="hidden sm:inline">Collection overlay</span>
             <span className="sm:hidden">Overlay</span>
           </button>
-          {copyError && (
-            <span className="text-[11px] text-bg-red">{copyError}</span>
-          )}
         </div>
       </div>
 
@@ -370,8 +362,14 @@ export default function DeckView({
         <ProxyPrintModal
           deckId={deck.id}
           deckName={deck.name}
-          cards={cards}
+          cards={cards.map((c) => ({
+            card: c.card,
+            quantity: c.quantity,
+            board: c.board,
+            isFoil: c.isFoil,
+          }))}
           userName={currentUserName}
+          userEmail={currentUserEmail}
           onClose={() => setShowProxyPrint(false)}
         />
       )}
@@ -382,6 +380,22 @@ export default function DeckView({
           onClose={() => setShowAddToCollection(false)}
         />
       )}
+
+      {showExport && (
+        <DeckExport
+          deckId={deck.id}
+          deckName={deck.name}
+          cards={cards}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
+      <AuthRequiredDialog
+        open={showAuthRequired}
+        onClose={() => setShowAuthRequired(false)}
+        redirectAfterLogin={`/decks/${deck.id}`}
+        message="La stampa proxy è riservata agli utenti registrati Adunata. Accedi o registrati per continuare."
+      />
     </div>
   )
 }

@@ -1,27 +1,59 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Lock, Globe, Loader2 } from 'lucide-react'
+import { Lock, Link as LinkIcon, Globe, Loader2 } from 'lucide-react'
+
+export type DeckVisibility = 'private' | 'unlisted' | 'public'
 
 interface VisibilityToggleProps {
   deckId: string
-  initialVisibility: 'private' | 'public'
+  initialVisibility: DeckVisibility
   /** Fires after a successful flip — the ShareDeckButton uses this to
    *  stay in sync so it skips the "make public first?" confirm when
    *  the user already flipped the pill. */
-  onChange?: (next: 'private' | 'public') => void
+  onChange?: (next: DeckVisibility) => void
 }
+
+const OPTIONS: Array<{
+  value: DeckVisibility
+  label: string
+  Icon: typeof Lock
+  activeClass: string
+  title: string
+}> = [
+  {
+    value: 'private',
+    label: 'Private',
+    Icon: Lock,
+    activeClass: 'bg-bg-surface text-font-primary shadow-sm',
+    title: 'Visibile solo a te',
+  },
+  {
+    value: 'unlisted',
+    label: 'Unlisted',
+    Icon: LinkIcon,
+    activeClass: 'bg-bg-blue/20 text-bg-blue',
+    title: 'Visibile a chiunque abbia il link, non listato sul tuo profilo',
+  },
+  {
+    value: 'public',
+    label: 'Public',
+    Icon: Globe,
+    activeClass: 'bg-bg-green/20 text-bg-green',
+    title: 'Visibile a tutti, listato sul tuo profilo pubblico',
+  },
+]
 
 export default function VisibilityToggle({
   deckId,
   initialVisibility,
   onChange,
 }: VisibilityToggleProps) {
-  const [visibility, setVisibility] = useState(initialVisibility)
+  const [visibility, setVisibility] = useState<DeckVisibility>(initialVisibility)
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  async function setTo(next: 'private' | 'public') {
+  async function setTo(next: DeckVisibility) {
     if (next === visibility) return
     const previous = visibility
     setVisibility(next)
@@ -51,30 +83,25 @@ export default function VisibilityToggle({
   return (
     <div className="flex items-center gap-2">
       <div className="flex gap-0.5 rounded-lg bg-bg-cell p-1">
-        <button
-          onClick={() => setTo('private')}
-          disabled={pending}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            visibility === 'private'
-              ? 'bg-bg-surface text-font-primary shadow-sm'
-              : 'text-font-muted hover:text-font-primary'
-          }`}
-        >
-          <Lock className="h-3.5 w-3.5" />
-          Private
-        </button>
-        <button
-          onClick={() => setTo('public')}
-          disabled={pending}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            visibility === 'public'
-              ? 'bg-bg-green/20 text-bg-green'
-              : 'text-font-muted hover:text-font-primary'
-          }`}
-        >
-          <Globe className="h-3.5 w-3.5" />
-          Public
-        </button>
+        {OPTIONS.map(({ value, label, Icon, activeClass, title }) => {
+          const active = visibility === value
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTo(value)}
+              disabled={pending}
+              title={title}
+              aria-pressed={active}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                active ? activeClass : 'text-font-muted hover:text-font-primary'
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          )
+        })}
       </div>
       {pending && <Loader2 className="h-3.5 w-3.5 animate-spin text-font-muted" />}
       {error && <span className="text-[10px] text-bg-red">{error}</span>}

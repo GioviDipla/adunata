@@ -7,11 +7,13 @@ interface ShareDeckButtonProps {
   deckId: string
   deckName: string
   /** Current visibility. Only the owner can see `private` — visitors
-   *  reach this component only on public decks (private is 404'd
-   *  server-side), so the private-confirmation branch is owner-only. */
-  visibility: 'private' | 'public'
+   *  reach this component only on public/unlisted decks (private is
+   *  404'd server-side), so the private-confirmation branch is
+   *  owner-only. */
+  visibility: 'private' | 'unlisted' | 'public'
   isOwner: boolean
-  /** Called after the deck was flipped to public via the share flow, so
+  /** Called after the deck was flipped via the share flow (we promote
+   *  private decks to public so the recipient can open the link), so
    *  the parent can sync its local state (e.g. the VisibilityToggle
    *  pill) without a round-trip refresh. */
   onVisibilityChanged?: (next: 'public') => void

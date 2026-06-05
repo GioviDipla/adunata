@@ -21,6 +21,7 @@ interface CardEntry {
   card: CardRow
   quantity: number
   board: string
+  isFoil?: boolean
 }
 
 interface ProxyPrintModalProps {
@@ -28,6 +29,7 @@ interface ProxyPrintModalProps {
   deckName: string
   cards: CardEntry[]
   userName: string
+  userEmail: string
   onClose: () => void
 }
 
@@ -367,7 +369,7 @@ function getPreviewImage(card: CardRow): string | null {
   return card.image_normal || card.image_small
 }
 
-export default function ProxyPrintModal({ deckId, deckName, cards, userName, onClose }: ProxyPrintModalProps) {
+export default function ProxyPrintModal({ deckId, deckName, cards, userName, userEmail, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
   const [presetId, setPresetId] = useState<PrintPresetId>(DEFAULT_PRESET_ID)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -432,6 +434,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     card: CardRow
     board: string
     face?: 'front' | 'back'
+    isFoil?: boolean
   }
   const [expandedOrder, setExpandedOrder] = useState<ExpandedSlot[]>([])
   const [dragSlot, setDragSlot] = useState<number | null>(null)
@@ -518,8 +521,8 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     for (const e of selectedCards) {
       const isDfc = Array.isArray(e.card.card_faces) && e.card.card_faces.length >= 2
       for (let i = 0; i < e.quantity; i++) {
-        expanded.push({ card: e.card, board: e.board, face: 'front' })
-        if (isDfc) expanded.push({ card: e.card, board: e.board, face: 'back' })
+        expanded.push({ card: e.card, board: e.board, face: 'front', isFoil: !!e.isFoil })
+        if (isDfc) expanded.push({ card: e.card, board: e.board, face: 'back', isFoil: !!e.isFoil })
       }
     }
     setExpandedOrder(expanded)
@@ -568,16 +571,23 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
 
   // Group expanded slots back into entries with quantities for the decklist email.
   // Back-face slots are ignored — they represent the same card as their front sibling.
+  // Foil vs non-foil copies of the same card stay on separate lines so the
+  // Moxfield-format export carries the correct `*F*` marker per copy.
   const groupExpandedToEntries = useCallback(
     (slots: ExpandedSlot[]): CardEntry[] => {
       const grouped: CardEntry[] = []
       for (const slot of slots) {
         if (slot.face === 'back') continue
         const last = grouped[grouped.length - 1]
-        if (last && last.card.id === slot.card.id && last.board === slot.board) {
+        if (
+          last
+          && last.card.id === slot.card.id
+          && last.board === slot.board
+          && !!last.isFoil === !!slot.isFoil
+        ) {
           last.quantity++
         } else {
-          grouped.push({ card: slot.card, quantity: 1, board: slot.board })
+          grouped.push({ card: slot.card, quantity: 1, board: slot.board, isFoil: !!slot.isFoil })
         }
       }
       return grouped
@@ -590,8 +600,18 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     const sideboard: string[] = []
     const maybeboard: string[] = []
     const tokens: string[] = []
-    for (const entry of cards) {
-      const line = `${entry.quantity} ${entry.card.name}`
+    // Moxfield import line format:
+    //   `{qty} {name} ({SET}) {collector_number}{ *F* if foil}`
+    // Set + CN come from the `cards` table (already populated by the bulk
+    // Scryfall sync). Foil flag travels with each deck_card row.
+    for (const entry of entries) {
+      const setCode = (entry.card.set_code ?? '').toUpperCase()
+      const cn = entry.card.collector_number ?? ''
+      const foilSuffix = entry.isFoil ? ' *F*' : ''
+      const lineParts = [`${entry.quantity} ${entry.card.name}`]
+      if (setCode) lineParts.push(`(${setCode})`)
+      if (cn) lineParts.push(cn)
+      const line = `${lineParts.join(' ')}${foilSuffix}`
       if (entry.board === 'main' || entry.board === 'commander') main.push(line)
       else if (entry.board === 'sideboard') sideboard.push(line)
       else if (entry.board === 'maybeboard') maybeboard.push(line)
@@ -774,6 +794,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userName,
+          userEmail,
           deckName,
           decklist,
           shareLink,
@@ -794,7 +815,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     } finally {
       setSendingOrder(false)
     }
-  }, [buildMoxfieldDecklist, groupExpandedToEntries, deckId, deckName, userName, onClose, showPreview, expandedOrder, selectedCards])
+  }, [buildMoxfieldDecklist, groupExpandedToEntries, deckId, deckName, userName, userEmail, onClose, showPreview, expandedOrder, selectedCards])
 
   const pages = outputMode === 'direct-poker'
     ? (calibrationMode ? 1 : totalCards)
