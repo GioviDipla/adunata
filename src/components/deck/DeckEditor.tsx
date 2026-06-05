@@ -942,6 +942,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
           cards={statsCards}
           userName={currentUserName}
           userEmail={currentUserEmail}
+          currentVisibility={deckVisibility}
           onClose={() => setShowProxyPrint(false)}
         />
       )}

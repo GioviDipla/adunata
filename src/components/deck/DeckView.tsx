@@ -370,6 +370,7 @@ export default function DeckView({
           }))}
           userName={currentUserName}
           userEmail={currentUserEmail}
+          currentVisibility={(deck.visibility as 'private' | 'unlisted' | 'public') ?? 'public'}
           onClose={() => setShowProxyPrint(false)}
         />
       )}

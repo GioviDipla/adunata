@@ -30,6 +30,11 @@ interface ProxyPrintModalProps {
   cards: CardEntry[]
   userName: string
   userEmail: string
+  /** Current deck visibility. If the owner submits a print order while
+   *  the deck is still 'private', the modal silently promotes it to
+   *  'unlisted' before posting so StudioB35 can actually open the
+   *  share link from the email. */
+  currentVisibility?: 'private' | 'unlisted' | 'public'
   onClose: () => void
 }
 
@@ -369,7 +374,7 @@ function getPreviewImage(card: CardRow): string | null {
   return card.image_normal || card.image_small
 }
 
-export default function ProxyPrintModal({ deckId, deckName, cards, userName, userEmail, onClose }: ProxyPrintModalProps) {
+export default function ProxyPrintModal({ deckId, deckName, cards, userName, userEmail, currentVisibility, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
   const [presetId, setPresetId] = useState<PrintPresetId>(DEFAULT_PRESET_ID)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -789,6 +794,24 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
       const decklist = buildMoxfieldDecklist(entries)
       const shareLink = `${window.location.origin}/decks/${deckId}`
 
+      // If the owner is shipping a still-private deck, silently promote
+      // it to 'unlisted' so the link in the email actually opens for
+      // StudioB35. The API rejects the patch if the caller is not the
+      // owner — non-owner visitors only ever reach this code path with
+      // an already-shareable deck (RLS gates the page).
+      if (currentVisibility === 'private') {
+        await fetch(`/api/decks/${deckId}/visibility`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ visibility: 'unlisted' }),
+        }).catch(() => {
+          // Best-effort — if promotion fails the email still goes out
+          // with the existing link, just with a broken share for the
+          // recipient. We surface the order error below if Resend
+          // itself rejects.
+        })
+      }
+
       const res = await fetch('/api/print-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -815,7 +838,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
     } finally {
       setSendingOrder(false)
     }
-  }, [buildMoxfieldDecklist, groupExpandedToEntries, deckId, deckName, userName, userEmail, onClose, showPreview, expandedOrder, selectedCards])
+  }, [buildMoxfieldDecklist, groupExpandedToEntries, deckId, deckName, userName, userEmail, currentVisibility, onClose, showPreview, expandedOrder, selectedCards])
 
   const pages = outputMode === 'direct-poker'
     ? (calibrationMode ? 1 : totalCards)
