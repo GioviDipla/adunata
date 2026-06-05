@@ -26,7 +26,7 @@ import DeckContent from './DeckContent'
 import { useDeckOverlay } from '@/lib/hooks/useDeckOverlay'
 import DeckSectionsPanel from './DeckSectionsPanel'
 import SidebarCards, { type SidebarPanel } from './SidebarCards'
-import VisibilityToggle from './VisibilityToggle'
+import VisibilityToggle, { type DeckVisibility } from './VisibilityToggle'
 import ShareDeckButton from './ShareDeckButton'
 import type { Database } from '@/types/supabase'
 import type { SectionRow } from '@/types/deck'
@@ -60,11 +60,12 @@ interface DeckEditorProps {
   initialCards: DeckCardEntry[]
   initialSections?: SectionRow[]
   currentUserName: string
+  currentUserEmail: string
 }
 
 type BoardTab = 'main' | 'sideboard' | 'maybeboard' | 'tokens' | 'removed'
 
-export default function DeckEditor({ deck, initialCards, initialSections = [], currentUserName }: DeckEditorProps) {
+export default function DeckEditor({ deck, initialCards, initialSections = [], currentUserName, currentUserEmail }: DeckEditorProps) {
   const router = useRouter()
   const [cards, setCards] = useState<DeckCardEntry[]>(initialCards)
   const [sections, setSections] = useState<SectionRow[]>(initialSections)
@@ -157,8 +158,8 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
   // Lifted so the ShareDeckButton sees the current value even after the
   // user flips the VisibilityToggle pills — it skips the "make public
   // first?" confirm if the deck is already public.
-  const [deckVisibility, setDeckVisibility] = useState<'private' | 'public'>(
-    (deck.visibility as 'private' | 'public') ?? 'private',
+  const [deckVisibility, setDeckVisibility] = useState<DeckVisibility>(
+    (deck.visibility as DeckVisibility) ?? 'private',
   )
   // Pre-filled text for the import-from-string modal. Populated on
   // mount when the deck was just created via /decks/import and some
@@ -940,6 +941,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
           deckName={deckName}
           cards={statsCards}
           userName={currentUserName}
+          userEmail={currentUserEmail}
           onClose={() => setShowProxyPrint(false)}
         />
       )}

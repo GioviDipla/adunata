@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { X, Printer, CheckSquare, Square, Mail, AlertTriangle, Send } from 'lucide-react'
+import { X, Printer, CheckSquare, Square, AlertTriangle, Send } from 'lucide-react'
 import { generateProxyPdfWithDetails } from '@/lib/proxyPdf'
 import type { Database } from '@/types/supabase'
 import type {
@@ -21,6 +21,7 @@ interface CardEntry {
   card: CardRow
   quantity: number
   board: string
+  isFoil?: boolean
 }
 
 interface ProxyPrintModalProps {
@@ -28,6 +29,7 @@ interface ProxyPrintModalProps {
   deckName: string
   cards: CardEntry[]
   userName: string
+  userEmail: string
   onClose: () => void
 }
 
@@ -367,7 +369,7 @@ function getPreviewImage(card: CardRow): string | null {
   return card.image_normal || card.image_small
 }
 
-export default function ProxyPrintModal({ deckId, deckName, cards, userName, onClose }: ProxyPrintModalProps) {
+export default function ProxyPrintModal({ deckId, deckName, cards, userName, userEmail, onClose }: ProxyPrintModalProps) {
   const [skipBasicLands, setSkipBasicLands] = useState(true)
   const [presetId, setPresetId] = useState<PrintPresetId>(DEFAULT_PRESET_ID)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -426,13 +428,13 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
   const [generating, setGenerating] = useState(false)
   const [generationPhase, setGenerationPhase] = useState<'idle' | 'preparing-images' | 'building-pdf'>('idle')
   const [progress, setProgress] = useState({ done: 0, total: 0 })
-  const [canShareFiles, setCanShareFiles] = useState(false)
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set())
   const [showPreview, setShowPreview] = useState(false)
   interface ExpandedSlot {
     card: CardRow
     board: string
     face?: 'front' | 'back'
+    isFoil?: boolean
   }
   const [expandedOrder, setExpandedOrder] = useState<ExpandedSlot[]>([])
   const [dragSlot, setDragSlot] = useState<number | null>(null)
@@ -442,17 +444,6 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
   const [orderFeedback, setOrderFeedback] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
   const [skipWarning, setSkipWarning] = useState<number>(0)
 
-  useEffect(() => {
-    // Feature-detect Web Share Level 2 with a probe file. Hidden on desktop
-    // browsers that don't accept file sharing (Chrome Win/Linux, Firefox).
-    if (typeof navigator === 'undefined' || typeof navigator.canShare !== 'function') return
-    try {
-      const probe = new File([new Uint8Array()], 'probe.pdf', { type: 'application/pdf' })
-      setCanShareFiles(navigator.canShare({ files: [probe] }))
-    } catch {
-      setCanShareFiles(false)
-    }
-  }, [])
 
   // Group and sort cards by section, alphabetically
   const sections = useMemo(() => {
@@ -530,8 +521,8 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     for (const e of selectedCards) {
       const isDfc = Array.isArray(e.card.card_faces) && e.card.card_faces.length >= 2
       for (let i = 0; i < e.quantity; i++) {
-        expanded.push({ card: e.card, board: e.board, face: 'front' })
-        if (isDfc) expanded.push({ card: e.card, board: e.board, face: 'back' })
+        expanded.push({ card: e.card, board: e.board, face: 'front', isFoil: !!e.isFoil })
+        if (isDfc) expanded.push({ card: e.card, board: e.board, face: 'back', isFoil: !!e.isFoil })
       }
     }
     setExpandedOrder(expanded)
@@ -580,16 +571,23 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
 
   // Group expanded slots back into entries with quantities for the decklist email.
   // Back-face slots are ignored — they represent the same card as their front sibling.
+  // Foil vs non-foil copies of the same card stay on separate lines so the
+  // Moxfield-format export carries the correct `*F*` marker per copy.
   const groupExpandedToEntries = useCallback(
     (slots: ExpandedSlot[]): CardEntry[] => {
       const grouped: CardEntry[] = []
       for (const slot of slots) {
         if (slot.face === 'back') continue
         const last = grouped[grouped.length - 1]
-        if (last && last.card.id === slot.card.id && last.board === slot.board) {
+        if (
+          last
+          && last.card.id === slot.card.id
+          && last.board === slot.board
+          && !!last.isFoil === !!slot.isFoil
+        ) {
           last.quantity++
         } else {
-          grouped.push({ card: slot.card, quantity: 1, board: slot.board })
+          grouped.push({ card: slot.card, quantity: 1, board: slot.board, isFoil: !!slot.isFoil })
         }
       }
       return grouped
@@ -602,8 +600,18 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     const sideboard: string[] = []
     const maybeboard: string[] = []
     const tokens: string[] = []
-    for (const entry of cards) {
-      const line = `${entry.quantity} ${entry.card.name}`
+    // Moxfield import line format:
+    //   `{qty} {name} ({SET}) {collector_number}{ *F* if foil}`
+    // Set + CN come from the `cards` table (already populated by the bulk
+    // Scryfall sync). Foil flag travels with each deck_card row.
+    for (const entry of entries) {
+      const setCode = (entry.card.set_code ?? '').toUpperCase()
+      const cn = entry.card.collector_number ?? ''
+      const foilSuffix = entry.isFoil ? ' *F*' : ''
+      const lineParts = [`${entry.quantity} ${entry.card.name}`]
+      if (setCode) lineParts.push(`(${setCode})`)
+      if (cn) lineParts.push(cn)
+      const line = `${lineParts.join(' ')}${foilSuffix}`
       if (entry.board === 'main' || entry.board === 'commander') main.push(line)
       else if (entry.board === 'sideboard') sideboard.push(line)
       else if (entry.board === 'maybeboard') maybeboard.push(line)
@@ -769,42 +777,6 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     }
   }, [buildPdfBlob, deckName, onClose])
 
-  const handleShare = useCallback(async () => {
-    setGenerating(true)
-    setGenerationPhase('idle')
-    setSkipWarning(0)
-    setProgress({ done: 0, total: 0 })
-    try {
-      const blob = await buildPdfBlob()
-      if (!blob) return
-      const file = new File([blob.blob], `${deckName}-proxies.pdf`, { type: 'application/pdf' })
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `${deckName} — proxies`,
-          text: `Proxies for ${deckName}`,
-        })
-        if (blob.skippedCount === 0) onClose()
-      } else {
-        // Share API disappeared between detection and click — fall back to download.
-        const url = URL.createObjectURL(blob.blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${deckName}-proxies.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
-        if (blob.skippedCount === 0) onClose()
-      }
-    } catch (err) {
-      // AbortError = user cancelled the share sheet. Don't surface it.
-      if ((err as Error | undefined)?.name && (err as Error).name !== 'AbortError') {
-        console.error('[proxy-share]', err)
-      }
-    } finally {
-      setGenerationPhase('idle')
-      setGenerating(false)
-    }
-  }, [buildPdfBlob, deckName, onClose])
 
   const handlePrintOrder = useCallback(async () => {
     setSendingOrder(true)
@@ -822,6 +794,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userName,
+          userEmail,
           deckName,
           decklist,
           shareLink,
@@ -842,7 +815,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
     } finally {
       setSendingOrder(false)
     }
-  }, [buildMoxfieldDecklist, groupExpandedToEntries, deckId, deckName, userName, onClose, showPreview, expandedOrder, selectedCards])
+  }, [buildMoxfieldDecklist, groupExpandedToEntries, deckId, deckName, userName, userEmail, onClose, showPreview, expandedOrder, selectedCards])
 
   const pages = outputMode === 'direct-poker'
     ? (calibrationMode ? 1 : totalCards)
@@ -1398,16 +1371,6 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, onC
               <Printer size={16} />
               Preview PDF
             </button>
-            {canShareFiles && (
-              <button
-                onClick={handleShare}
-                disabled={generating || !canGenerate}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-bg-accent/60 bg-bg-card px-4 py-2.5 text-sm font-bold text-font-accent transition-colors hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Mail size={16} />
-                Send via email
-              </button>
-            )}
           </div>
         </div>
       </div>

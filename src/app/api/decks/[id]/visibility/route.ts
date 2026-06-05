@@ -16,9 +16,9 @@ export async function PATCH(
   const body = await request.json() as { visibility?: string }
   const visibility = body.visibility
 
-  if (visibility !== 'private' && visibility !== 'public') {
+  if (visibility !== 'private' && visibility !== 'unlisted' && visibility !== 'public') {
     return NextResponse.json(
-      { error: 'visibility must be "private" or "public"' },
+      { error: 'visibility must be "private", "unlisted" or "public"' },
       { status: 400 },
     )
   }
@@ -40,5 +40,13 @@ export async function PATCH(
 
   revalidatePath(`/decks/${deckId}`)
   revalidatePath('/decks')
+  // Public-profile listing depends on visibility — refresh the owner's
+  // username page so the deck (dis)appears immediately after the toggle.
+  const { data: ownerProfile } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', user.id)
+    .single()
+  if (ownerProfile?.username) revalidatePath(`/u/${ownerProfile.username}`)
   return NextResponse.json({ visibility: data.visibility })
 }

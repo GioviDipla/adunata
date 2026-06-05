@@ -46,7 +46,8 @@ export async function generateMetadata({
     .eq('id', id)
     .single()
 
-  if (!deck || deck.visibility !== 'public') return {}
+  if (!deck) return {}
+  if (deck.visibility === 'private') return {}
 
   const [{ data: owner }, coverResult] = await Promise.all([
     supabase
@@ -94,6 +95,9 @@ export async function generateMetadata({
       images: image ? [image] : undefined,
     },
     alternates: { canonical: url },
+    // Unlisted decks: still want link previews (OG works above), but tell
+    // crawlers to skip indexing so they don't surface on Google.
+    robots: deck.visibility === 'unlisted' ? { index: false, follow: false } : undefined,
   }
 }
 
@@ -136,14 +140,16 @@ export default async function DeckDetailPage({
     ? await supabase.from('profiles').select('display_name').eq('id', user.id).single()
     : { data: null }
   const currentUserName = currentProfile?.display_name ?? user?.email?.split('@')[0] ?? 'Unknown'
+  const currentUserEmail = user?.email ?? ''
 
   const isOwner = !!user && deck.user_id === user.id
-  const visibility = (deck.visibility as 'private' | 'public') ?? 'private'
+  const visibility = (deck.visibility as 'private' | 'unlisted' | 'public') ?? 'private'
 
   // Private decks are owner-only. Route anon visitors through login so
   // they can come back after auth; hide existence from other logged-in
-  // users with a plain 404.
-  if (!isOwner && visibility !== 'public') {
+  // users with a plain 404. Unlisted decks behave like public for the
+  // page-level access check (anyone with the link can read).
+  if (!isOwner && visibility === 'private') {
     if (!user) redirect(`/login?next=/decks/${id}`)
     notFound()
   }
@@ -168,6 +174,7 @@ export default async function DeckDetailPage({
         initialCards={formattedCards}
         initialSections={sections}
         currentUserName={currentUserName}
+        currentUserEmail={currentUserEmail}
       />
     )
   }
@@ -190,7 +197,8 @@ export default async function DeckDetailPage({
       ownerUsername={ownerProfile.username}
       ownerDisplayName={ownerProfile.display_name}
       viewerId={user?.id ?? null}
-              currentUserName={currentUserName}
+      currentUserName={currentUserName}
+      currentUserEmail={currentUserEmail}
     />
   )
 }

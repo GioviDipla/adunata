@@ -10,6 +10,7 @@
     "test:proxy-pdf": "node --test tests/proxyPdf*.test.mjs",
     "test:card-images": "node --test tests/card-images/*.test.mjs",
     "queue:card-images": "node scripts/queue-card-images.mjs",
+    "queue:card-images:clear": "node scripts/clear-card-image-queue.mjs",
     "upscale:card-images": "node scripts/upscale-card-images.mjs",
     "upscale:card-images:watch": "node scripts/upscale-card-images.mjs --watch",
     "test:goblinai": "vitest run tests/goblinai",
