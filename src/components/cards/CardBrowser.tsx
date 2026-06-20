@@ -110,6 +110,18 @@ export default function CardBrowser({
 
   // Filters
   const [searchText, setSearchText] = useState('')
+  // Hydrate search from URL ?search= (e.g. redirected from Dashboard)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const q = new URLSearchParams(window.location.search).get('search')
+    if (q) {
+      setSearchText(q)
+      // Clean the URL so reloads don't re-trigger
+      const url = new URL(window.location.href)
+      url.searchParams.delete('search')
+      window.history.replaceState({}, '', url)
+    }
+  }, [])
   const [selectedColors, setSelectedColors] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [selectedRarity, setSelectedRarity] = useState('')
