@@ -1,27 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedUser } from "@/lib/supabase/get-user";
 import { redirect } from "next/navigation";
-import {
-  Search,
-  Plus,
-  Upload,
-  Layers,
-  Swords,
-  ArrowRight,
-  Library,
-  Play,
-  MessageCircle,
-  Trophy,
-} from "lucide-react";
+import { Swords, ArrowRight, Clock, Users } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 const STATUS_LABELS: Record<string, string> = {
   waiting: "Waiting",
   playing: "In progress",
-  finished: "Finished",
 };
 
-function formatRelativeDate(dateStr: string): string {
+function timeAgo(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
@@ -35,29 +24,18 @@ function formatRelativeDate(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
-interface GameLobby {
-  id: string;
-  status: string | null;
-  format: string | null;
-  name: string | null;
-  created_at: string;
-  winner_id: string | null;
-}
-
 export default async function DashboardPage() {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login");
 
   const supabase = await createClient();
 
+  // ── Batch 1: independent queries ──
   const [
     { data: profile },
-    { count: deckCount },
-    { data: recentDecks },
-    { count: cardCount },
-    { count: gameCount },
-    { data: recentGamePlayers },
-    { data: deckFormats },
+    { data: activeGames },
+    { data: latestDecks },
+    { data: latestCards },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -65,122 +43,77 @@ export default async function DashboardPage() {
       .eq("id", user.id)
       .single(),
     supabase
-      .from("decks")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id),
+      .from("game_lobbies")
+      .select("id, name, format, status, host_user_id, created_at")
+      .in("status", ["waiting", "playing"])
+      .order("created_at", { ascending: false })
+      .limit(8),
     supabase
       .from("decks")
-      .select("id, name, format, updated_at, card_count")
-      .eq("user_id", user.id)
+      .select("id, name, format, updated_at, card_count, user_id, cover_card_id")
+      .in("visibility", ["public", "unlisted"])
       .order("updated_at", { ascending: false })
-      .limit(5),
+      .limit(12),
     supabase
-      .from("user_cards")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id),
-    supabase
-      .from("game_players")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id),
-    supabase
-      .from("game_players")
-      .select("id, lobby_id, joined_at")
-      .eq("user_id", user.id)
-      .order("joined_at", { ascending: false })
-      .limit(5),
-    supabase
-      .from("decks")
-      .select("format")
-      .eq("user_id", user.id),
+      .from("cards")
+      .select("id, name, image_small, image_normal, type_line, mana_cost")
+      .order("created_at", { ascending: false })
+      .limit(10),
   ]);
 
-  // Fetch lobby data for recent game players
-  const lobbyIds = [...new Set(recentGamePlayers?.map((gp) => gp.lobby_id) ?? [])];
-  const { data: lobbyRows } =
-    lobbyIds.length > 0
-      ? await supabase
-          .from("game_lobbies")
-          .select("id, status, format, name, created_at, winner_id")
-          .in("id", lobbyIds)
-      : { data: [] };
-  const lobbyMap = new Map<string, GameLobby>(
-    (lobbyRows ?? []).map((l) => [l.id, l as GameLobby]),
+  // ── Batch 2: resolve deck cover images + owner profiles ──
+  const coverIds = [
+    ...new Set(
+      latestDecks
+        ?.map((d) => d.cover_card_id)
+        .filter((id): id is number => id != null) ?? [],
+    ),
+  ];
+
+  const deckOwnerIds = [
+    ...new Set(latestDecks?.map((d) => d.user_id) ?? []),
+  ];
+
+  const gameHostIds = [
+    ...new Set(
+      activeGames?.map((g) => g.host_user_id).filter(Boolean) ?? [],
+    ),
+  ];
+
+  const allUserIds = [...new Set([...deckOwnerIds, ...gameHostIds])];
+
+  const [{ data: coverCards }, { data: allProfiles }] = await Promise.all([
+    coverIds.length > 0
+      ? supabase
+          .from("cards")
+          .select("id, name, image_art_crop, image_normal")
+          .in("id", coverIds)
+      : { data: [] },
+    allUserIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, username, display_name")
+          .in("id", allUserIds)
+      : { data: [] },
+  ]);
+
+  const coverMap = new Map(
+    (coverCards ?? []).map((c) => [c.id, c]),
   );
-
-  const recentGames = (recentGamePlayers ?? []).map((gp) => ({
-    ...gp,
-    lobby: lobbyMap.get(gp.lobby_id) ?? null,
-  }));
-
-  const formatCounts: Record<string, number> = {};
-  deckFormats?.forEach((d) => {
-    const fmt = d.format || "Unknown";
-    formatCounts[fmt] = (formatCounts[fmt] || 0) + 1;
-  });
-  const favoriteFormat =
-    Object.entries(formatCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const profileMap = new Map(
+    (allProfiles ?? []).map((p) => [p.id, p]),
+  );
 
   const displayName =
     profile?.display_name || profile?.username || user.email;
   const firstName =
     displayName !== user.email ? displayName!.split(" ")[0] : null;
 
-  const quickActions = [
-    {
-      label: "Browse Cards",
-      href: "/cards",
-      icon: Search,
-      description: "Search the card database",
-    },
-    {
-      label: "Create Deck",
-      href: "/decks/new",
-      icon: Plus,
-      description: "Build a new deck",
-    },
-    {
-      label: "Import Deck",
-      href: "/decks/import",
-      icon: Upload,
-      description: "Import from a list",
-    },
-    {
-      label: "Play Game",
-      href: "/play",
-      icon: Play,
-      description: "Join or create a lobby",
-    },
-    {
-      label: "Goldfish",
-      href: "/decks",
-      icon: Swords,
-      description: "Solo-playtest a deck",
-    },
-    {
-      label: "Ask GoblinAI",
-      href: "/goblinai",
-      icon: MessageCircle,
-      description: "AI rules assistant",
-    },
-  ];
-
-  const stats = [
-    { label: "Decks", value: deckCount ?? 0, icon: Layers },
-    { label: "Cards owned", value: cardCount ?? 0, icon: Library },
-    { label: "Games played", value: gameCount ?? 0, icon: Play },
-    {
-      label: "Top format",
-      value: favoriteFormat ?? "—",
-      icon: Trophy,
-      isText: !favoriteFormat,
-    },
-  ];
-
-  const hasDecks = (recentDecks?.length ?? 0) > 0;
-  const hasGames = (recentGames?.length ?? 0) > 0;
+  const hasGames = (activeGames?.length ?? 0) > 0;
+  const hasDecks = (latestDecks?.length ?? 0) > 0;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
       {/* Welcome */}
       <div>
         <h1 className="text-2xl font-bold text-font-primary">
@@ -189,214 +122,191 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-font-secondary">{user.email}</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.label}
-              className="rounded-xl border border-border bg-bg-card p-4"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bg-accent/10">
-                  <Icon className="h-[18px] w-[18px] text-font-accent" />
-                </div>
-                <div className="min-w-0">
-                  <p
-                    className={
-                      stat.isText
-                        ? "text-sm font-semibold leading-tight text-font-primary"
-                        : "text-lg font-bold leading-tight text-font-primary"
-                    }
-                  >
-                    {stat.value}
-                  </p>
-                  <p className="text-xs text-font-muted truncate">
-                    {stat.label}
-                  </p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <h2 className="mb-4 text-lg font-semibold text-font-primary">
-          Quick actions
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {quickActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <Link
-                key={action.href}
-                href={action.href}
-                className="group flex items-center gap-4 rounded-xl border border-border bg-bg-card p-4 transition-colors hover:border-border-light hover:bg-bg-hover"
-              >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-accent/10 transition-colors group-hover:bg-bg-accent/20">
-                  <Icon className="h-5 w-5 text-font-accent" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-font-primary">
-                    {action.label}
-                  </p>
-                  <p className="text-xs text-font-muted">
-                    {action.description}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Recent Decks + Recent Games */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Decks */}
-        <div>
+      {/* Active Games */}
+      {hasGames && (
+        <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-font-primary">
-              Recent decks
+              Active games
             </h2>
-            {hasDecks && (
-              <Link
-                href="/decks"
-                className="flex items-center gap-1 text-sm text-font-accent hover:underline"
-              >
-                View all <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
+            <Link
+              href="/play"
+              className="flex items-center gap-1 text-sm text-font-accent hover:underline"
+            >
+              View all <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
 
-          {!hasDecks ? (
-            <div className="rounded-xl border border-border bg-bg-card p-8 text-center">
-              <Layers className="mx-auto h-10 w-10 text-font-muted" />
-              <p className="mt-3 text-sm text-font-secondary">
-                No decks yet. Create your first deck to get started.
-              </p>
-              <Link
-                href="/decks/new"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-bg-accent px-4 py-2 text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark"
-              >
-                <Plus className="h-4 w-4" />
-                Create deck
-              </Link>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {recentDecks!.map((deck) => (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {activeGames!.map((game) => {
+              const host = profileMap.get(game.host_user_id);
+              const hostName =
+                host?.display_name || host?.username || "Unknown";
+              return (
+                <Link
+                  key={game.id}
+                  href={`/play/${game.id}`}
+                  className="group flex flex-col gap-3 rounded-xl border border-border bg-bg-card p-4 transition-colors hover:border-border-light hover:bg-bg-hover"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={
+                        game.status === "playing"
+                          ? "shrink-0 rounded-full bg-bg-green/20 px-2 py-0.5 text-[11px] font-semibold text-bg-green"
+                          : "shrink-0 rounded-full bg-bg-yellow/20 px-2 py-0.5 text-[11px] font-semibold text-bg-yellow"
+                      }
+                    >
+                      {STATUS_LABELS[game.status] || game.status}
+                    </span>
+                    <span className="text-xs text-font-muted">
+                      {game.format}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-font-primary line-clamp-2">
+                    {game.name || "Unnamed lobby"}
+                  </p>
+                  <div className="mt-auto flex items-center gap-3 text-xs text-font-muted">
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      {hostName}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {timeAgo(game.created_at)}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Latest Decks */}
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-font-primary">
+            Latest decks
+          </h2>
+        </div>
+
+        {!hasDecks ? (
+          <div className="rounded-xl border border-border bg-bg-card p-8 text-center">
+            <Swords className="mx-auto h-10 w-10 text-font-muted" />
+            <p className="mt-3 text-sm text-font-secondary">
+              No public decks yet.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {latestDecks!.map((deck) => {
+              const coverCard = deck.cover_card_id
+                ? coverMap.get(deck.cover_card_id)
+                : null;
+              const coverSrc =
+                coverCard?.image_art_crop ?? coverCard?.image_normal ?? null;
+              const owner = profileMap.get(deck.user_id);
+              const ownerName =
+                owner?.display_name || owner?.username || "Unknown";
+
+              return (
                 <Link
                   key={deck.id}
                   href={`/decks/${deck.id}`}
-                  className="flex items-center justify-between rounded-xl border border-border bg-bg-card px-5 py-3.5 transition-colors hover:border-border-light hover:bg-bg-hover"
+                  className="group flex flex-col overflow-hidden rounded-xl border border-border bg-bg-card transition-colors hover:border-border-light hover:bg-bg-hover"
                 >
-                  <div className="min-w-0">
+                  {/* Cover image */}
+                  <div className="relative aspect-[5/3] w-full overflow-hidden bg-bg-cell">
+                    {coverSrc ? (
+                      <Image
+                        src={coverSrc}
+                        alt={coverCard?.name ?? deck.name}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+                        className="object-cover transition-transform group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <Swords className="h-8 w-8 text-font-muted" />
+                      </div>
+                    )}
+                    {/* Format badge */}
+                    <span className="absolute top-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+                      {deck.format}
+                    </span>
+                  </div>
+
+                  {/* Deck info */}
+                  <div className="flex flex-col gap-1 p-3.5">
                     <p className="truncate text-sm font-medium text-font-primary">
                       {deck.name}
                     </p>
-                    <p className="text-xs text-font-muted">
-                      {deck.format}
-                      {deck.card_count != null && (
-                        <>{" \u00b7 "}{deck.card_count} cards</>
-                      )}
-                      {" \u00b7 "}
-                      {formatRelativeDate(deck.updated_at)}
-                    </p>
-                  </div>
-                  <ArrowRight className="ml-3 h-4 w-4 shrink-0 text-font-muted" />
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Recent Games */}
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-font-primary">
-              Recent games
-            </h2>
-            {hasGames && (
-              <Link
-                href="/play"
-                className="flex items-center gap-1 text-sm text-font-accent hover:underline"
-              >
-                View all <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
-          </div>
-
-          {!hasGames ? (
-            <div className="rounded-xl border border-border bg-bg-card p-8 text-center">
-              <Play className="mx-auto h-10 w-10 text-font-muted" />
-              <p className="mt-3 text-sm text-font-secondary">
-                No games yet. Join a lobby or create your own.
-              </p>
-              <Link
-                href="/play"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-bg-accent px-4 py-2 text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark"
-              >
-                <Swords className="h-4 w-4" />
-                Start playing
-              </Link>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {recentGames.map((gp) => {
-                const lobby = gp.lobby;
-                const isWinner =
-                  lobby?.winner_id != null &&
-                  lobby.winner_id === user.id;
-                const status = lobby?.status ?? null;
-                const statusColor =
-                  status === "playing"
-                    ? "text-bg-green"
-                    : status === "waiting"
-                      ? "text-bg-yellow"
-                      : "text-font-muted";
-
-                return (
-                  <Link
-                    key={gp.id}
-                    href={lobby ? `/play/${lobby.id}` : "#"}
-                    className="flex items-center justify-between rounded-xl border border-border bg-bg-card px-5 py-3.5 transition-colors hover:border-border-light hover:bg-bg-hover"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium text-font-primary">
-                          {lobby?.name || "Game"}
-                        </p>
-                        {isWinner && (
-                          <span className="shrink-0 rounded-full bg-bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-font-accent">
-                            Won
-                          </span>
+                    <div className="flex items-center justify-between text-xs text-font-muted">
+                      <span>{ownerName}</span>
+                      <span className="flex items-center gap-1">
+                        {deck.card_count != null && (
+                          <>{deck.card_count} cards{" \u00b7 "}</>
                         )}
-                      </div>
-                      <p className="text-xs text-font-muted">
-                        {lobby?.format || "Unknown format"}
-                        {" \u00b7 "}
-                        <span className={statusColor}>
-                          {status
-                            ? STATUS_LABELS[status] || status
-                            : "Unknown"}
-                        </span>
-                        {" \u00b7 "}
-                        {lobby?.created_at
-                          ? formatRelativeDate(lobby.created_at)
-                          : formatRelativeDate(gp.joined_at)}
-                      </p>
+                        {timeAgo(deck.updated_at)}
+                      </span>
                     </div>
-                    <ArrowRight className="ml-3 h-4 w-4 shrink-0 text-font-muted" />
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Latest Cards */}
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-font-primary">
+            Latest cards
+          </h2>
+          <Link
+            href="/cards"
+            className="flex items-center gap-1 text-sm text-font-accent hover:underline"
+          >
+            Show more <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
-      </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {latestCards?.map((card) => (
+            <Link
+              key={card.id}
+              href={`/cards?card=${card.id}`}
+              className="group flex flex-col overflow-hidden rounded-xl border border-border bg-bg-card transition-colors hover:border-border-light hover:bg-bg-hover"
+            >
+              <div className="relative aspect-[488/680] w-full overflow-hidden bg-bg-cell">
+                {card.image_normal || card.image_small ? (
+                  <Image
+                    src={(card.image_normal ?? card.image_small)!}
+                    alt={card.name}
+                    width={488}
+                    height={680}
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center p-2 text-center text-xs text-font-muted">
+                    {card.name}
+                  </div>
+                )}
+              </div>
+              <div className="p-2.5">
+                <p className="truncate text-xs font-medium text-font-primary">
+                  {card.name}
+                </p>
+                <p className="truncate text-[11px] text-font-muted">
+                  {card.type_line}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
