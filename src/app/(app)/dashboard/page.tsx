@@ -48,6 +48,7 @@ export default async function DashboardPage() {
     { data: activeGames },
     { data: publicDecks },
     { data: myDecks },
+    { data: myDeckCovers },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -83,24 +84,26 @@ export default async function DashboardPage() {
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(4),
+    // My deck covers via RPC (dynamically finds best cover from deck contents)
+    supabase.rpc("get_deck_covers", { p_user_id: user.id }),
   ]);
 
   const likedIds = (likedRows || []).map((r) => r.card_id);
   const likedCardIds = likedIds.slice(0, 8).map(Number);
 
-  // ── Batch 2: resolve covers + liked card images + owner profiles ──
-  const coverIds = [
+  // ── My deck covers map (from RPC) ──
+  const myCoverMap = new Map(
+    (myDeckCovers ?? []).map((c) => [c.deck_id, c]),
+  );
+
+  // ── Collect IDs for batch 2 ──
+  const publicCoverIds = [
     ...new Set(
-      [
-        ...(myDecks ?? []),
-        ...(publicDecks ?? []),
-      ]
+      (publicDecks ?? [])
         .map((d) => d.cover_card_id)
         .filter((id): id is number => id != null),
     ),
   ];
-
-  const allCardIds = [...new Set([...coverIds, ...likedCardIds])];
 
   const publicOwnerIds = [
     ...new Set((publicDecks ?? []).map((d) => d.user_id)),
@@ -112,10 +115,10 @@ export default async function DashboardPage() {
   ];
   const allUserIds = [...new Set([...publicOwnerIds, ...gameHostIds])];
 
-  const [
-    { data: cardDetails },
-    { data: allProfiles },
-  ] = await Promise.all([
+  // ── Batch 2: resolve liked card images + public deck covers + profiles ──
+  const allCardIds = [...new Set([...publicCoverIds, ...likedCardIds])];
+
+  const [{ data: cardDetails }, { data: allProfiles }] = await Promise.all([
     allCardIds.length > 0
       ? admin
           .from("cards")
@@ -173,7 +176,6 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        {/* Search form — submits to /cards */}
         <form
           action="/cards"
           method="GET"
@@ -194,7 +196,6 @@ export default async function DashboardPage() {
           </button>
         </form>
 
-        {/* 5-card preview */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
           {previewCards?.map((card) => (
             <Link
@@ -247,6 +248,13 @@ export default async function DashboardPage() {
               No liked cards yet. Browse cards and tap the heart to save
               favorites.
             </p>
+            <Link
+              href="/cards"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-bg-accent px-4 py-2 text-sm font-medium text-font-white transition-colors hover:bg-bg-accent-dark"
+            >
+              <Search className="h-4 w-4" />
+              Browse cards
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
@@ -452,13 +460,22 @@ export default async function DashboardPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {myDecks!.map((deck) => {
-              const coverCard = deck.cover_card_id
+              // Use RPC cover (dynamically finds best image from deck contents)
+              const rpcCover = myCoverMap.get(deck.id);
+              // Fallback to cover_card_id lookup
+              const storedCover = deck.cover_card_id
                 ? cardMap.get(deck.cover_card_id)
                 : null;
               const coverSrc =
-                coverCard?.image_art_crop ??
-                coverCard?.image_normal ??
+                rpcCover?.image_art_crop ??
+                rpcCover?.image_normal ??
+                storedCover?.image_art_crop ??
+                storedCover?.image_normal ??
                 null;
+              const coverAlt =
+                rpcCover?.card_name ??
+                storedCover?.name ??
+                deck.name;
 
               return (
                 <Link
@@ -470,7 +487,7 @@ export default async function DashboardPage() {
                     {coverSrc ? (
                       <Image
                         src={coverSrc}
-                        alt={coverCard?.name ?? deck.name}
+                        alt={coverAlt}
                         fill
                         sizes="96px"
                         className="object-cover transition-transform group-hover:scale-105"

@@ -98,9 +98,14 @@ Feature proposte ma non prioritarie al momento. Niente di bloccante.
 
 - Notifiche push per turno avversario (web push)
 - Spettatori nelle lobby
-- Statistiche aggregate profilo (win rate, formati preferiti)
-- Deck sharing via link con preview social
+- Statistiche aggregate profilo (formati preferiti)
+- Migliorare drasticamente la Dashboard
+- Profilo dell'utente molto piu bello e descrittivo; immagini dei deck pubblici
+- Sezione Decks come su moxfield, con filtro per comandante e like
 - Supporto formato Commander con regole specifiche (color identity, lista singleton)
+- Deck Analitics molto piu dettagliati e "parlanti"
+- Integrazione con EDRECH tramite OpenAPI ("https://apify.com/jungle_synthesizer/edhrec-mtg-commander-meta-scraper/api/openapi")
+- miglioramento grafica UI e UX multiplayer
 
 ## Bug noti / debiti tecnici
 
