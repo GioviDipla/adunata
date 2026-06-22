@@ -3,12 +3,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { Send } from 'lucide-react'
+import { initialColor, initialsOf } from '@/lib/utils/user'
 
 type CardSuggestion = {
   id: string
   name: string
   type_line: string | null
   image_small: string | null
+}
+
+type UserSuggestion = {
+  id: string
+  username: string
+  display_name: string
 }
 
 interface CommentComposerProps {
@@ -25,7 +32,7 @@ const MAX_BODY = 2000
 
 export default function CommentComposer({
   initialBody = '',
-  placeholder = 'Scrivi un commento… usa @ per menzionare una carta',
+  placeholder = 'Scrivi un commento… usa @ per menzionare una carta o un utente',
   submitLabel = 'Commenta',
   autoFocus = false,
   disabled = false,
@@ -34,6 +41,7 @@ export default function CommentComposer({
 }: CommentComposerProps) {
   const [value, setValue] = useState(initialBody)
   const [suggestions, setSuggestions] = useState<CardSuggestion[]>([])
+  const [userSuggestions, setUserSuggestions] = useState<UserSuggestion[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [mentionRange, setMentionRange] = useState<{ start: number; end: number; token: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -80,14 +88,20 @@ export default function CommentComposer({
 
     if (token.length < 2) {
       setSuggestions([])
+      setUserSuggestions([])
       return
     }
 
-    fetch(`/api/cards/search?q=${encodeURIComponent(token)}`, { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('search failed'))))
-      .then((data) => {
+    // Fetch cards and users concurrently
+    Promise.all([
+      fetch(`/api/cards/search?q=${encodeURIComponent(token)}`, { signal: controller.signal })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('cards search failed'))),
+      fetch(`/api/users/search?q=${encodeURIComponent(token)}&limit=5`, { signal: controller.signal })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('users search failed'))),
+    ])
+      .then(([cardData, userData]) => {
         if (controller.signal.aborted) return
-        const cards = Array.isArray(data.cards) ? data.cards.slice(0, 8) : []
+        const cards = Array.isArray(cardData.cards) ? cardData.cards.slice(0, 8) : []
         setSuggestions(
           cards.map((c: Record<string, unknown>) => ({
             id: String(c.id),
@@ -96,11 +110,17 @@ export default function CommentComposer({
             image_small: (c.image_small as string | null) ?? null,
           })),
         )
+        const users = Array.isArray(userData.users) ? userData.users.slice(0, 5) : []
+        setUserSuggestions(
+          users.map((u: Record<string, unknown>) => ({
+            id: String(u.id),
+            username: String(u.username),
+            display_name: String(u.display_name),
+          })),
+        )
         setSelectedIndex(0)
       })
-      .catch(() => {
-        /* aborted or network error — ignored */
-      })
+      .catch(() => { /* aborted or network error */ })
   }, [])
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -114,6 +134,7 @@ export default function CommentComposer({
       debounceRef.current = setTimeout(() => runSearch(m.token), 200)
     } else {
       setSuggestions([])
+      setUserSuggestions([])
     }
   }
 
@@ -122,7 +143,7 @@ export default function CommentComposer({
     if (!el) return
     const m = findMention(el.value, el.selectionStart)
     setMentionRange(m)
-    if (!m) setSuggestions([])
+    if (!m) { setSuggestions([]); setUserSuggestions([]) }
   }
 
   function insertMention(card: CardSuggestion) {
@@ -143,26 +164,52 @@ export default function CommentComposer({
     })
   }
 
+  function insertUserMention(user: UserSuggestion) {
+    if (!mentionRange) return
+    const before = value.slice(0, mentionRange.start)
+    const after = value.slice(mentionRange.end)
+    const token = `@${user.username}`
+    const next = `${before}${token} ${after}`
+    setValue(next)
+    setMentionRange(null)
+    setSuggestions([])
+    setUserSuggestions([])
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (!el) return
+      const pos = (before + token + ' ').length
+      el.focus()
+      el.setSelectionRange(pos, pos)
+    })
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (suggestions.length > 0 && mentionRange) {
+    const totalSuggestions = userSuggestions.length + suggestions.length
+    const hasSuggestions = totalSuggestions > 0 && mentionRange
+    if (hasSuggestions) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setSelectedIndex((i) => (i + 1) % suggestions.length)
+        setSelectedIndex((i) => (i + 1) % totalSuggestions)
         return
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
-        setSelectedIndex((i) => (i - 1 + suggestions.length) % suggestions.length)
+        setSelectedIndex((i) => (i - 1 + totalSuggestions) % totalSuggestions)
         return
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault()
-        insertMention(suggestions[selectedIndex])
+        if (selectedIndex < userSuggestions.length) {
+          insertUserMention(userSuggestions[selectedIndex])
+        } else {
+          insertMention(suggestions[selectedIndex - userSuggestions.length])
+        }
         return
       }
       if (e.key === 'Escape') {
         e.preventDefault()
         setSuggestions([])
+        setUserSuggestions([])
         setMentionRange(null)
         return
       }
@@ -181,6 +228,7 @@ export default function CommentComposer({
       await onSubmit(trimmed)
       setValue('')
       setSuggestions([])
+      setUserSuggestions([])
       setMentionRange(null)
     } finally {
       setSubmitting(false)
@@ -189,6 +237,7 @@ export default function CommentComposer({
 
   const over = value.length > MAX_BODY
   const canSubmit = value.trim().length > 0 && !over && !submitting && !disabled
+  const totalSuggestions = userSuggestions.length + suggestions.length
 
   return (
     <div className="relative">
@@ -232,41 +281,63 @@ export default function CommentComposer({
         </div>
       </div>
 
-      {suggestions.length > 0 && mentionRange && (
+      {totalSuggestions > 0 && mentionRange && (
         <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-xl">
-          {suggestions.map((card, idx) => (
+          {userSuggestions.map((user, idx) => (
             <button
-              key={card.id}
+              key={user.id}
               type="button"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                insertMention(card)
-              }}
+              onMouseDown={(e) => { e.preventDefault(); insertUserMention(user) }}
               onMouseEnter={() => setSelectedIndex(idx)}
               className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${
                 idx === selectedIndex ? 'bg-bg-elevated' : ''
               }`}
             >
-              {card.image_small ? (
-                <Image
-                  src={card.image_small}
-                  alt=""
-                  width={28}
-                  height={40}
-                  className="h-10 w-7 rounded-sm object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="h-10 w-7 rounded-sm bg-bg-elevated" />
-              )}
+              <span
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-font-white"
+                style={{ backgroundColor: initialColor(user.username) }}
+              >
+                {initialsOf(user.display_name)}
+              </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-font-primary">{card.name}</div>
-                {card.type_line && (
-                  <div className="truncate text-xs text-font-muted">{card.type_line}</div>
-                )}
+                <div className="truncate text-font-primary">{user.display_name}</div>
+                <div className="truncate text-xs text-font-muted">@{user.username}</div>
               </div>
             </button>
           ))}
+          {suggestions.map((card, idx) => {
+            const realIdx = idx + userSuggestions.length
+            return (
+              <button
+                key={card.id}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); insertMention(card) }}
+                onMouseEnter={() => setSelectedIndex(realIdx)}
+                className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm ${
+                  realIdx === selectedIndex ? 'bg-bg-elevated' : ''
+                }`}
+              >
+                {card.image_small ? (
+                  <Image
+                    src={card.image_small}
+                    alt=""
+                    width={28}
+                    height={40}
+                    className="h-10 w-7 rounded-sm object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="h-10 w-7 rounded-sm bg-bg-elevated" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-font-primary">{card.name}</div>
+                  {card.type_line && (
+                    <div className="truncate text-xs text-font-muted">{card.type_line}</div>
+                  )}
+                </div>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
