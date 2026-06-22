@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Search,
@@ -39,6 +39,7 @@ export function Navbar() {
   const router = useRouter();
   const { collapsed, toggle } = useSidebar();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Hide mobile FAB + drawer on immersive game screens (goldfish, multiplayer game).
   const isGameScreen =
@@ -63,6 +64,59 @@ export function Navbar() {
     }
     return pathname === href || pathname.startsWith(href + "/");
   }
+
+  // Unread notification count for Community badge
+  useEffect(() => {
+    let cancelled = false;
+
+    // Initial fetch
+    fetch("/api/notifications/unread-count")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((d) => {
+        if (!cancelled) setUnreadCount(d.count ?? 0);
+      })
+      .catch(() => {});
+
+    // Realtime subscription
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user || cancelled) return;
+      const channel = supabase
+        .channel(`notifications-badge-${data.user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${data.user.id}`,
+          },
+          () => setUnreadCount((c) => c + 1),
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${data.user.id}`,
+          },
+          (payload) => {
+            const row = payload.new as { read: boolean };
+            if (row.read) setUnreadCount((c) => Math.max(0, c - 1));
+          },
+        )
+        .subscribe();
+
+      return () => {
+        void supabase.removeChannel(channel);
+      };
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <>
@@ -92,14 +146,21 @@ export function Navbar() {
                 }`}
                 title={item.label}
               >
-                <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full backdrop-blur-md ring-1 transition-colors ${
-                    active
-                      ? "bg-bg-accent/80 text-font-white ring-font-white/30"
-                      : "bg-bg-dark/60 text-font-primary ring-white/10 group-hover:bg-white/10"
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
+                <span className="relative">
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full backdrop-blur-md ring-1 transition-colors ${
+                      active
+                        ? "bg-bg-accent/80 text-font-white ring-font-white/30"
+                        : "bg-bg-dark/60 text-font-primary ring-white/10 group-hover:bg-white/10"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  {item.href === "/users" && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-bg-dark">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </span>
                 {!collapsed && item.label}
               </Link>
@@ -211,14 +272,21 @@ export function Navbar() {
                     active ? "text-font-primary" : "text-font-secondary hover:text-font-primary"
                   }`}
                 >
-                  <span
-                    className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
-                      active
-                        ? "bg-bg-accent/85 text-font-white ring-font-white/40"
-                        : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
-                    }`}
-                  >
-                    <Icon className="h-8 w-8" />
+                  <span className="relative">
+                    <span
+                      className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
+                        active
+                          ? "bg-bg-accent/85 text-font-white ring-font-white/40"
+                          : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
+                      }`}
+                    >
+                      <Icon className="h-8 w-8" />
+                    </span>
+                    {item.href === "/users" && unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-bg-dark">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
                   </span>
                   <span
                     className={`rounded-full px-4 py-2 text-base ring-1 backdrop-blur-xl transition-colors ${
