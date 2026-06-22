@@ -16,7 +16,9 @@ interface CardListFilterProps {
 
 export default function CardListFilter({ cards, mode, onChange }: CardListFilterProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<{ id: string; name: string }[]>([])
+  const [results, setResults] = useState<
+    { id: string; name: string; image_small: string | null; type_line: string | null; mana_cost: string | null }[]
+  >([])
   const [loading, setLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -42,7 +44,13 @@ export default function CardListFilter({ cards, mode, onChange }: CardListFilter
         if (controller.signal.aborted) return
         if (res.ok) {
           const data = await res.json()
-          const rows: { id: string; name: string }[] = data.cards ?? []
+          const rows = (data.cards ?? []) as {
+            id: string
+            name: string
+            image_small: string | null
+            type_line: string | null
+            mana_cost: string | null
+          }[]
           setResults(rows.slice(0, 8))
         } else {
           setResults([])
@@ -106,15 +114,30 @@ export default function CardListFilter({ cards, mode, onChange }: CardListFilter
           <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-font-muted" />
         )}
         {results.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-border bg-bg-card shadow-lg">
+          <div className="absolute left-0 top-full z-50 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-border bg-bg-surface shadow-xl">
             {results.map((c) => (
               <button
                 key={c.id}
                 type="button"
-                onClick={() => addCard(c)}
-                className="block w-full px-3 py-2 text-left text-sm text-font-primary hover:bg-bg-hover"
+                onClick={() => addCard({ id: c.id, name: c.name })}
+                className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-bg-hover"
               >
-                {c.name}
+                {c.image_small && (
+                  <img
+                    src={c.image_small}
+                    alt={c.name}
+                    className="h-12 w-auto shrink-0 rounded"
+                  />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-font-primary">
+                    {c.name}
+                  </span>
+                  <span className="block truncate text-xs text-font-muted">
+                    {c.type_line}
+                    {c.mana_cost && ` · ${c.mana_cost}`}
+                  </span>
+                </span>
               </button>
             ))}
           </div>

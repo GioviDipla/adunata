@@ -1,11 +1,13 @@
 'use client'
 
 import CardListFilter from './CardListFilter'
+import CardAutocomplete from './CardAutocomplete'
+import UserAutocomplete from './UserAutocomplete'
 
 export interface FilterState {
   name: string
-  creator: string
-  commander: string
+  creator: { id: string; name: string } | null
+  commander: { id: string; name: string } | null
   colors: string[]
   colorIdentity: string[]
   cards: { id: string; name: string }[]
@@ -16,8 +18,8 @@ export interface FilterState {
 
 export const EMPTY_FILTERS: FilterState = {
   name: '',
-  creator: '',
-  commander: '',
+  creator: null,
+  commander: null,
   colors: [],
   colorIdentity: [],
   cards: [],
@@ -116,22 +118,18 @@ export default function DeckFilters({ filters, onChange }: DeckFiltersProps) {
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-font-secondary">Creator</span>
-          <input
-            type="text"
+          <UserAutocomplete
             value={filters.creator}
-            onChange={(e) => set('creator', e.target.value)}
-            placeholder="Username or name..."
-            className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+            onChange={(u) => set('creator', u)}
+            placeholder="Search creator..."
           />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-font-secondary">Commander</span>
-          <input
-            type="text"
+          <CardAutocomplete
             value={filters.commander}
-            onChange={(e) => set('commander', e.target.value)}
-            placeholder="Commander card name..."
-            className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
+            onChange={(c) => set('commander', c)}
+            placeholder="Search commander..."
           />
         </label>
       </div>

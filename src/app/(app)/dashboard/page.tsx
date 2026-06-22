@@ -77,7 +77,7 @@ export default async function DashboardPage() {
     // on the stored decks.cover_card_id (null for most decks).
     supabase.rpc("search_public_decks", {
       p_name: "",
-      p_creator: "",
+      p_creator_id: "",
       p_commander: "",
       p_colors: "",
       p_color_identity: "",

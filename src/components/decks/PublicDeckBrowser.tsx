@@ -35,8 +35,8 @@ interface PublicDeckBrowserProps {
 function buildQuery(f: FilterState, offset: number): string {
   const p = new URLSearchParams()
   if (f.name) p.set('name', f.name)
-  if (f.creator) p.set('creator', f.creator)
-  if (f.commander) p.set('commander', f.commander)
+  if (f.creator) p.set('creator_id', f.creator.id)
+  if (f.commander) p.set('commander', f.commander.name)
   if (f.colors.length) p.set('colors', f.colors.join(','))
   if (f.colorIdentity.length) p.set('ci', f.colorIdentity.join(','))
   if (f.cards.length) p.set('cards', f.cards.map((c) => c.id).join(','))

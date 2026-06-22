@@ -1149,7 +1149,7 @@ export interface Database {
       search_public_decks: {
         Args: {
           p_name?: string
-          p_creator?: string
+          p_creator_id?: string
           p_commander?: string
           p_colors?: string
           p_color_identity?: string

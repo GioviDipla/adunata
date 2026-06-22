@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase.rpc('search_public_decks', {
     p_name: sp.get('name') ?? '',
-    p_creator: sp.get('creator') ?? '',
+    p_creator_id: sp.get('creator_id') ?? '',
     p_commander: sp.get('commander') ?? '',
     p_colors: sp.get('colors') ?? '',
     p_color_identity: sp.get('ci') ?? '',

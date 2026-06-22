@@ -17,7 +17,7 @@ export default async function PublicDecksPage() {
   const supabase = await createClient()
   const { data, error } = await supabase.rpc('search_public_decks', {
     p_name: '',
-    p_creator: '',
+    p_creator_id: '',
     p_commander: '',
     p_colors: '',
     p_color_identity: '',
