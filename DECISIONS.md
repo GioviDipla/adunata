@@ -176,3 +176,13 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 Scryfall risolve già ogni printing → URL Cardmarket corretto (`purchase_uris.cardmarket`). Usarlo elimina la classe di bug.
 
 **Effetti collaterali:** Bulk-sync ora richiede `stream-json` perché il file `default_cards` ha superato 512 MB (V8 max string) e `readFileSync(..., 'utf-8')` overflowa con `ERR_STRING_TOO_LONG`. Parser streaming = drop di RAM-spike + futureproof per quando il catalogo cresce ancora. Slugifier fallback migliorato (translittera Æ→Ae, Œ→Oe, Ø→O, ß→ss, normalizza diacritici NFKD, em/en dash → `-`, curly quotes) per ridurre 404 anche sui cards non ancora backfilled.
+
+## 2026-06-22 — Paginazione Community (users) offset-based, non cursor
+
+**Scelta:** Estesa RPC `get_latest_users` con `p_offset int default 0` (signature `(int)` → `(int, int)`, drop+create). Community page (`/users`) ora paginata 10 utenti per pagina con bottone "Carica altri" in fondo, come Cards. Endpoint `/api/users?offset=N` chiama la RPC.
+
+**Perché offset e non keyset cursor (come Cards):** `profiles` è tabella piccola (beta, ~19 righe) e low-churn. Cards usa cursor pagination su `(released_at DESC, id DESC)` perché scansiona 34k righe e offset profondo diventa O(N). Su users l'offset è O(offset+limit) su centinaia di righe al massimo — overhead trascurabile, complessità del cursor non giustificata.
+
+**Trade-off:** Nuovi utenti registrati tra un page-load e l'altro shiftano gli offset (classico problema offset pagination) — possibile saltare/duplicare un utente ai limiti di pagina. Accettabile per browse community; non è un dato finanziario né critico. Se tabella cresce oltre ~10k utenti o serve consistenza, migrare a cursor su `(created_at DESC, id DESC)`.
+
+**Backward compat:** `p_offset` ha default 0; chiamate esistenti `get_latest_users({ p_limit: 10 })` via named param continuano a funzionare. Grant re-applicato su nuova signature `(int, int)`, `search_path` hardening mantenuto.

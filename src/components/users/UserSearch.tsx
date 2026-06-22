@@ -1,8 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Search, Loader2 } from 'lucide-react'
 import UserCard from './UserCard'
+
+// Must match /api/users PAGE_SIZE and the /users page initial fetch (10).
+// hasMore relies on this: a full page means another page may exist.
+const PAGE_SIZE = 10
 
 interface SearchResult {
   id: string
@@ -27,6 +31,14 @@ export default function UserSearch({ initialUsers }: UserSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[] | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Pagination over the "Latest joiners" browse feed. Only active when not
+  // searching (results === null). Mirrors CardBrowser's loadMore pattern:
+  // hasMore flips false once a page returns fewer than PAGE_SIZE rows.
+  const [extraUsers, setExtraUsers] = useState<InitialUser[]>([])
+  const [hasMore, setHasMore] = useState(initialUsers.length === PAGE_SIZE)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const loadMoreAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -70,10 +82,36 @@ export default function UserSearch({ initialUsers }: UserSearchProps) {
     }
   }, [query])
 
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    loadMoreAbortRef.current?.abort()
+    const controller = new AbortController()
+    loadMoreAbortRef.current = controller
+    setLoadingMore(true)
+    try {
+      const offset = initialUsers.length + extraUsers.length
+      const res = await fetch(`/api/users?offset=${offset}`, {
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return
+      if (res.ok) {
+        const data = await res.json()
+        const users: InitialUser[] = data.users ?? []
+        setExtraUsers((prev) => [...prev, ...users])
+        setHasMore(users.length === PAGE_SIZE)
+      } else {
+        setHasMore(false)
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') setHasMore(false)
+    }
+    if (!loadMoreAbortRef.current?.signal.aborted) setLoadingMore(false)
+  }, [loadingMore, hasMore, initialUsers.length, extraUsers.length])
+
   const showEmptyState = results === null
   const usersToRender = useMemo(() => {
     if (showEmptyState) {
-      return initialUsers.map((u) => ({
+      return [...initialUsers, ...extraUsers].map((u) => ({
         id: u.id,
         username: u.username,
         display_name: u.display_name,
@@ -82,7 +120,7 @@ export default function UserSearch({ initialUsers }: UserSearchProps) {
       }))
     }
     return results ?? []
-  }, [showEmptyState, initialUsers, results])
+  }, [showEmptyState, initialUsers, extraUsers, results])
 
   return (
     <div className="flex flex-col gap-4">
@@ -111,17 +149,29 @@ export default function UserSearch({ initialUsers }: UserSearchProps) {
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {usersToRender.map((u) => (
-            <UserCard
-              key={u.id}
-              username={u.username}
-              displayName={u.display_name}
-              bio={u.bio}
-              publicDeckCount={u.public_deck_count}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {usersToRender.map((u) => (
+              <UserCard
+                key={u.id}
+                username={u.username}
+                displayName={u.display_name}
+                bio={u.bio}
+                publicDeckCount={u.public_deck_count}
+              />
+            ))}
+          </div>
+          {showEmptyState && hasMore && usersToRender.length > 0 && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="flex items-center justify-center gap-2 rounded-lg border border-border bg-bg-card py-2.5 text-sm font-medium text-font-primary transition-colors hover:border-border-light hover:bg-bg-hover disabled:opacity-60"
+            >
+              {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loadingMore ? 'Caricamento...' : 'Carica altri'}
+            </button>
+          )}
+        </>
       )}
     </div>
   )
