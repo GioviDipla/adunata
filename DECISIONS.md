@@ -205,3 +205,17 @@ Distinti perché in MTG sono concetti diversi (una carta può avere colori nel c
 **Backward compat:** `search_public_decks` nuova RPC (no sostituto legacy). `p_*` params tutti default null/0/10. Aggiunta a `src/types/supabase.ts` hand-maintained. `idx_deck_cards_card_id` creato con `if not exists`.
 
 **Due voci navbar (no tab):** `/decks` (My Decks) + `/decks/public` (Pub Decks) come route separate. `isActive('/decks')` special-cased per non shadoware `/decks/public`.
+
+## 2026-06-22 — Pub Decks filter v2: CI exact + autocomplete dropdowns
+
+**Scelta:** Per feedback utente (ricerca "funziona molto male"), overhaul filtri Pub Decks:
+- **Color identity → EXACT match**: deck CI deve essere ESATTAMENTE i colori selezionati (non superset). Selezionare W,U matcha solo deck Azorius (WU), non WUB/WUBRG. Implementato con `deckci.arr @> selected AND array_length(deckci.arr,1) = array_length(selected,1)` (stessa size + tutti presenti = exact).
+- **Creator → UserAutocomplete**: dropdown utenti matching (via `/api/users/search`), selezione exact `user_id`. Non più text ILIKE fuzzy.
+- **Commander → CardAutocomplete**: dropdown carte matching con image_small + name + type_line + mana_cost (stessa UX di AddCardSearch). Filtro exact card-name (`cmd_card.name = p_commander`) — matcha across printings (nomi Scryfall canonici).
+- **Cards (CardListFilter) → dropdown con image**: righe dropdown ora mostrano card image + type + mana_cost (prima solo nome).
+
+**Perché:** Ricerca fuzzy ILIKE su creator/commander matchava troppo largo (es. "atr" matchava qualsiasi comandante con "atr" nel nome). Autocomplete con selezione esatta = precisione + UX migliore (vedi la carta). CI exact = semanticamente corretto per Commander (deck "SOLO" di quei colori).
+
+**Pattern riutilizzato:** `CardAutocomplete` + `UserAutocomplete` replicano `AddCardSearch` (300ms debounce, AbortController, keyboard nav ArrowUp/Down/Enter/Esc, click-outside close, `<img>` consistente col codebase card-search).
+
+**RPC:** `p_creator` (text ILIKE) → `p_creator_id` (text, cast uuid, exact). `p_commander` ILIKE `%X%` → exact `=`. DROP+CREATE (rename param non permesso via CREATE OR REPLACE). Color filter (mana cost) resta contains (non menzionato da utente).
