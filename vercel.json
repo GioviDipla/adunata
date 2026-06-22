@@ -5,7 +5,7 @@
   "functions": {
     "src/app/api/cron/daily-sync/route.ts": {
       "memory": 2048,
-      "maxDuration": 300
+      "maxDuration": 900
     }
   },
   "crons": [
