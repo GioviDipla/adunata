@@ -68,6 +68,7 @@ export function Navbar() {
   // Unread notification count for Community badge
   useEffect(() => {
     let cancelled = false;
+    let channelRef: ReturnType<typeof supabase.channel> | null = null;
 
     // Initial fetch
     fetch("/api/notifications/unread-count")
@@ -108,13 +109,16 @@ export function Navbar() {
         )
         .subscribe();
 
-      return () => {
+      if (cancelled) {
         void supabase.removeChannel(channel);
-      };
+      } else {
+        channelRef = channel;
+      }
     });
 
     return () => {
       cancelled = true;
+      if (channelRef) void supabase.removeChannel(channelRef);
     };
   }, []);
 
