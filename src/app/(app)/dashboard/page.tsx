@@ -361,6 +361,12 @@ export default async function DashboardPage() {
           <h2 className="text-lg font-semibold text-font-primary">
             Latest public decks
           </h2>
+          <Link
+            href="/decks/public"
+            className="flex items-center gap-1 text-sm text-font-accent hover:underline"
+          >
+            View all <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
 
         {!hasPublicDecks ? (
