@@ -38,7 +38,7 @@ export default function CardListFilter({ cards, mode, onChange }: CardListFilter
     queueMicrotask(() => setLoading(true))
     const handle = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/cards/search?q=${encodeURIComponent(trimmed)}`, {
+        const res = await fetch(`/api/cards/autocomplete?q=${encodeURIComponent(trimmed)}`, {
           signal: controller.signal,
         })
         if (controller.signal.aborted) return

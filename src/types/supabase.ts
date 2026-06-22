@@ -1180,6 +1180,19 @@ export interface Database {
           price_eur: number
         }[]
       }
+      search_cards_autocomplete: {
+        Args: { p_query: string; p_limit?: number }
+        Returns: {
+          id: string
+          name: string
+          name_it: string | null
+          image_small: string | null
+          image_normal: string | null
+          type_line: string | null
+          mana_cost: string | null
+          has_upscaled_2x: boolean
+        }[]
+      }
       process_game_action: {
         Args: {
           p_lobby_id: string

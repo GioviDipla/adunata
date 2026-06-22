@@ -64,7 +64,7 @@ export default function CardAutocomplete({
     const handle = setTimeout(async () => {
       try {
         const res = await fetch(
-          `/api/cards/search?q=${encodeURIComponent(trimmed)}`,
+          `/api/cards/autocomplete?q=${encodeURIComponent(trimmed)}`,
           { signal: controller.signal },
         )
         if (controller.signal.aborted) return
