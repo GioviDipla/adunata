@@ -11,6 +11,7 @@ export interface FilterState {
   cards: { id: string; name: string }[]
   cardMode: 'and' | 'or'
   format: string
+  sort: string
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -22,7 +23,16 @@ export const EMPTY_FILTERS: FilterState = {
   cards: [],
   cardMode: 'and',
   format: '',
+  sort: 'updated',
 }
+
+const SORTS: { value: string; label: string }[] = [
+  { value: 'updated', label: 'Last modified' },
+  { value: 'created', label: 'Creation date' },
+  { value: 'likes', label: 'Most liked' },
+  { value: 'price', label: 'Price (high→low)' },
+  { value: 'name', label: 'Name (A→Z)' },
+]
 
 const COLORS: { code: string; label: string; cls: string }[] = [
   { code: 'W', label: 'W', cls: 'bg-bg-surface border-font-secondary' },
@@ -159,6 +169,20 @@ export default function DeckFilters({ filters, onChange }: DeckFiltersProps) {
             {FORMATS.map((f) => (
               <option key={f} value={f}>
                 {f}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-font-secondary">Sort by</span>
+          <select
+            value={filters.sort}
+            onChange={(e) => set('sort', e.target.value)}
+            className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-font-primary focus:border-bg-accent focus:outline-none"
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
               </option>
             ))}
           </select>

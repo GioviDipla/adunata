@@ -19,6 +19,11 @@ export async function GET(request: NextRequest) {
     ? Math.max(0, Math.min(rawOffset, MAX_OFFSET))
     : 0
   const cardMode = sp.get('cardMode') === 'or' ? 'or' : 'and'
+  const VALID_SORTS = ['updated', 'created', 'name', 'likes', 'price'] as const
+  const sortParam = sp.get('sort') ?? 'updated'
+  const sort = (VALID_SORTS as readonly string[]).includes(sortParam)
+    ? sortParam
+    : 'updated'
 
   const { data, error } = await supabase.rpc('search_public_decks', {
     p_name: sp.get('name') ?? '',
@@ -29,6 +34,7 @@ export async function GET(request: NextRequest) {
     p_cards: sp.get('cards') ?? '',
     p_card_mode: cardMode,
     p_format: sp.get('format') ?? '',
+    p_sort: sort,
     p_limit: PAGE_SIZE,
     p_offset: offset,
   })

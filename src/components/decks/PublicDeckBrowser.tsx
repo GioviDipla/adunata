@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Loader2, Swords } from 'lucide-react'
+import { Loader2, Swords, Heart } from 'lucide-react'
 import DeckFilters, { EMPTY_FILTERS, type FilterState } from './DeckFilters'
 
 const PAGE_SIZE = 10
@@ -15,6 +15,7 @@ export interface PublicDeck {
   format: string | null
   card_count: number
   updated_at: string
+  created_at: string
   user_id: string
   creator_username: string | null
   creator_display_name: string | null
@@ -23,6 +24,8 @@ export interface PublicDeck {
   cover_card_id: string | null
   cover_image_art_crop: string | null
   cover_image_normal: string | null
+  like_count: number
+  price_eur: number
 }
 
 interface PublicDeckBrowserProps {
@@ -39,6 +42,7 @@ function buildQuery(f: FilterState, offset: number): string {
   if (f.cards.length) p.set('cards', f.cards.map((c) => c.id).join(','))
   p.set('cardMode', f.cardMode)
   if (f.format) p.set('format', f.format)
+  if (f.sort) p.set('sort', f.sort)
   p.set('offset', String(offset))
   return p.toString()
 }
@@ -185,6 +189,15 @@ export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserPro
                         Cmdr: {d.commander_name}
                       </p>
                     )}
+                    <div className="flex items-center justify-between text-[11px] text-font-muted">
+                      <span className="flex items-center gap-1">
+                        <Heart className="h-3 w-3" />
+                        {d.like_count}
+                      </span>
+                      {d.price_eur > 0 && (
+                        <span>€{d.price_eur.toFixed(2)}</span>
+                      )}
+                    </div>
                     <p
                       className="text-[11px] text-font-muted"
                       suppressHydrationWarning

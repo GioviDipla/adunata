@@ -1156,6 +1156,7 @@ export interface Database {
           p_cards?: string
           p_card_mode?: string
           p_format?: string
+          p_sort?: string
           p_limit?: number
           p_offset?: number
         }
@@ -1166,6 +1167,7 @@ export interface Database {
           format: string | null
           card_count: number
           updated_at: string
+          created_at: string
           user_id: string
           creator_username: string | null
           creator_display_name: string | null
@@ -1174,6 +1176,8 @@ export interface Database {
           cover_card_id: string | null
           cover_image_art_crop: string | null
           cover_image_normal: string | null
+          like_count: number
+          price_eur: number
         }[]
       }
       process_game_action: {
