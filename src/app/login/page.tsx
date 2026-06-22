@@ -144,7 +144,7 @@ export default async function LoginPage() {
       <div className="min-h-screen bg-bg-dark text-font-primary radial-bg" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <main>
           {/* ── Hero ── */}
-          <section className="relative isolate overflow-hidden px-4 pb-8 pt-28 text-center sm:px-6 sm:pb-12 sm:pt-44 lg:pb-16 lg:pt-56">
+          <section className="relative isolate flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-12 text-center sm:px-6 sm:py-16">
             {/* Background layers */}
             <div
               aria-hidden="true"
@@ -168,7 +168,7 @@ export default async function LoginPage() {
               }}
             />
 
-            <div className="mx-auto max-w-4xl">
+            <div className="mx-auto w-full max-w-4xl">
               <div className="animate-fade-in-up">
                 <LoginForm />
               </div>
