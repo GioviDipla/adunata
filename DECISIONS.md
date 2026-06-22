@@ -186,3 +186,22 @@ Scryfall risolve già ogni printing → URL Cardmarket corretto (`purchase_uris.
 **Trade-off:** Nuovi utenti registrati tra un page-load e l'altro shiftano gli offset (classico problema offset pagination) — possibile saltare/duplicare un utente ai limiti di pagina. Accettabile per browse community; non è un dato finanziario né critico. Se tabella cresce oltre ~10k utenti o serve consistenza, migrare a cursor su `(created_at DESC, id DESC)`.
 
 **Backward compat:** `p_offset` ha default 0; chiamate esistenti `get_latest_users({ p_limit: 10 })` via named param continuano a funzionare. Grant re-applicato su nuova signature `(int, int)`, `search_path` hardening mantenuto.
+
+## 2026-06-22 — Pub Decks: search RPC + filter panel (visibility=public only)
+
+**Scelta:** Nuova pagina `/decks/public` ("Pub Decks") che lista tutti i deck `visibility='public'` con pannello filtri + paginazione "carica altri" 10/page. Navbar "Decks" → "My Decks" + nuova voce "Pub Decks". RPC `search_public_decks` PL/pgSQL (`security invoker`, `stable`) gestisce tutti i filtri server-side: nome, creatore, comandante, color (cards.colors), color identity (union cards.color_identity), card-list AND/OR, format. Index nuovo `deck_cards(card_id)` per il lookup card-list.
+
+**Perché visibility='public' solo (no unlisted):** "unlisted" = condivisibile via link ma NON sfogliabile — coerente col significato. 11 deck public ora vs 25 unlisted. Mettere unlisted nella lista pubblica rompe la semantica link-only.
+
+**Color vs color identity (entrambi richiesti):**
+- **color** = deck ha ≥1 carta con quel colore nel mana cost (`cards.colors`). AND tra selezionati (deck deve avere carte di ogni colore selezionato).
+- **color identity** = CI del deck (union di `cards.color_identity`, boards `main`+`commander`) include tutti i selezionati. Stile Commander/EDHREC.
+Distinti perché in MTG sono concetti diversi (una carta può avere colori nel costo diversi dalla sua CI, es. carte incolori con regole colorate, o producer che aggiungono CI).
+
+**Card list AND/OR (toggle singolo):** un toggle per tutta la lista, non per-card. AND = deck contiene TUTTE le carte; OR = almeno una. Matcha Moxfield/EDHREC; per-card sarebbe overkill UI.
+
+**Offset pagination (non cursor):** come Community — dataset piccolo (11 deck public), low-churn. Cursor complexity non giustificata. Cards usa cursor perché scansiona 34k righe.
+
+**Backward compat:** `search_public_decks` nuova RPC (no sostituto legacy). `p_*` params tutti default null/0/10. Aggiunta a `src/types/supabase.ts` hand-maintained. `idx_deck_cards_card_id` creato con `if not exists`.
+
+**Due voci navbar (no tab):** `/decks` (My Decks) + `/decks/public` (Pub Decks) come route separate. `isActive('/decks')` special-cased per non shadoware `/decks/public`.
