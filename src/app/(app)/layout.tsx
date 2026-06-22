@@ -8,9 +8,11 @@ import { GoblinAIButton } from "@/components/goblinai/GoblinAIButton";
 
 // Routes inside the (app) group that anon visitors may access. The deck
 // detail page handles its own private/unlisted/public branching, so the
-// layout-level auth gate skips it and lets the page decide.
+// layout-level auth gate skips it and lets the page decide. The negative
+// lookahead excludes /decks/public — that's a browse route (auth-only like
+// /dashboard, /users), not a shared deck-detail page.
 const ANON_ALLOWED = [
-  /^\/decks\/[^/]+\/?$/,
+  /^\/decks\/(?!public\/?$)[^/]+\/?$/,
 ];
 
 export default async function AppLayout({
