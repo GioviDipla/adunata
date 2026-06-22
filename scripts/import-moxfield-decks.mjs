@@ -44,6 +44,7 @@ import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import { chromium } from 'playwright'
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 config({ path: '.env.local' })
 
@@ -117,6 +118,7 @@ const VISIBILITY = ['public', 'unlisted', 'private'].includes(String(args.visibi
   ? String(args.visibility)
   : 'public'
 const DRY_RUN = !!args['dry-run']
+const IDS_FILE = args['ids-file'] ? String(args['ids-file']) : null
 
 if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(TARGET_USER_ID)) {
   console.error(`Invalid or missing --user uuid. Use --find-user=<query> to discover a profile id.`)
@@ -346,6 +348,14 @@ async function createDeck(deck, cardMap, visibility) {
 
 // ── main ───────────────────────────────────────────────────────────────────
 console.log(`Config: user=${TARGET_USER_ID} count=${COUNT} format=${FORMAT_FILTER || 'any'} visibility=${VISIBILITY}${DRY_RUN ? ' DRY-RUN' : ''}`)
+
+let ids
+if (IDS_FILE) {
+  ids = JSON.parse(readFileSync(IDS_FILE, 'utf-8'))
+  if (!Array.isArray(ids)) { console.error(`--ids-file must be a JSON array of deck IDs`); process.exit(1) }
+  console.log(`Loaded ${ids.length} deck IDs from ${IDS_FILE}`)
+}
+
 const browser = await launchBrowser()
 const ctx = await browser.newContext({ userAgent: UA })
 await ctx.addInitScript(() => {
@@ -353,9 +363,12 @@ await ctx.addInitScript(() => {
 })
 const page = await ctx.newPage()
 
-console.log(`Scraping deck IDs from Moxfield /decks/public…`)
-const ids = await scrapeDeckIds(page, COUNT)
-console.log(`  found ${ids.length} deck IDs`)
+if (!IDS_FILE) {
+  console.log(`Scraping deck IDs from Moxfield /decks/public…`)
+  ids = await scrapeDeckIds(page, COUNT)
+  console.log(`  found ${ids.length} deck IDs`)
+}
+ids = ids.slice(0, COUNT)
 
 // Fetch decks (filter by format, collect until COUNT matching or ids exhausted).
 const decks = []
