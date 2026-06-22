@@ -13,3 +13,16 @@ export function extractMentions(body: string): Mention[] {
   }
   return out
 }
+
+// User mentions: @username (3-24 chars, lowercase, digits, underscores)
+// Must be preceded by whitespace or start of string
+// Must not be inside a card mention (@[...](...))
+export const USER_MENTION_RE = /(?:^|\s)@([a-z0-9_]{3,24})(?=\s|$|[.,!?:;)\]])/g
+
+export function extractUserMentions(body: string): string[] {
+  const usernames = new Set<string>()
+  for (const m of body.matchAll(USER_MENTION_RE)) {
+    usernames.add(m[1])
+  }
+  return Array.from(usernames)
+}
