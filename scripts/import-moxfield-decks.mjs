@@ -363,7 +363,13 @@ await ctx.addInitScript(() => {
 })
 const page = await ctx.newPage()
 
-if (!IDS_FILE) {
+// Navigate to Moxfield so the page origin is established and the browser
+// has a Cloudflare clearance cookie. Without this, fetch() to
+// api.moxfield.com from about:blank fails (CORS + CF block).
+if (IDS_FILE) {
+  console.log(`Navigating to Moxfield for Cloudflare clearance…`)
+  await page.goto('https://moxfield.com/decks/public', { waitUntil: 'domcontentloaded', timeout: 60000 })
+} else {
   console.log(`Scraping deck IDs from Moxfield /decks/public…`)
   ids = await scrapeDeckIds(page, COUNT)
   console.log(`  found ${ids.length} deck IDs`)
