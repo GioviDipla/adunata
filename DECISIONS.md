@@ -176,3 +176,46 @@ Ogni riga documenta una scelta tecnica autonoma con la relativa motivazione.
 Scryfall risolve già ogni printing → URL Cardmarket corretto (`purchase_uris.cardmarket`). Usarlo elimina la classe di bug.
 
 **Effetti collaterali:** Bulk-sync ora richiede `stream-json` perché il file `default_cards` ha superato 512 MB (V8 max string) e `readFileSync(..., 'utf-8')` overflowa con `ERR_STRING_TOO_LONG`. Parser streaming = drop di RAM-spike + futureproof per quando il catalogo cresce ancora. Slugifier fallback migliorato (translittera Æ→Ae, Œ→Oe, Ø→O, ß→ss, normalizza diacritici NFKD, em/en dash → `-`, curly quotes) per ridurre 404 anche sui cards non ancora backfilled.
+
+## 2026-06-22 — Paginazione Community (users) offset-based, non cursor
+
+**Scelta:** Estesa RPC `get_latest_users` con `p_offset int default 0` (signature `(int)` → `(int, int)`, drop+create). Community page (`/users`) ora paginata 10 utenti per pagina con bottone "Carica altri" in fondo, come Cards. Endpoint `/api/users?offset=N` chiama la RPC.
+
+**Perché offset e non keyset cursor (come Cards):** `profiles` è tabella piccola (beta, ~19 righe) e low-churn. Cards usa cursor pagination su `(released_at DESC, id DESC)` perché scansiona 34k righe e offset profondo diventa O(N). Su users l'offset è O(offset+limit) su centinaia di righe al massimo — overhead trascurabile, complessità del cursor non giustificata.
+
+**Trade-off:** Nuovi utenti registrati tra un page-load e l'altro shiftano gli offset (classico problema offset pagination) — possibile saltare/duplicare un utente ai limiti di pagina. Accettabile per browse community; non è un dato finanziario né critico. Se tabella cresce oltre ~10k utenti o serve consistenza, migrare a cursor su `(created_at DESC, id DESC)`.
+
+**Backward compat:** `p_offset` ha default 0; chiamate esistenti `get_latest_users({ p_limit: 10 })` via named param continuano a funzionare. Grant re-applicato su nuova signature `(int, int)`, `search_path` hardening mantenuto.
+
+## 2026-06-22 — Pub Decks: search RPC + filter panel (visibility=public only)
+
+**Scelta:** Nuova pagina `/decks/public` ("Pub Decks") che lista tutti i deck `visibility='public'` con pannello filtri + paginazione "carica altri" 10/page. Navbar "Decks" → "My Decks" + nuova voce "Pub Decks". RPC `search_public_decks` PL/pgSQL (`security invoker`, `stable`) gestisce tutti i filtri server-side: nome, creatore, comandante, color (cards.colors), color identity (union cards.color_identity), card-list AND/OR, format. Index nuovo `deck_cards(card_id)` per il lookup card-list.
+
+**Perché visibility='public' solo (no unlisted):** "unlisted" = condivisibile via link ma NON sfogliabile — coerente col significato. 11 deck public ora vs 25 unlisted. Mettere unlisted nella lista pubblica rompe la semantica link-only.
+
+**Color vs color identity (entrambi richiesti):**
+- **color** = deck ha ≥1 carta con quel colore nel mana cost (`cards.colors`). AND tra selezionati (deck deve avere carte di ogni colore selezionato).
+- **color identity** = CI del deck (union di `cards.color_identity`, boards `main`+`commander`) include tutti i selezionati. Stile Commander/EDHREC.
+Distinti perché in MTG sono concetti diversi (una carta può avere colori nel costo diversi dalla sua CI, es. carte incolori con regole colorate, o producer che aggiungono CI).
+
+**Card list AND/OR (toggle singolo):** un toggle per tutta la lista, non per-card. AND = deck contiene TUTTE le carte; OR = almeno una. Matcha Moxfield/EDHREC; per-card sarebbe overkill UI.
+
+**Offset pagination (non cursor):** come Community — dataset piccolo (11 deck public), low-churn. Cursor complexity non giustificata. Cards usa cursor perché scansiona 34k righe.
+
+**Backward compat:** `search_public_decks` nuova RPC (no sostituto legacy). `p_*` params tutti default null/0/10. Aggiunta a `src/types/supabase.ts` hand-maintained. `idx_deck_cards_card_id` creato con `if not exists`.
+
+**Due voci navbar (no tab):** `/decks` (My Decks) + `/decks/public` (Pub Decks) come route separate. `isActive('/decks')` special-cased per non shadoware `/decks/public`.
+
+## 2026-06-22 — Pub Decks filter v2: CI exact + autocomplete dropdowns
+
+**Scelta:** Per feedback utente (ricerca "funziona molto male"), overhaul filtri Pub Decks:
+- **Color identity → EXACT match**: deck CI deve essere ESATTAMENTE i colori selezionati (non superset). Selezionare W,U matcha solo deck Azorius (WU), non WUB/WUBRG. Implementato con `deckci.arr @> selected AND array_length(deckci.arr,1) = array_length(selected,1)` (stessa size + tutti presenti = exact).
+- **Creator → UserAutocomplete**: dropdown utenti matching (via `/api/users/search`), selezione exact `user_id`. Non più text ILIKE fuzzy.
+- **Commander → CardAutocomplete**: dropdown carte matching con image_small + name + type_line + mana_cost (stessa UX di AddCardSearch). Filtro exact card-name (`cmd_card.name = p_commander`) — matcha across printings (nomi Scryfall canonici).
+- **Cards (CardListFilter) → dropdown con image**: righe dropdown ora mostrano card image + type + mana_cost (prima solo nome).
+
+**Perché:** Ricerca fuzzy ILIKE su creator/commander matchava troppo largo (es. "atr" matchava qualsiasi comandante con "atr" nel nome). Autocomplete con selezione esatta = precisione + UX migliore (vedi la carta). CI exact = semanticamente corretto per Commander (deck "SOLO" di quei colori).
+
+**Pattern riutilizzato:** `CardAutocomplete` + `UserAutocomplete` replicano `AddCardSearch` (300ms debounce, AbortController, keyboard nav ArrowUp/Down/Enter/Esc, click-outside close, `<img>` consistente col codebase card-search).
+
+**RPC:** `p_creator` (text ILIKE) → `p_creator_id` (text, cast uuid, exact). `p_commander` ILIKE `%X%` → exact `=`. DROP+CREATE (rename param non permesso via CREATE OR REPLACE). Color filter (mana cost) resta contains (non menzionato da utente).

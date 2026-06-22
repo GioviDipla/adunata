@@ -751,7 +751,7 @@ export default function DeckContent({
                 return (
                   <div
                     key={key || '__uncategorized__'}
-                    className="relative overflow-hidden rounded-xl border border-border-light/60 bg-bg-surface/40"
+                    className="relative overflow-hidden rounded-xl border border-border bg-bg-card shadow-sm"
                   >
                     <span
                       aria-hidden="true"
@@ -856,7 +856,7 @@ export default function DeckContent({
               return (
                 <div
                   key={key || '__uncategorized__'}
-                  className="relative overflow-hidden rounded-xl border border-border-light/60 bg-bg-surface/40"
+                  className="relative overflow-hidden rounded-xl border border-border bg-bg-card shadow-sm"
                 >
                   <span
                     aria-hidden="true"

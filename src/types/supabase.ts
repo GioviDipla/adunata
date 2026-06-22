@@ -1146,6 +1146,53 @@ export interface Database {
           public_deck_count: number
         }[]
       }
+      search_public_decks: {
+        Args: {
+          p_name?: string
+          p_creator_id?: string
+          p_commander?: string
+          p_colors?: string
+          p_color_identity?: string
+          p_cards?: string
+          p_card_mode?: string
+          p_format?: string
+          p_sort?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          name: string
+          description: string | null
+          format: string | null
+          card_count: number
+          updated_at: string
+          created_at: string
+          user_id: string
+          creator_username: string | null
+          creator_display_name: string | null
+          commander_card_id: string | null
+          commander_name: string | null
+          cover_card_id: string | null
+          cover_image_art_crop: string | null
+          cover_image_normal: string | null
+          like_count: number
+          price_eur: number
+        }[]
+      }
+      search_cards_autocomplete: {
+        Args: { p_query: string; p_limit?: number }
+        Returns: {
+          id: string
+          name: string
+          name_it: string | null
+          image_small: string | null
+          image_normal: string | null
+          type_line: string | null
+          mana_cost: string | null
+          has_upscaled_2x: boolean
+        }[]
+      }
       process_game_action: {
         Args: {
           p_lobby_id: string

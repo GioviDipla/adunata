@@ -72,12 +72,22 @@ export default async function DashboardPage() {
       .in("status", ["waiting", "playing"])
       .order("created_at", { ascending: false })
       .limit(5),
-    supabase
-      .from("decks")
-      .select("id, name, format, updated_at, card_count, user_id, cover_card_id")
-      .in("visibility", ["public", "unlisted"])
-      .order("updated_at", { ascending: false })
-      .limit(5),
+    // Public decks via RPC: dynamic cover (commander or first main card),
+    // creator names, commander, likes, price — all in one call. No reliance
+    // on the stored decks.cover_card_id (null for most decks).
+    supabase.rpc("search_public_decks", {
+      p_name: "",
+      p_creator_id: "",
+      p_commander: "",
+      p_colors: "",
+      p_color_identity: "",
+      p_cards: "",
+      p_card_mode: "and",
+      p_format: "",
+      p_sort: "updated",
+      p_limit: 5,
+      p_offset: 0,
+    }),
     supabase
       .from("decks")
       .select("id, name, format, updated_at, card_count, cover_card_id")
@@ -97,26 +107,17 @@ export default async function DashboardPage() {
   );
 
   // ── Collect IDs for batch 2 ──
-  const publicCoverIds = [
-    ...new Set(
-      (publicDecks ?? [])
-        .map((d) => d.cover_card_id)
-        .filter((id): id is number => id != null),
-    ),
-  ];
-
-  const publicOwnerIds = [
-    ...new Set((publicDecks ?? []).map((d) => d.user_id)),
-  ];
+  // Public decks come from the RPC with their own cover + creator fields,
+  // so only game-host profile IDs need resolving here.
   const gameHostIds = [
     ...new Set(
       (activeGames ?? []).map((g) => g.host_user_id).filter(Boolean),
     ),
   ];
-  const allUserIds = [...new Set([...publicOwnerIds, ...gameHostIds])];
+  const allUserIds = [...new Set([...gameHostIds])];
 
-  // ── Batch 2: resolve liked card images + public deck covers + profiles ──
-  const allCardIds = [...new Set([...publicCoverIds, ...likedCardIds])];
+  // ── Batch 2: resolve liked card images + game-host profiles ──
+  const allCardIds = [...new Set([...likedCardIds])];
 
   const [{ data: cardDetails }, { data: allProfiles }] = await Promise.all([
     allCardIds.length > 0
@@ -361,6 +362,12 @@ export default async function DashboardPage() {
           <h2 className="text-lg font-semibold text-font-primary">
             Latest public decks
           </h2>
+          <Link
+            href="/decks/public"
+            className="flex items-center gap-1 text-sm text-font-accent hover:underline"
+          >
+            View all <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
 
         {!hasPublicDecks ? (
@@ -373,16 +380,12 @@ export default async function DashboardPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {publicDecks!.map((deck) => {
-              const coverCard = deck.cover_card_id
-                ? cardMap.get(deck.cover_card_id)
-                : null;
               const coverSrc =
-                coverCard?.image_art_crop ??
-                coverCard?.image_normal ??
-                null;
-              const owner = profileMap.get(deck.user_id);
+                deck.cover_image_art_crop ?? deck.cover_image_normal ?? null;
               const ownerName =
-                owner?.display_name || owner?.username || "Unknown";
+                deck.creator_display_name ||
+                deck.creator_username ||
+                "Unknown";
 
               return (
                 <Link
@@ -394,7 +397,7 @@ export default async function DashboardPage() {
                     {coverSrc ? (
                       <Image
                         src={coverSrc}
-                        alt={coverCard?.name ?? deck.name}
+                        alt={deck.name}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 20vw"
                         className="object-cover transition-transform group-hover:scale-105"
@@ -404,17 +407,23 @@ export default async function DashboardPage() {
                         <Swords className="h-8 w-8 text-font-muted" />
                       </div>
                     )}
-                    <span className="absolute top-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
-                      {deck.format}
-                    </span>
+                    {deck.format && (
+                      <span className="absolute top-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+                        {deck.format}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1 p-3.5">
                     <p className="truncate text-sm font-medium text-font-primary">
                       {deck.name}
                     </p>
                     <div className="flex items-center justify-between text-xs text-font-muted">
-                      <span>{ownerName}</span>
-                      <span>
+                      <span className="truncate">{ownerName}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-0.5">
+                          <Heart className="h-3 w-3" />
+                          {deck.like_count}
+                        </span>
                         {deck.card_count != null && (
                           <>{deck.card_count} cards</>
                         )}

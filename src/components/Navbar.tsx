@@ -17,6 +17,7 @@ import {
   Info,
   Menu,
   X,
+  Globe,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
@@ -26,7 +27,8 @@ const navItems = [
   // Collection is now a tab inside /cards (?tab=collection); the old
   // standalone /collection route still redirects here.
   { href: "/cards", label: "Cards", icon: Search },
-  { href: "/decks", label: "Decks", icon: Layers },
+  { href: "/decks", label: "My Decks", icon: Layers },
+  { href: "/decks/public", label: "Pub Decks", icon: Globe },
   { href: "/play", label: "Play", icon: Swords },
   { href: "/users", label: "Community", icon: Users },
   { href: "/profile", label: "Profile", icon: User },
@@ -51,6 +53,14 @@ export function Navbar() {
   }
 
   function isActive(href: string) {
+    // /decks would otherwise shadow /decks/public via startsWith — exclude
+    // the Pub Decks subtree so only "My Decks" detail/management routes match.
+    if (href === "/decks") {
+      if (pathname === "/decks") return true;
+      if (pathname.startsWith("/decks/") && !pathname.startsWith("/decks/public"))
+        return true;
+      return false;
+    }
     return pathname === href || pathname.startsWith(href + "/");
   }
 

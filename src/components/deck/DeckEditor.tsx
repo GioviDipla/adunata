@@ -596,7 +596,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
   }, [commanderCards])
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col px-4 py-4 sm:py-6 h-screen overflow-hidden">
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
       {/* Header */}
       <div className="shrink-0 mb-4 sm:mb-6">
         <div className="flex items-center gap-2 sm:gap-3">
@@ -720,10 +720,12 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
         </div>
       </div>
 
-      {/* Two-panel layout — fills remaining viewport height, each panel scrolls independently */}
-      <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row flex-1 min-h-0">
-        {/* Left panel: Card list */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
+      {/* Two-panel layout — page scrolls naturally; right sidebar is sticky
+          with its own independent scroll. No viewport-height lock so the
+          header, search, tabs and card list flow with the page. */}
+      <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
+        {/* Left panel: Card list — flows with the page (standard scroll). */}
+        <div className="flex-1 min-w-0">
           {/* Compact stats bar */}
           <div className="mb-3 sm:mb-4">
             <DeckStatsBar
@@ -761,7 +763,7 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
               <span>{showSectionsPanel ? '−' : '+'}</span>
             </button>
             {showSectionsPanel && (
-              <div className="mt-2">
+              <div className="mt-2 max-h-[60vh] overflow-y-auto rounded-lg">
                 <DeckSectionsPanel
                   deckId={deck.id}
                   sections={sections}
@@ -863,11 +865,12 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
           )}
         </div>
 
-        {/* Right panel: stats + sections — only on lg+. Order is user-
-            persistable via SidebarCards (drag handle on hover), and each
-            card is collapsible via its header chevron. Defaults: stats
-            first, sections second. Scrolls independently from the card list. */}
-        <div className="hidden lg:block w-80 shrink-0 overflow-y-auto">
+        {/* Right panel: stats + sections — only on lg+. Sticky with its own
+            independent scroll so it stays in view while the page (card list)
+            scrolls normally. Order is user-persistable via SidebarCards (drag
+            handle on hover), and each card is collapsible via its header
+            chevron. Defaults: stats first, sections second. */}
+        <div className="hidden lg:block w-80 shrink-0 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] overflow-y-auto">
             <SidebarCards
               deckId={deck.id}
               panels={[
