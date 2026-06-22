@@ -23,12 +23,18 @@ export default function NotificationList() {
   const router = useRouter()
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [offset, setOffset] = useState(0)
 
-  const fetchPage = useCallback(async (off: number, append: boolean) => {
+  const fetchPage = useCallback(async (off: number, append: boolean): Promise<boolean> => {
+    setError(null)
     const res = await fetch(`/api/notifications?offset=${off}&limit=${LIMIT}`)
-    if (!res.ok) return
+    if (!res.ok) {
+      setError('Errore nel caricamento delle notifiche')
+      return false
+    }
     const data = await res.json()
     const list: NotificationRow[] = data.notifications ?? []
     if (append) {
@@ -37,21 +43,31 @@ export default function NotificationList() {
       setNotifs(list)
     }
     setHasMore(data.has_more ?? false)
+    return true
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
-    fetchPage(0, false).finally(() => setLoading(false))
+    fetchPage(0, false).finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => { cancelled = true }
   }, [fetchPage])
 
   async function loadMore() {
+    if (loadingMore) return
+    setLoadingMore(true)
+    setError(null)
     const next = offset + LIMIT
-    setOffset(next)
-    await fetchPage(next, true)
+    const ok = await fetchPage(next, true)
+    if (ok) setOffset(next)
+    setLoadingMore(false)
   }
 
   async function markAllRead() {
-    await fetch('/api/notifications', { method: 'PATCH' })
+    const res = await fetch('/api/notifications', { method: 'PATCH' })
+    if (!res.ok) return
     setNotifs(prev => prev.map(n => ({ ...n, read: true })))
   }
 
@@ -101,7 +117,16 @@ export default function NotificationList() {
   }
 
   if (notifs.length === 0) {
-    return <p className="py-8 text-center text-sm text-font-muted">Nessuna notifica</p>
+    return (
+      <>
+        {error && (
+          <p className="mb-4 rounded-md bg-red-500/10 px-4 py-2 text-center text-sm text-red-400">
+            {error}
+          </p>
+        )}
+        <p className="py-8 text-center text-sm text-font-muted">Nessuna notifica</p>
+      </>
+    )
   }
 
   // Group by date
@@ -125,6 +150,12 @@ export default function NotificationList() {
           Segna tutte come lette
         </button>
       </div>
+
+      {error && (
+        <p className="mb-4 rounded-md bg-red-500/10 px-4 py-2 text-center text-sm text-red-400">
+          {error}
+        </p>
+      )}
 
       <div className="divide-y divide-border">
         {Array.from(groups.entries()).map(([date, items]) => (
@@ -172,9 +203,10 @@ export default function NotificationList() {
           <button
             type="button"
             onClick={loadMore}
-            className="rounded-full px-4 py-2 text-sm font-medium text-font-accent hover:bg-bg-elevated"
+            disabled={loadingMore}
+            className="rounded-full px-4 py-2 text-sm font-medium text-font-accent hover:bg-bg-elevated disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Carica altre
+            {loadingMore ? 'Caricamento...' : 'Carica altre'}
           </button>
         </div>
       )}
