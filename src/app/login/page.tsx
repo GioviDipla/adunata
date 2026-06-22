@@ -170,36 +170,6 @@ export default async function LoginPage() {
 
             <div className="mx-auto max-w-4xl">
               <div className="animate-fade-in-up">
-                {/* GoblinAI badge pill above title */}
-                <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-bg-green/30 bg-bg-green/10 px-4 py-1.5 text-sm font-medium text-bg-green backdrop-blur-sm">
-                  <Sparkles className="h-4 w-4" />
-                  Novità: assistente IA per le regole
-                </div>
-              </div>
-
-              <h1
-                className="animate-fade-in-up stagger-1 mb-6 text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl lg:text-7xl"
-                style={{ textShadow: "0 4px 32px rgba(0,0,0,0.8)" }}
-              >
-                Il tavolo da gioco{" "}
-                <span className="bg-gradient-to-r from-bg-yellow via-yellow-300 to-bg-yellow bg-clip-text text-transparent">
-                  definitivo
-                </span>{" "}
-                per Magic
-              </h1>
-
-              <p
-                className="animate-fade-in-up stagger-2 mx-auto mb-10 max-w-2xl text-base leading-relaxed text-font-primary/80 sm:text-lg lg:text-xl"
-                style={{ textShadow: "0 2px 16px rgba(0,0,0,0.7)" }}
-              >
-                Costruisci mazzi, testali in goldfish, sfida amici in partite 1v1
-                sincronizzate. E quando hai un dubbio sulle regole, chiedi a GoblinAI
-                — l&apos;assistente IA che conosce il regolamento ufficiale, le
-                interazioni tra carte e i ruling dei giudici. Tutto dal browser. Gratis.
-              </p>
-
-              {/* Login form inline */}
-              <div className="animate-fade-in-up stagger-3">
                 <LoginForm />
               </div>
             </div>
