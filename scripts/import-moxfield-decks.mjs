@@ -1,28 +1,82 @@
 #!/usr/bin/env node
 /**
- * Import a batch of public Moxfield decks under a given user profile.
+ * import-moxfield-decks.mjs — Import public Moxfield decks into Adunata.
  *
- * Flow:
- *   1. Launch Chromium (real browser → passes Moxfield's Cloudflare gate).
- *   2. Scrape public deck IDs from https://moxfield.com/decks.
- *   3. For each deck, fetch api.moxfield.com/v2/decks/all/<id> from the page
- *      context (Cloudflare-cleared) and extract a compact card list.
- *   4. Resolve every card by scryfall_id against the `cards` table; for any
- *      missing, fetch Scryfall /cards/<id> and upsert (reusing mapScryfallCard
- *      field mapping).
- *   5. Insert each deck (public, description credits the original Moxfield
- *      author) + its deck_cards under the target user_id.
+ * End-to-end, reproducible by anyone with repo access:
+ *   1. Launches Chromium (real browser passes Moxfield's Cloudflare gate).
+ *      Auto-installs the browser on first run if missing.
+ *   2. Scrapes public deck IDs from https://moxfield.com/decks/public.
+ *   3. Fetches each deck via api.moxfield.com/v2/decks/all/<id> (page context,
+ *      Cloudflare-cleared) and extracts a compact card list.
+ *   4. Resolves every card by scryfall_id against the `cards` table; missing
+ *      ones are fetched from Scryfall /cards/<id> and upserted (reusing the
+ *      mapScryfallCard field mapping from src/lib/scryfall.ts).
+ *   5. Inserts each deck (chosen visibility, description credits the original
+ *      Moxfield author + deck URL) + its deck_cards under the target user.
+ *      Idempotent: decks already imported (same Moxfield URL in description)
+ *      are skipped, so re-running is safe.
  *
- * Uses service_role (admin) — bypasses RLS. Standalone script per project
- * convention (no web route for bulk ops).
+ * PREREQUISITES
+ *   - .env.local with NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+ *     (service role bypasses RLS — keep it secret).
+ *   - `npm install` done (playwright + @supabase/supabase-js + dotenv).
+ *   - Chromium is auto-installed on first run via `npx playwright install`.
  *
- * Usage: node scripts/import-moxfield-decks.mjs [COUNT]   (default 12)
+ * USAGE
+ *   node scripts/import-moxfield-decks.mjs --user=<uuid> [options]
+ *
+ * OPTIONS
+ *   --user=<uuid>       Target profile id (required, unless --find-user/--help).
+ *   --count=<n>         How many decks to import (default 12).
+ *   --format=<f>        Only import decks whose Moxfield format matches
+ *                       (e.g. commander, duelCommander). Default: any.
+ *   --visibility=<v>    public | unlisted | private (default public).
+ *   --find-user=<q>     Search profiles by username/display_name, print matches
+ *                       with their ids, then exit. Use to discover --user.
+ *   --help              Show this help.
+ *
+ * EXAMPLES
+ *   node scripts/import-moxfield-decks.mjs --find-user=giovanni
+ *   node scripts/import-moxfield-decks.mjs --user=f0e76951-... --count=20
+ *   node scripts/import-moxfield-decks.mjs --user=f0e76951-... --format=commander --visibility=unlisted
  */
 import { config } from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import { chromium } from 'playwright'
+import { execSync } from 'node:child_process'
 
 config({ path: '.env.local' })
+
+// ── args ───────────────────────────────────────────────────────────────────
+function parseArgs(argv) {
+  const out = {}
+  for (const a of argv.slice(2)) {
+    const m = /^--([a-zA-Z-]+)(?:=(.*))?$/.exec(a)
+    if (m) out[m[1]] = m[2] ?? true
+  }
+  return out
+}
+const args = parseArgs(process.argv)
+
+if (args.help || Object.keys(args).length === 0) {
+  console.log(
+    [
+      'Usage: node scripts/import-moxfield-decks.mjs --user=<uuid> [options]',
+      '',
+      'Options:',
+      '  --user=<uuid>       Target profile id (required).',
+      '  --count=<n>         Decks to import (default 12).',
+      '  --format=<f>        Filter by Moxfield format (e.g. commander).',
+      '  --visibility=<v>    public | unlisted | private (default public).',
+      '  --find-user=<q>     Search profiles, print ids, exit.',
+      '  --dry-run           Fetch + resolve but do not create decks (test).',
+      '  --help              Show full docs.',
+      '',
+      'Prerequisites: .env.local with NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.',
+    ].join('\n'),
+  )
+  process.exit(0)
+}
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -30,10 +84,44 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local')
   process.exit(1)
 }
+const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 
-// ilnanni — Giovanni's main app profile (has existing decks).
-const TARGET_USER_ID = 'f0e76951-3a55-435a-a690-c3e107218199'
-const COUNT = parseInt(process.argv[2] ?? '12', 10) || 12
+// ── find-user mode ─────────────────────────────────────────────────────────
+if (args['find-user'] !== undefined) {
+  const q = String(args['find-user']).trim()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, display_name')
+    .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+    .limit(20)
+  if (error) {
+    console.error('profile search error:', error.message)
+    process.exit(1)
+  }
+  if (!data?.length) {
+    console.log(`No profiles matching "${q}".`)
+    process.exit(0)
+  }
+  console.log('Matching profiles:')
+  for (const p of data) {
+    console.log(`  ${p.id}  ${p.username}  (${p.display_name})`)
+  }
+  process.exit(0)
+}
+
+// ── config ─────────────────────────────────────────────────────────────────
+const TARGET_USER_ID = String(args.user ?? '')
+const COUNT = parseInt(String(args.count ?? '12'), 10) || 12
+const FORMAT_FILTER = args.format ? String(args.format).toLowerCase() : null
+const VISIBILITY = ['public', 'unlisted', 'private'].includes(String(args.visibility))
+  ? String(args.visibility)
+  : 'public'
+const DRY_RUN = !!args['dry-run']
+
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(TARGET_USER_ID)) {
+  console.error(`Invalid or missing --user uuid. Use --find-user=<query> to discover a profile id.`)
+  process.exit(1)
+}
 
 const BOARD_MAP = {
   commanders: 'commander',
@@ -41,15 +129,11 @@ const BOARD_MAP = {
   sideboard: 'sideboard',
   maybeboard: 'maybeboard',
 }
-
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
-
-// --- mapScryfallCard: replicated from src/lib/scryfall.ts (TS not importable
-// in .mjs). Maps a Scryfall card JSON to the app's `cards` row shape. ---
+// ── card mapping (replicated from src/lib/scryfall.ts) ─────────────────────
 function mapScryfallCard(card) {
   const frontFace = card.card_faces?.[0]
   const imageUris = card.image_uris ?? frontFace?.image_uris
@@ -90,13 +174,26 @@ function mapScryfallCard(card) {
   }
 }
 
+// ── browser launch (auto-install chromium if missing) ──────────────────────
+async function launchBrowser() {
+  const launchOpts = { headless: true, args: ['--disable-blink-features=AutomationControlled'] }
+  try {
+    return await chromium.launch(launchOpts)
+  } catch (e) {
+    if (/executable|doesn't exist|install/i.test(e.message)) {
+      console.log('Chromium not installed — running `npx playwright install chromium`…')
+      execSync('npx playwright install chromium', { stdio: 'inherit' })
+      return await chromium.launch(launchOpts)
+    }
+    throw e
+  }
+}
+
 async function scrapeDeckIds(page, count) {
   await page.goto('https://moxfield.com/decks/public', { waitUntil: 'domcontentloaded', timeout: 60000 })
-  // Deck cards are in a virtualized grid (present in DOM but not "visible"
-  // per Playwright). Wait for attached presence, then a small settle.
   await page.waitForSelector('a[href*="/decks/"]', { state: 'attached', timeout: 30000 })
   await page.waitForTimeout(1500)
-  const ids = await page.evaluate(() => {
+  return page.evaluate(() => {
     const re = /^https?:\/\/(www\.)?moxfield\.com\/decks\/([A-Za-z0-9_-]+)$/
     const seen = new Set()
     for (const a of document.querySelectorAll('a[href*="/decks/"]')) {
@@ -105,7 +202,6 @@ async function scrapeDeckIds(page, count) {
     }
     return [...seen]
   })
-  return ids.slice(0, count)
 }
 
 async function fetchDeck(page, id) {
@@ -135,21 +231,40 @@ async function fetchDeck(page, id) {
       format: j.format,
       author: j.authors?.[0]?.userName ?? 'unknown',
       description: j.description ?? '',
+      publicUrl: j.publicUrl || `https://moxfield.com/decks/${deckId}`,
       cards,
     }
   }, id)
 }
 
+// ── dedup: skip decks already imported by this user ────────────────────────
+async function alreadyImported(userId, publicUrls) {
+  if (!publicUrls.length) return new Set()
+  // Description contains the Moxfield deck URL for previously imported decks.
+  const { data, error } = await supabase
+    .from('decks')
+    .select('description')
+    .eq('user_id', userId)
+    .like('description', '%moxfield.com/decks/%')
+  if (error) {
+    console.error('dedup lookup error:', error.message)
+    return new Set()
+  }
+  const have = new Set()
+  for (const d of data ?? []) {
+    for (const url of publicUrls) {
+      if (d.description?.includes(url)) have.add(url)
+    }
+  }
+  return have
+}
+
 async function resolveCards(scryfallIds) {
   const map = new Map()
-  // Keep only valid uuids — a single malformed id in a Postgres = ANY(uuid[])
-  // cast nukes the whole chunk query, marking every card in it as missing.
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   const valid = scryfallIds.filter((s) => UUID.test(s))
   const skipped = scryfallIds.length - valid.length
   if (skipped) console.log(`  skipping ${skipped} non-uuid scryfall_ids`)
-  // Query existing in small chunks — PostgREST builds a GET URL with the
-  // full `in.(...)` list, and large chunks exceed URL limits → "fetch failed".
   for (let i = 0; i < valid.length; i += 100) {
     const chunk = valid.slice(i, i + 100)
     const { data, error } = await supabase
@@ -183,14 +298,17 @@ async function resolveCards(scryfallIds) {
     } catch (e) {
       console.error(`  scryfall ${sfid}: ${e.message}`)
     }
-    // Scryfall rate limit (~100ms between requests).
     await new Promise((res) => setTimeout(res, 120))
   }
   return map
 }
 
-async function createDeck(deck, cardMap) {
-  const credit = `Imported from Moxfield — original author: ${deck.author}`
+async function createDeck(deck, cardMap, visibility) {
+  if (DRY_RUN) {
+    console.log(`  [dry-run] would create: ${deck.name} [${deck.format}] by ${deck.author} — ${deck.cards.length} cards`)
+    return 'dry-run'
+  }
+  const credit = `Imported from Moxfield — original: ${deck.author} (${deck.publicUrl})`
   const description = deck.description ? `${deck.description}\n\n${credit}` : credit
   const { data: deckRow, error } = await supabase
     .from('decks')
@@ -198,7 +316,7 @@ async function createDeck(deck, cardMap) {
       user_id: TARGET_USER_ID,
       name: deck.name,
       format: deck.format,
-      visibility: 'public',
+      visibility,
       description,
     })
     .select('id')
@@ -213,13 +331,7 @@ async function createDeck(deck, cardMap) {
   for (const c of deck.cards) {
     const cardId = cardMap.get(c.s)
     if (!cardId) { unresolved++; continue }
-    rows.push({
-      deck_id: deckId,
-      card_id: cardId,
-      quantity: c.q,
-      board: c.b,
-      is_foil: c.f,
-    })
+    rows.push({ deck_id: deckId, card_id: cardId, quantity: c.q, board: c.b, is_foil: c.f })
   }
   if (rows.length) {
     const { error: e2 } = await supabase.from('deck_cards').insert(rows)
@@ -232,54 +344,57 @@ async function createDeck(deck, cardMap) {
   return deckId
 }
 
-async function main() {
-  console.log(`Launching Chromium…`)
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-blink-features=AutomationControlled'],
-  })
-  const ctx = await browser.newContext({ userAgent: UA })
-  // navigator.webdriver = false → looks like a normal browser to Cloudflare.
-  await ctx.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => false })
-  })
-  const page = await ctx.newPage()
+// ── main ───────────────────────────────────────────────────────────────────
+console.log(`Config: user=${TARGET_USER_ID} count=${COUNT} format=${FORMAT_FILTER || 'any'} visibility=${VISIBILITY}${DRY_RUN ? ' DRY-RUN' : ''}`)
+const browser = await launchBrowser()
+const ctx = await browser.newContext({ userAgent: UA })
+await ctx.addInitScript(() => {
+  Object.defineProperty(navigator, 'webdriver', { get: () => false })
+})
+const page = await ctx.newPage()
 
-  console.log(`Scraping ${COUNT} public deck IDs from Moxfield…`)
-  const ids = await scrapeDeckIds(page, COUNT)
-  console.log(`  found ${ids.length} deck IDs: ${ids.join(', ')}`)
+console.log(`Scraping deck IDs from Moxfield /decks/public…`)
+const ids = await scrapeDeckIds(page, COUNT)
+console.log(`  found ${ids.length} deck IDs`)
 
-  const decks = []
-  for (const id of ids) {
-    const d = await fetchDeck(page, id)
-    if (d.error) {
-      console.error(`  skip ${id}: HTTP ${d.error}`)
-      continue
-    }
-    decks.push({ id, ...d })
-    console.log(`  fetched: ${d.name} [${d.format}] by ${d.author} (${d.cards.length} cards)`)
-    await page.waitForTimeout(450) // polite rate limit
+// Fetch decks (filter by format, collect until COUNT matching or ids exhausted).
+const decks = []
+const skippedFormat = []
+for (const id of ids) {
+  if (decks.length >= COUNT) break
+  const d = await fetchDeck(page, id)
+  if (d.error) {
+    console.error(`  skip ${id}: HTTP ${d.error}`)
+    continue
   }
-  await browser.close()
-
-  if (!decks.length) {
-    console.log('No decks fetched. Aborting.')
-    return
+  if (FORMAT_FILTER && (d.format || '').toLowerCase() !== FORMAT_FILTER) {
+    skippedFormat.push(d.format)
+    continue
   }
-
-  const allSids = [...new Set(decks.flatMap((d) => d.cards.map((c) => c.s)))]
-  console.log(`\nResolving ${allSids.length} unique cards…`)
-  const cardMap = await resolveCards(allSids)
-
-  console.log(`\nCreating ${decks.length} decks under user ${TARGET_USER_ID}…`)
-  let created = 0
-  for (const deck of decks) {
-    if (await createDeck(deck, cardMap)) created++
-  }
-  console.log(`\n✅ Done: ${created}/${decks.length} decks created.`)
+  decks.push({ id, ...d })
+  console.log(`  fetched: ${d.name} [${d.format}] by ${d.author} (${d.cards.length} cards)`)
+  await page.waitForTimeout(450)
+}
+await browser.close()
+if (skippedFormat.length) console.log(`  skipped ${skippedFormat.length} decks not matching format=${FORMAT_FILTER}`)
+if (!decks.length) {
+  console.log('No decks to import. Aborting.')
+  process.exit(0)
 }
 
-main().catch((e) => {
-  console.error('Fatal:', e)
-  process.exit(1)
-})
+// Dedup against already-imported decks for this user.
+const urls = decks.map((d) => d.publicUrl)
+const already = await alreadyImported(TARGET_USER_ID, urls)
+const fresh = decks.filter((d) => !already.has(d.publicUrl))
+console.log(`\nDedup: ${fresh.length}/${decks.length} new (skipping ${already.size} already imported)`)
+
+const allSids = [...new Set(fresh.flatMap((d) => d.cards.map((c) => c.s)))]
+console.log(`Resolving ${allSids.length} unique cards…`)
+const cardMap = await resolveCards(allSids)
+
+console.log(`\nCreating ${fresh.length} decks (visibility=${VISIBILITY})…`)
+let created = 0
+for (const deck of fresh) {
+  if (await createDeck(deck, cardMap, VISIBILITY)) created++
+}
+console.log(`\n✅ Done: ${created}/${fresh.length} decks created.`)
