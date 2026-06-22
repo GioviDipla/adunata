@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { extractMentions } from '@/lib/mentions'
+import { extractMentions, extractUserMentions } from '@/lib/mentions'
 
 const MAX_BODY = 2000
 
@@ -86,6 +86,47 @@ export async function POST(
 
   if (error || !row) {
     return NextResponse.json({ error: error?.message ?? 'Insert failed' }, { status: 500 })
+  }
+
+  // --- Notification: deck_comment ---
+  const { data: deck } = await supabase
+    .from('decks')
+    .select('user_id')
+    .eq('id', deckId)
+    .single()
+
+  if (deck && deck.user_id !== user.id) {
+    await supabase.from('notifications').insert({
+      user_id: deck.user_id,
+      type: 'deck_comment',
+      deck_id: deckId,
+      actor_id: user.id,
+      comment_id: row.id,
+    })
+  }
+
+  // --- Notification: user mentions ---
+  const mentionedUsernames = extractUserMentions(raw)
+  if (mentionedUsernames.length > 0) {
+    const { data: mentionedUsers } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('username', mentionedUsernames)
+
+    if (mentionedUsers) {
+      const inserts = mentionedUsers
+        .filter((mu) => mu.id !== user.id)
+        .map((mu) => ({
+          user_id: mu.id,
+          type: 'mention' as const,
+          deck_id: deckId,
+          actor_id: user.id,
+          comment_id: row.id,
+        }))
+      if (inserts.length > 0) {
+        await supabase.from('notifications').insert(inserts)
+      }
+    }
   }
 
   const authors = await hydrateAuthors(supabase, [row.user_id])

@@ -59,12 +59,37 @@ export async function POST(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    // Remove corresponding notification
+    await supabase
+      .from('notifications')
+      .delete()
+      .eq('deck_id', deckId)
+      .eq('actor_id', user.id)
+      .eq('type', 'deck_like')
+
   } else {
     const { error } = await supabase
       .from('deck_likes')
       .insert({ deck_id: deckId, user_id: user.id })
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Fetch deck owner to skip self-notify
+    const { data: deck } = await supabase
+      .from('decks')
+      .select('user_id')
+      .eq('id', deckId)
+      .single()
+
+    if (deck && deck.user_id !== user.id) {
+      await supabase.from('notifications').insert({
+        user_id: deck.user_id,
+        type: 'deck_like',
+        deck_id: deckId,
+        actor_id: user.id,
+      })
     }
   }
 
