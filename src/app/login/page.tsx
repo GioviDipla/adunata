@@ -144,7 +144,7 @@ export default async function LoginPage() {
       <div className="min-h-screen bg-bg-dark text-font-primary radial-bg" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <main>
           {/* ── Hero ── */}
-          <section className="relative isolate flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-12 text-center sm:px-6 sm:py-16">
+          <section className="relative isolate flex min-h-screen flex-col items-center justify-end overflow-hidden px-4 pb-20 pt-12 text-center sm:px-6 sm:pb-28">
             {/* Background layers */}
             <div
               aria-hidden="true"
@@ -156,7 +156,7 @@ export default async function LoginPage() {
               className="pointer-events-none absolute inset-0 -z-20"
               style={{
                 background:
-                  "linear-gradient(180deg, rgba(18,18,24,0.0) 0%, rgba(18,18,24,0.08) 12%, rgba(18,18,24,0.30) 35%, rgba(18,18,24,0.60) 55%, #121218 85%)",
+                  "linear-gradient(180deg, rgba(18,18,24,0.0) 0%, rgba(18,18,24,0.05) 20%, rgba(18,18,24,0.25) 50%, rgba(18,18,24,0.55) 75%, #121218 95%)",
               }}
             />
             {/* Golden glow orb behind hero text */}
@@ -172,6 +172,22 @@ export default async function LoginPage() {
               <div className="animate-fade-in-up">
                 <LoginForm />
               </div>
+            </div>
+
+            {/* Scroll indicator */}
+            <div className="animate-fade-in-up stagger-3 mt-8 flex flex-col items-center gap-1">
+              <span className="text-xs text-font-muted/60">Scopri di più</span>
+              <svg
+                className="h-5 w-5 animate-bounce text-font-muted/40"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
             </div>
           </section>
 
