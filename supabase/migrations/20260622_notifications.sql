@@ -30,6 +30,8 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Users can create notifications as actor" ON public.notifications;
+DROP POLICY IF EXISTS "Users can remove notifications they created" ON public.notifications;
 
 CREATE POLICY "Users can view own notifications"
   ON public.notifications FOR SELECT
@@ -41,6 +43,16 @@ CREATE POLICY "Users can update own notifications"
   TO authenticated
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "Users can create notifications as actor"
+  ON public.notifications FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = actor_id);
+
+CREATE POLICY "Users can remove notifications they created"
+  ON public.notifications FOR DELETE
+  TO authenticated
+  USING (auth.uid() = actor_id);
 
 -- Realtime (idempotent via DO block since ALTER PUBLICATION ... IF NOT EXISTS requires PG 15+)
 DO $$
