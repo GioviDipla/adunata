@@ -17,6 +17,7 @@ import {
   ClipboardCopy,
   Layers,
   BarChart3,
+  Sparkles,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
@@ -84,6 +85,8 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
   const [showImport, setShowImport] = useState(false)
   const [overlayOn, setOverlayOn] = useState(false)
   const [overlayToast, setOverlayToast] = useState<string | null>(null)
+  const [upscaling, setUpscaling] = useState(false)
+  const [upscaleResult, setUpscaleResult] = useState<{ queued: number; alreadyCached: number; skipped: number } | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -144,6 +147,25 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
     },
     [],
   )
+
+  async function handleUpscaleDeck() {
+    if (upscaling) return
+    setUpscaling(true)
+    setUpscaleResult(null)
+    try {
+      const res = await fetch(`/api/decks/${deck.id}/upscale`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        setUpscaleResult({ queued: data.queued, alreadyCached: data.alreadyCached, skipped: data.skipped })
+      } else {
+        setUpscaleResult({ queued: 0, alreadyCached: 0, skipped: 0 })
+      }
+    } catch {
+      setUpscaleResult({ queued: 0, alreadyCached: 0, skipped: 0 })
+    }
+    setUpscaling(false)
+    setTimeout(() => setUpscaleResult(null), 4000)
+  }
 
   async function exportShoppingList() {
     if (!overlayData) return
@@ -691,6 +713,17 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
           <Button
             variant="secondary"
             size="sm"
+            onClick={handleUpscaleDeck}
+            loading={upscaling}
+            title="Queue all card images in this deck for AI upscaling (2x resolution)"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Upscale</span>
+            <span className="sm:hidden">Up</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setShowAddToCollection(true)}
             title="Pick which cards to add to your collection"
           >
@@ -806,6 +839,19 @@ export default function DeckEditor({ deck, initialCards, initialSections = [], c
               )
             })}
           </div>
+
+          {upscaleResult && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-bg-accent/40 bg-bg-accent/10 px-3 py-2 text-xs animate-in fade-in">
+              <Sparkles className="h-3.5 w-3.5 text-bg-accent shrink-0" />
+              <span className="text-font-primary">
+                {upscaleResult.queued > 0
+                  ? `${upscaleResult.queued} card${upscaleResult.queued !== 1 ? 's' : ''} queued for upscaling`
+                  : 'All cards already upscaled'}
+                {upscaleResult.alreadyCached > 0 && ` (${upscaleResult.alreadyCached} cached)`}
+                {upscaleResult.skipped > 0 && ` · ${upscaleResult.skipped} skipped`}
+              </span>
+            </div>
+          )}
 
           {overlayOn && overlayData && (
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2 text-xs">
