@@ -176,13 +176,27 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   const cardFaces = displayCard.card_faces as CardFace[] | null
   const isDoubleFaced = cardFaces && cardFaces.length > 1
 
+  // Track previous card name so we only clear the printings cache when the
+  // user opens a genuinely different card, not when cycling printings of the
+  // same card. Without this, selecting a printing from the carousel triggers a
+  // card prop change (parent swaps the deck entry), which would clear printings
+  // and cause the carousel to flash away and reload unnecessarily.
+  const prevCardNameRef = useRef<string | null>(null)
+
   // Reset when card prop changes; lazily hydrate heavy fields
   // (oracle_text, legalities, card_faces, power, toughness, set_name,
   // collector_number, prices_eur*, prices_usd_foil) only when the
   // detail modal actually opens — the grid query omits them.
   useEffect(() => {
     setDisplayCard(card)
-    setPrintings([])
+
+    // Only clear printings cache when card name actually changes
+    // (different card), not when switching between printings of the
+    // same card (parent re-renders with new printing row).
+    if (prevCardNameRef.current !== card.name) {
+      prevCardNameRef.current = card.name ?? null
+      setPrintings([])
+    }
 
     if (card.legalities !== undefined) return
     let aborted = false
