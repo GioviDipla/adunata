@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
         try {
           const res = await fetch(
             `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(c.name)}`,
+            { headers: { 'User-Agent': 'Adunata/1.0' } },
           )
           if (res.ok) {
             canonical.push(await res.json() as ScryfallCard)

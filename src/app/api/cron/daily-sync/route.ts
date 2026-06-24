@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   const MAX_RUNTIME = 295_000
 
   // 1. Resolve latest oracle_cards bulk entry
-  const bulkRes = await fetch('https://api.scryfall.com/bulk-data')
+  const bulkRes = await fetch('https://api.scryfall.com/bulk-data', { headers: { 'User-Agent': 'Adunata/1.0' } })
   if (!bulkRes.ok) {
     return NextResponse.json({ error: 'bulk-data list failed' }, { status: 502 })
   }
