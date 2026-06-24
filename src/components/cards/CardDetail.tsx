@@ -79,13 +79,6 @@ function cardmarketUrl(card: { name: string; set_name?: string | null; cardmarke
   return `https://www.cardmarket.com/it/Magic/Products/Search?searchString=${encodeURIComponent(card.name)}`
 }
 
-const LEGALITY_COLORS: Record<string, string> = {
-  legal: 'bg-bg-green/20 text-bg-green',
-  not_legal: 'bg-bg-cell text-font-muted',
-  banned: 'bg-bg-red/20 text-bg-red',
-  restricted: 'bg-bg-yellow/20 text-bg-yellow',
-}
-
 interface DeckSummary {
   id: string
   name: string
@@ -106,7 +99,6 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   const [displayCard, setDisplayCard] = useState<Card>(card)
   const [printings, setPrintings] = useState<Card[]>([])
   const [loadingPrintings, setLoadingPrintings] = useState(false)
-  const [showPrintings, setShowPrintings] = useState(false)
 
   // Add to deck state — prefer pre-fetched decks from parent (server-rendered, instant).
   const [showDeckPicker, setShowDeckPicker] = useState(false)
@@ -181,7 +173,6 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     setDragDelta(0)
   }
 
-  const legalities = displayCard.legalities as Record<string, string> | null
   const cardFaces = displayCard.card_faces as CardFace[] | null
   const isDoubleFaced = cardFaces && cardFaces.length > 1
 
@@ -192,7 +183,6 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
   useEffect(() => {
     setDisplayCard(card)
     setPrintings([])
-    setShowPrintings(false)
 
     if (card.legalities !== undefined) return
     let aborted = false
@@ -208,6 +198,32 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     })()
     return () => { aborted = true }
   }, [card])
+
+  // Auto-load all printings on mount for the carousel below.
+  useEffect(() => {
+    let aborted = false
+    const load = async () => {
+      setLoadingPrintings(true)
+      const typeLine = (card.type_line ?? '').toLowerCase()
+      const isToken = /\b(token|emblem|dungeon|plane|scheme)\b/.test(typeLine)
+      const url = isToken
+        ? `/api/cards/printings?name=${encodeURIComponent(card.name)}&type=token`
+        : `/api/cards/printings?name=${encodeURIComponent(card.name)}`
+      try {
+        const res = await fetch(url)
+        if (!res.ok || aborted) { setLoadingPrintings(false); return }
+        const data = await res.json()
+        if (!aborted) {
+          setPrintings(data.printings ?? [])
+          setLoadingPrintings(false)
+        }
+      } catch {
+        if (!aborted) setLoadingPrintings(false)
+      }
+    }
+    load()
+    return () => { aborted = true }
+  }, [card.name, card.type_line])
 
   // Fetch the current liked status from Supabase directly (RLS filters by user).
   // Re-run whenever the displayed card changes (user cycles printings).
@@ -294,34 +310,8 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
     return () => { aborted = true }
   }, [userDecks])
 
-  async function loadPrintings() {
-    if (printings.length > 0) {
-      setShowPrintings(!showPrintings)
-      return
-    }
-
-    setLoadingPrintings(true)
-    try {
-      const typeLine = (card.type_line ?? '').toLowerCase()
-      const isToken = /\b(token|emblem|dungeon|plane|scheme)\b/.test(typeLine)
-      const url = isToken
-        ? `/api/cards/printings?name=${encodeURIComponent(card.name)}&type=token`
-        : `/api/cards/printings?name=${encodeURIComponent(card.name)}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setPrintings(data.printings ?? [])
-        setShowPrintings(true)
-      }
-    } catch {
-      // silently fail
-    }
-    setLoadingPrintings(false)
-  }
-
   function selectPrinting(printing: Card) {
     setDisplayCard(printing)
-    setShowPrintings(false)
     onPrintingSelect?.(printing)
   }
 
@@ -460,54 +450,6 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
                 )}
               </div>
 
-              {/* Printings selector button */}
-              <button
-                onClick={loadPrintings}
-                disabled={loadingPrintings}
-                className="flex items-center justify-center gap-2 rounded-lg border border-border bg-bg-card px-3 py-2 text-sm text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
-              >
-                {loadingPrintings ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ChevronDown className={`h-4 w-4 transition-transform ${showPrintings ? 'rotate-180' : ''}`} />
-                )}
-                {displayCard.set_name} ({displayCard.set_code?.toUpperCase()})
-              </button>
-
-              {/* Printings dropdown */}
-              {showPrintings && printings.length > 0 && (
-                <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-bg-card">
-                  {printings.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => selectPrinting(p)}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-bg-hover ${
-                        p.id === displayCard.id ? 'bg-bg-accent/10 text-font-accent' : 'text-font-secondary'
-                      }`}
-                    >
-                      {p.image_small && (
-                        <Image
-                          src={p.image_small}
-                          alt={p.set_name ?? ''}
-                          width={29}
-                          height={40}
-                          className="h-8 w-auto rounded"
-                          unoptimized
-                        />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-medium">
-                          {p.set_name}
-                        </div>
-                        <div className="text-xs text-font-muted">
-                          {p.set_code?.toUpperCase()} #{p.collector_number} · {p.rarity}
-                          {p.prices_usd != null && ` · $${Number(p.prices_usd).toFixed(2)}`}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Details */}
@@ -723,23 +665,72 @@ export default function CardDetail({ card, onClose, onPrintingSelect, onAddToDec
             </div>
           </div>
 
-          {/* Legalities */}
-          {legalities && (
+          {/* Printings carousel */}
+          {loadingPrintings ? (
+            <div className="mt-6 flex items-center justify-center gap-2 py-6 text-sm text-font-muted">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading printings...
+            </div>
+          ) : printings.length > 0 ? (
             <div className="mt-6">
-              <p className="text-sm text-font-muted mb-2">Format Legalities</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {Object.entries(legalities).map(([format, status]) => (
-                  <div
-                    key={format}
-                    className={`px-2 py-1 rounded text-xs font-medium capitalize ${LEGALITY_COLORS[status] || 'bg-bg-cell text-font-muted'}`}
-                  >
-                    <span className="text-font-secondary">{format.replace(/_/g, ' ')}</span>
-                    <span className="ml-1">{status.replace(/_/g, ' ')}</span>
-                  </div>
-                ))}
+              <p className="text-sm text-font-muted mb-3">
+                All Printings ({printings.length})
+              </p>
+              <div className="relative">
+                <div
+                  className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory"
+                  style={{ scrollbarWidth: 'thin' }}
+                >
+                  {printings.map((p) => {
+                    const isSelected = p.id === displayCard.id
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => selectPrinting(p)}
+                        className={`shrink-0 snap-start rounded-lg transition-all ${
+                          isSelected
+                            ? 'ring-2 ring-bg-accent scale-105'
+                            : 'ring-1 ring-border hover:ring-bg-accent/50 hover:scale-[1.02]'
+                        }`}
+                      >
+                        {p.image_small ? (
+                          <img
+                            src={p.image_small}
+                            alt={p.set_name ?? 'Printing'}
+                            width={146}
+                            height={204}
+                            loading="lazy"
+                            className="h-[180px] w-auto rounded-t-lg object-contain bg-bg-cell"
+                          />
+                        ) : (
+                          <div className="h-[180px] w-[128px] flex items-center justify-center rounded-t-lg bg-bg-cell text-font-muted text-xs">
+                            No image
+                          </div>
+                        )}
+                        <div
+                          className={`px-2 py-1.5 rounded-b-lg text-left ${
+                            isSelected ? 'bg-bg-accent/10' : 'bg-bg-card'
+                          }`}
+                        >
+                          <div className="text-[11px] font-medium text-font-primary truncate max-w-[120px]">
+                            {p.set_name}
+                          </div>
+                          <div className="text-[10px] text-font-muted">
+                            {p.set_code?.toUpperCase()} #{p.collector_number}
+                            {p.prices_eur != null && (
+                              <span className="ml-1 text-bg-green">
+                                €{Number(p.prices_eur).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>,
