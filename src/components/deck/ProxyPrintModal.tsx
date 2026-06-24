@@ -1129,7 +1129,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
                       type="number"
                       min={0}
                       max={5}
-                      step={0.5}
+                      step={0.01}
                       value={bleed}
                       onChange={(e) => setBleed(Math.max(0, Number(e.target.value)))}
                       className="w-16 rounded border border-border bg-bg-card px-2 py-1 text-xs text-font-primary"
@@ -1302,7 +1302,7 @@ export default function ProxyPrintModal({ deckId, deckName, cards, userName, use
                     type="number"
                     min={0}
                     max={5}
-                    step={0.5}
+                    step={0.01}
                     value={bleed}
                     disabled={bleedMode === 'none'}
                     onChange={(e) => setBleed(Math.max(0, Number(e.target.value)))}

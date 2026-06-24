@@ -148,7 +148,7 @@ export function computeCardImageLayout(
     return {
       imageDrawBox: trimBox,
       mainImageDrawBox: trimBox,
-      mainFitMode: 'contain',
+      mainFitMode: 'cover',
       bleedImageDrawBox: bleedBox,
       bleedFitMode: 'cover',
     }
@@ -157,7 +157,7 @@ export function computeCardImageLayout(
   return {
     imageDrawBox: trimBox,
     mainImageDrawBox: trimBox,
-    mainFitMode: 'contain',
+    mainFitMode: 'cover',
   }
 }
 
