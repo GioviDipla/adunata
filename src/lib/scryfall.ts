@@ -93,7 +93,13 @@ async function rateLimitedFetch(
     await new Promise((r) => setTimeout(r, 100 - elapsed))
   }
   lastRequestTime = Date.now()
-  return fetch(url, init)
+  return fetch(url, {
+    ...init,
+    headers: {
+      'User-Agent': 'Adunata/1.0 (Magic: The Gathering deck builder)',
+      ...(init?.headers as Record<string, string> | undefined),
+    },
+  })
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────

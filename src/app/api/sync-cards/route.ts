@@ -40,7 +40,7 @@ async function syncCards(request: NextRequest) {
 
   try {
     // 1. Get the bulk data download URL
-    const bulkRes = await fetch('https://api.scryfall.com/bulk-data')
+    const bulkRes = await fetch('https://api.scryfall.com/bulk-data', { headers: { 'User-Agent': 'Adunata/1.0' } })
     if (!bulkRes.ok) {
       return NextResponse.json({ error: 'Failed to fetch bulk data catalog' }, { status: 502 })
     }
