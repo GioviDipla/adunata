@@ -184,8 +184,8 @@ export function Navbar() {
             <span
               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full backdrop-blur-md ring-1 transition-colors ${
                 isActive('/about')
-                  ? 'bg-bg-accent/80 text-font-white ring-font-white/30'
-                  : 'bg-bg-dark/60 text-font-primary ring-white/10 group-hover:bg-white/10'
+                  ? 'bg-bg-orange/80 text-font-white ring-font-white/30'
+                  : 'bg-bg-orange/15 text-bg-orange ring-bg-orange/30 group-hover:bg-bg-orange/25'
               }`}
             >
               <Info className="h-5 w-5" />
@@ -317,8 +317,8 @@ export function Navbar() {
               <span
                 className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full ring-1 backdrop-blur-xl transition-colors ${
                   isActive("/about")
-                    ? "bg-bg-accent/85 text-font-white ring-font-white/40"
-                    : "bg-white/25 text-font-primary ring-white/40 group-hover:bg-white/35"
+                    ? "bg-bg-orange/85 text-font-white ring-font-white/40"
+                    : "bg-bg-orange/20 text-bg-orange ring-bg-orange/40 group-hover:bg-bg-orange/30"
                 }`}
               >
                 <Info className="h-8 w-8" />

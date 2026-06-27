@@ -90,6 +90,159 @@ img {
   --font-family-inter: "Inter", sans-serif;
 }
 
+/* ---------------------------------------------------------------------------
+   Themes
+   The @theme block above defines the default (Dark) palette as :root tokens.
+   Each block below re-declares the same surface/font/border/accent custom
+   properties under a `:root[data-theme="…"]` selector so the whole Tailwind
+   utility layer (which reads `var(--color-…)`) recolors. Semantic status
+   colors (green/red/yellow/orange, mana-*) stay constant on purpose.
+   `auto` is resolved to dark/light in JS — no CSS block needed for it.
+--------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --color-bg-dark: #121218;
+  --color-bg-surface: #1A1A24;
+  --color-bg-card: #22222E;
+  --color-bg-cell: #2A2A38;
+  --color-bg-hover: #33334A;
+  --color-bg-accent: #3B82F6;
+  --color-bg-accent-dark: #2563EB;
+  --color-border: #2E2E3E;
+  --color-border-light: #3A3A4E;
+  --color-font-primary: #F0F0F5;
+  --color-font-secondary: #9CA3AF;
+  --color-font-muted: #6B7280;
+  --color-font-accent: #60A5FA;
+}
+
+:root[data-theme="light"] {
+  --color-bg-dark: #F5F5F7;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-card: #FFFFFF;
+  --color-bg-cell: #EFEFF3;
+  --color-bg-hover: #E4E4EC;
+  --color-bg-accent: #3B82F6;
+  --color-bg-accent-dark: #2563EB;
+  --color-border: #D8D8E0;
+  --color-border-light: #C4C4D0;
+  --color-font-primary: #1A1A24;
+  --color-font-secondary: #52525B;
+  --color-font-muted: #8A8A94;
+  --color-font-accent: #2563EB;
+}
+
+:root[data-theme="midnight"] {
+  --color-bg-dark: #080A12;
+  --color-bg-surface: #0D1019;
+  --color-bg-card: #121624;
+  --color-bg-cell: #181D31;
+  --color-bg-hover: #222A45;
+  --color-bg-accent: #6366F1;
+  --color-bg-accent-dark: #4F46E5;
+  --color-border: #181D31;
+  --color-border-light: #222A45;
+  --color-font-primary: #E6E8F5;
+  --color-font-secondary: #9EA3C2;
+  --color-font-muted: #646A8C;
+  --color-font-accent: #818CF8;
+}
+
+:root[data-theme="sunburned"] {
+  --color-bg-dark: #1B1410;
+  --color-bg-surface: #241A12;
+  --color-bg-card: #2E2116;
+  --color-bg-cell: #3A2A1A;
+  --color-bg-hover: #4A3724;
+  --color-bg-accent: #F97316;
+  --color-bg-accent-dark: #EA580C;
+  --color-border: #3A2A1A;
+  --color-border-light: #4A3724;
+  --color-font-primary: #FBEFE2;
+  --color-font-secondary: #C9B49C;
+  --color-font-muted: #917A63;
+  --color-font-accent: #FB923C;
+}
+
+:root[data-theme="blue"] {
+  --color-bg-dark: #0D1320;
+  --color-bg-surface: #121A2B;
+  --color-bg-card: #172238;
+  --color-bg-cell: #1E2C47;
+  --color-bg-hover: #273A5E;
+  --color-bg-accent: #3B82F6;
+  --color-bg-accent-dark: #2563EB;
+  --color-border: #1E2C47;
+  --color-border-light: #27395C;
+  --color-font-primary: #E8F0FB;
+  --color-font-secondary: #9DB2CE;
+  --color-font-muted: #67809E;
+  --color-font-accent: #60A5FA;
+}
+
+:root[data-theme="yellow"] {
+  --color-bg-dark: #161510;
+  --color-bg-surface: #201E14;
+  --color-bg-card: #2A2718;
+  --color-bg-cell: #36321F;
+  --color-bg-hover: #46412A;
+  --color-bg-accent: #EAB308;
+  --color-bg-accent-dark: #CA8A04;
+  --color-border: #36321F;
+  --color-border-light: #46412A;
+  --color-font-primary: #F6F1DD;
+  --color-font-secondary: #C8BE96;
+  --color-font-muted: #8F8560;
+  --color-font-accent: #FACC15;
+}
+
+:root[data-theme="forest"] {
+  --color-bg-dark: #0E1611;
+  --color-bg-surface: #121F17;
+  --color-bg-card: #16271D;
+  --color-bg-cell: #1D3326;
+  --color-bg-hover: #274736;
+  --color-bg-accent: #22C55E;
+  --color-bg-accent-dark: #16A34A;
+  --color-border: #1D3326;
+  --color-border-light: #274736;
+  --color-font-primary: #E6F2EA;
+  --color-font-secondary: #A2C2AE;
+  --color-font-muted: #6A8C77;
+  --color-font-accent: #4ADE80;
+}
+
+:root[data-theme="crimson"] {
+  --color-bg-dark: #1A0F12;
+  --color-bg-surface: #241419;
+  --color-bg-card: #2E1820;
+  --color-bg-cell: #3A1F29;
+  --color-bg-hover: #4D2935;
+  --color-bg-accent: #EF4444;
+  --color-bg-accent-dark: #DC2626;
+  --color-border: #3A1F29;
+  --color-border-light: #4D2935;
+  --color-font-primary: #F8E8EB;
+  --color-font-secondary: #CCA1AB;
+  --color-font-muted: #946D76;
+  --color-font-accent: #F87171;
+}
+
+:root[data-theme="sepia"] {
+  --color-bg-dark: #EDE4D3;
+  --color-bg-surface: #F7F0E1;
+  --color-bg-card: #FBF6EA;
+  --color-bg-cell: #E7DCC6;
+  --color-bg-hover: #DCCFB4;
+  --color-bg-accent: #B45309;
+  --color-bg-accent-dark: #92400E;
+  --color-border: #D8CBB0;
+  --color-border-light: #C8B894;
+  --color-font-primary: #3B2F1E;
+  --color-font-secondary: #6B5A3F;
+  --color-font-muted: #9A8866;
+  --color-font-accent: #B45309;
+}
+
 body {
   background-color: var(--color-bg-dark);
   color: var(--color-font-primary);
