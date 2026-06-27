@@ -143,8 +143,63 @@ export default async function PlayPage() {
     })
   }
 
+  // Enrich with game stats (turns, life totals, cards played)
+  let gamesWithStats: Array<
+    (typeof gamesWithDetails)[0] & {
+      turnCount: number
+      finalLife: Record<string, number>
+      cardsOnBoard: Record<string, number>
+    }
+  > = []
+
+  if (finishedLobbyIds.length > 0) {
+    const { data: gameStates } = await supabase
+      .from('game_states')
+      .select('lobby_id, turn_number, state_data')
+      .in('lobby_id', finishedLobbyIds)
+
+    const statsMap = new Map<string, { turnCount: number; finalLife: Record<string, number>; cardsOnBoard: Record<string, number> }>()
+    for (const gs of gameStates ?? []) {
+      const sd = gs.state_data as Record<string, unknown> | null
+      const players = (sd?.players ?? {}) as Record<string, { life?: number; battlefield?: unknown[] }>
+      const finalLife: Record<string, number> = {}
+      const cardsOnBoard: Record<string, number> = {}
+      for (const [pid, ps] of Object.entries(players)) {
+        if (ps.life != null) finalLife[pid] = ps.life
+        cardsOnBoard[pid] = Array.isArray(ps.battlefield) ? ps.battlefield.length : 0
+      }
+      statsMap.set(gs.lobby_id, {
+        turnCount: gs.turn_number ?? 0,
+        finalLife,
+        cardsOnBoard,
+      })
+    }
+
+    gamesWithStats = gamesWithDetails.map((g) => ({
+      ...g,
+      ...(statsMap.get(g.id) ?? { turnCount: 0, finalLife: {}, cardsOnBoard: {} }),
+    }))
+  }
+
+  // Resolve player IDs to names for life totals display
+  const statsPlayerIds = new Set<string>()
+  for (const g of gamesWithStats) {
+    for (const pid of Object.keys(g.finalLife)) {
+      statsPlayerIds.add(pid)
+    }
+  }
+  const { data: statsProfiles } = statsPlayerIds.size > 0
+    ? await supabase
+        .from('profiles')
+        .select('id, display_name, username')
+        .in('id', [...statsPlayerIds])
+    : { data: [] }
+  const statsProfileMap = new Map(
+    (statsProfiles ?? []).map((p) => [p.id, p.display_name || p.username || 'Player']),
+  )
+
   const hasActiveLobbies = activeLobbies.length > 0
-  const hasFinishedGames = gamesWithDetails.length > 0
+  const hasFinishedGames = gamesWithStats.length > 0
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
@@ -194,7 +249,11 @@ export default async function PlayPage() {
       {/* Game History */}
       <section className="mb-6">
         {hasFinishedGames ? (
-          <GameHistoryList games={gamesWithDetails} userId={user.id} />
+          <GameHistoryList
+            games={gamesWithStats}
+            userId={user.id}
+            playerNames={statsProfileMap}
+          />
         ) : (
           <div className="rounded-xl border border-border bg-bg-card p-6 text-center">
             <Swords className="mx-auto h-8 w-8 text-font-muted" />
