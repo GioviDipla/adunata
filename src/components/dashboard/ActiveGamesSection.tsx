@@ -57,15 +57,15 @@ export default function ActiveGamesSection({ games, myRoles }: ActiveGamesSectio
   }
 
   function getActionLabel(status: string, isHost: boolean): string {
-    if (status === 'playing') return 'Termina'
-    if (isHost) return 'Elimina'
-    return 'Lascia'
+    if (status === 'playing') return 'Finish'
+    if (isHost) return 'Delete'
+    return 'Leave'
   }
 
   function getActionTitle(status: string, isHost: boolean): string {
-    if (status === 'playing') return 'Termina la partita'
-    if (isHost) return 'Elimina lobby'
-    return 'Lascia lobby'
+    if (status === 'playing') return 'Finish game'
+    if (isHost) return 'Delete lobby'
+    return 'Leave lobby'
   }
 
   return (
@@ -128,7 +128,7 @@ export default function ActiveGamesSection({ games, myRoles }: ActiveGamesSectio
                   disabled={isClosing}
                   className="rounded-md bg-bg-cell px-2 py-1 text-[10px] font-bold text-font-secondary active:bg-bg-hover disabled:opacity-40"
                 >
-                  Annulla
+                  Cancel
                 </button>
               </div>
             ) : (
