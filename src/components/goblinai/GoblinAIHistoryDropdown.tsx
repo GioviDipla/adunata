@@ -80,7 +80,7 @@ export function GoblinAIHistoryDropdown({
     <div ref={containerRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`rounded p-1.5 text-white/50 hover:text-white hover:bg-white/10 transition-colors ${open ? 'bg-white/10 text-white' : ''}`}
+        className={`rounded p-1.5 text-font-muted hover:text-font-primary hover:bg-bg-cell transition-colors ${open ? 'bg-bg-cell text-font-primary' : ''}`}
         aria-label="Storico conversazioni"
         title="Storico conversazioni"
       >
@@ -88,10 +88,10 @@ export function GoblinAIHistoryDropdown({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-white/10 bg-[#1a1a1a] shadow-2xl z-50">
+        <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-border bg-[#1a1a1a] shadow-2xl z-50">
           <button
             onClick={handleNew}
-            className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-white hover:bg-white/5 rounded-t-lg border-b border-white/10"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-sm font-medium text-font-primary hover:bg-bg-cell/40 rounded-t-lg border-b border-border"
           >
             <Plus className="h-4 w-4 text-primary-400" />
             Nuova conversazione
@@ -99,13 +99,13 @@ export function GoblinAIHistoryDropdown({
 
           <div className="max-h-72 overflow-y-auto">
             {loading && (
-              <p className="px-3 py-4 text-center text-xs text-white/40 animate-pulse">
+              <p className="px-3 py-4 text-center text-xs text-font-muted animate-pulse">
                 Caricamento...
               </p>
             )}
 
             {!loading && conversations.length === 0 && (
-              <p className="px-3 py-4 text-center text-xs text-white/40">
+              <p className="px-3 py-4 text-center text-xs text-font-muted">
                 Nessuna conversazione
               </p>
             )}
@@ -114,21 +114,21 @@ export function GoblinAIHistoryDropdown({
               <div
                 key={conv.id}
                 onClick={() => handleSelect(conv)}
-                className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-white/5 ${
-                  conv.id === activeConversationId ? 'bg-white/5' : ''
+                className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-bg-cell/40 ${
+                  conv.id === activeConversationId ? 'bg-bg-cell/40' : ''
                 }`}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">
+                  <p className="text-sm text-font-primary truncate">
                     {conv.title ?? 'Conversazione'}
                   </p>
-                  <p className="text-xs text-white/40 mt-0.5">
+                  <p className="text-xs text-font-muted mt-0.5">
                     {formatRelativeDate(conv.updated_at)}
                   </p>
                 </div>
                 <button
                   onClick={(e) => handleDelete(e, conv.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded text-white/40 hover:text-red-400 hover:bg-white/10 transition-opacity flex-shrink-0"
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded text-font-muted hover:text-red-400 hover:bg-bg-cell transition-opacity flex-shrink-0"
                   aria-label="Elimina conversazione"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

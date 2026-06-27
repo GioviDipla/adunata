@@ -204,12 +204,12 @@ export function GoblinAIPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-bg-dark border-l border-white/10 shadow-2xl sm:w-[420px]">
-      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+    <div className="fixed inset-y-0 right-0 z-50 flex w-full flex-col bg-bg-dark border-l border-border shadow-2xl sm:w-[420px]">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-semibold text-white">GoblinAI</h2>
+          <h2 className="text-lg font-semibold text-font-primary">GoblinAI</h2>
           {activeConversationTitle && (
-            <p className="text-xs text-white/40 truncate">{activeConversationTitle}</p>
+            <p className="text-xs text-font-muted truncate">{activeConversationTitle}</p>
           )}
         </div>
         <GoblinAIHistoryDropdown
@@ -219,7 +219,7 @@ export function GoblinAIPanel({ onClose }: { onClose: () => void }) {
         />
         <button
           onClick={onClose}
-          className="rounded p-1 text-white/50 hover:text-white hover:bg-white/10"
+          className="rounded p-1 text-font-muted hover:text-font-primary hover:bg-bg-cell"
           aria-label="Close"
         >
           <X className="h-5 w-5" />
@@ -228,7 +228,7 @@ export function GoblinAIPanel({ onClose }: { onClose: () => void }) {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && !loading && (
-          <p className="text-sm text-white/50 text-center mt-8">
+          <p className="text-sm text-font-muted text-center mt-8">
             Chiedi una regola. Usa @ per citare ogni carta coinvolta.
           </p>
         )}
@@ -246,7 +246,7 @@ export function GoblinAIPanel({ onClose }: { onClose: () => void }) {
         ))}
 
         {loading && (
-          <p className="text-sm text-white/50 animate-pulse">GoblinAI pensa...</p>
+          <p className="text-sm text-font-muted animate-pulse">GoblinAI pensa...</p>
         )}
 
         {error && (

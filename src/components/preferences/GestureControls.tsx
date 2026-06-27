@@ -1,6 +1,50 @@
 'use client'
 
+import { useState } from 'react'
+import { MousePointerClick, Eye } from 'lucide-react'
 import { usePreferences } from '@/lib/contexts/PreferencesContext'
+import { useCardGestures } from '@/lib/hooks/useCardGestures'
+
+/**
+ * Interactive sandbox: a sample card that reacts to the real gestures
+ * (tap/click, long-press/right-click) through useCardGestures, so the user
+ * can feel their current configuration. The feedback re-labels itself with the
+ * active inversion, matching the explanation table above.
+ */
+function GestureTester() {
+  const [last, setLast] = useState<'primary' | 'secondary' | null>(null)
+  const { getHandlers } = useCardGestures()
+  const handlers = getHandlers({
+    onPrimary: () => setLast('primary'),
+    onSecondary: () => setLast('secondary'),
+  })
+
+  return (
+    <div className="rounded-lg border border-border bg-bg-surface p-3">
+      <p className="mb-2 text-xs font-medium text-font-secondary">
+        Prova i controlli
+      </p>
+      <div
+        {...handlers}
+        className="flex aspect-[16/9] cursor-pointer select-none items-center justify-center rounded-lg border border-dashed border-border-light bg-bg-cell/50 p-4 text-center transition-colors hover:bg-bg-cell"
+      >
+        {last === null ? (
+          <span className="text-xs text-font-muted">
+            Tocca / clicca, oppure long-press / tasto destro qui sopra
+          </span>
+        ) : last === 'primary' ? (
+          <span className="flex items-center gap-2 text-sm font-semibold text-font-accent">
+            <MousePointerClick className="h-4 w-4" /> Azione rapida
+          </span>
+        ) : (
+          <span className="flex items-center gap-2 text-sm font-semibold text-bg-yellow">
+            <Eye className="h-4 w-4" /> Anteprima + menu
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function Toggle({
   checked,
@@ -125,6 +169,8 @@ export default function GestureControls() {
           ? 'Controlli personalizzati attivi: la tabella sopra riflette i tuoi gesti. Le impostazioni valgono nel deck builder, viewer e nel browser carte.'
           : 'Stessa regola ovunque nelle aree deck: tap/click per l’azione rapida, long-press (mobile) o tasto destro (desktop) per l’anteprima con le azioni contestuali.'}
       </p>
+
+      <GestureTester />
     </div>
   )
 }

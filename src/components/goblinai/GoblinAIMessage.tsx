@@ -50,18 +50,18 @@ export function GoblinAIMessage({
       <div
         className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
           isAssistant
-            ? 'bg-white/5 text-white/90'
-            : 'bg-primary-600/30 text-white'
+            ? 'bg-bg-cell/40 text-font-primary'
+            : 'bg-primary-600/30 text-font-primary'
         }`}
       >
         <div className="flex items-center gap-2 mb-1">
-          <p className="text-xs font-semibold text-white/50">
+          <p className="text-xs font-semibold text-font-muted">
             {isAssistant ? 'GoblinAI' : 'Tu'}
           </p>
           {isAssistant && !pendingConfirmation && messageId && (
             <button
               onClick={() => setShowingFeedback(!showingFeedback)}
-              className={`p-0.5 rounded hover:bg-white/10 ${feedbackSent ? 'text-orange-400' : 'text-white/30 hover:text-white/60'}`}
+              className={`p-0.5 rounded hover:bg-bg-cell ${feedbackSent ? 'text-orange-400' : 'text-font-muted hover:text-font-secondary'}`}
               title="Segnala risposta sbagliata"
             >
               <ThumbsDown className="h-3.5 w-3.5" />
@@ -76,13 +76,13 @@ export function GoblinAIMessage({
           <div className="mt-3 flex gap-2">
             <button
               onClick={onConfirm}
-              className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
+              className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-font-white hover:bg-green-700"
             >
               Conferma scenario
             </button>
             <button
               onClick={() => setCorrecting(true)}
-              className="rounded bg-white/10 px-3 py-1 text-xs font-medium text-white/70 hover:bg-white/20"
+              className="rounded bg-bg-cell px-3 py-1 text-xs font-medium text-font-secondary hover:bg-bg-hover"
             >
               Correggi
             </button>
@@ -96,7 +96,7 @@ export function GoblinAIMessage({
               value={correction}
               onChange={(e) => setCorrection(e.target.value)}
               placeholder="Scrivi la correzione..."
-              className="w-full rounded bg-white/10 border border-white/20 px-2 py-1 text-xs text-white placeholder:text-white/30"
+              className="w-full rounded bg-bg-cell border border-border-light px-2 py-1 text-xs text-font-primary placeholder:text-font-muted"
               rows={3}
             />
             <div className="flex gap-2">
@@ -105,13 +105,13 @@ export function GoblinAIMessage({
                   onCorrect(correction)
                   setCorrecting(false)
                 }}
-                className="rounded bg-primary-600 px-3 py-1 text-xs font-medium text-white hover:bg-primary-700"
+                className="rounded bg-primary-600 px-3 py-1 text-xs font-medium text-font-white hover:bg-primary-700"
               >
                 Invia correzione
               </button>
               <button
                 onClick={() => setCorrecting(false)}
-                className="rounded bg-white/10 px-3 py-1 text-xs text-white/50 hover:bg-white/20"
+                className="rounded bg-bg-cell px-3 py-1 text-xs text-font-muted hover:bg-bg-hover"
               >
                 Annulla
               </button>
@@ -121,13 +121,13 @@ export function GoblinAIMessage({
 
         {/* Feedback form for wrong answers */}
         {showingFeedback && !feedbackSent && (
-          <div className="mt-3 space-y-2 border-t border-white/10 pt-2">
-            <p className="text-xs text-white/50">Cosa ha sbagliato GoblinAI?</p>
+          <div className="mt-3 space-y-2 border-t border-border pt-2">
+            <p className="text-xs text-font-muted">Cosa ha sbagliato GoblinAI?</p>
             <textarea
               value={correction}
               onChange={(e) => setCorrection(e.target.value)}
               placeholder="Descrivi l'errore così possiamo migliorare..."
-              className="w-full rounded bg-white/10 border border-white/20 px-2 py-1 text-xs text-white placeholder:text-white/30"
+              className="w-full rounded bg-bg-cell border border-border-light px-2 py-1 text-xs text-font-primary placeholder:text-font-muted"
               rows={2}
             />
             <div className="flex gap-2">
@@ -138,13 +138,13 @@ export function GoblinAIMessage({
                   setCorrection('')
                 }}
                 disabled={!correction.trim()}
-                className="rounded bg-orange-600 px-3 py-1 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-40"
+                className="rounded bg-orange-600 px-3 py-1 text-xs font-medium text-font-white hover:bg-orange-700 disabled:opacity-40"
               >
                 Invia feedback
               </button>
               <button
                 onClick={() => setShowingFeedback(false)}
-                className="rounded bg-white/10 px-3 py-1 text-xs text-white/50 hover:bg-white/20"
+                className="rounded bg-bg-cell px-3 py-1 text-xs text-font-muted hover:bg-bg-hover"
               >
                 Annulla
               </button>
