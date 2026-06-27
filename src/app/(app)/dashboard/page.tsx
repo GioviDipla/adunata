@@ -98,8 +98,7 @@ export default async function DashboardPage() {
     supabase.rpc("get_deck_covers", { p_user_id: user.id }),
   ]);
 
-  const likedIds = (likedRows || []).map((r) => r.card_id);
-  const likedCardIds = likedIds.slice(0, 8).map(Number);
+  const likedCardIds = (likedRows || []).map((r) => r.card_id).slice(0, 8);
 
   // ── My deck covers map (from RPC) ──
   const myCoverMap = new Map(
@@ -126,7 +125,7 @@ export default async function DashboardPage() {
           .select(
             "id, name, image_art_crop, image_normal, image_small, type_line, mana_cost",
           )
-          .in("id", allCardIds)
+          .in("id", allCardIds as any)
       : { data: [] },
     allUserIds.length > 0
       ? supabase
@@ -260,7 +259,7 @@ export default async function DashboardPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             {likedCardIds.map((id) => {
-              const card = cardMap.get(id);
+              const card = cardMap.get(id as any);
               if (!card) return null;
               return (
                 <Link
