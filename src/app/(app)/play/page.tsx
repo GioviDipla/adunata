@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, Heart, Swords } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import CreateLobby from '@/components/play/CreateLobby'
@@ -144,42 +143,44 @@ export default async function PlayPage() {
   }
 
   const hasActiveLobbies = activeLobbies.length > 0
-  const hasFinishedGames = gamesWithDetails.length > 0
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="mb-6 text-2xl font-bold text-font-primary">Play</h1>
+    <div className="mx-auto max-w-4xl px-4 py-8 bg-[#0D0D0D] min-h-screen">
+      {/* HEADER BAR */}
+      <div className="flex items-center justify-between mb-8 pb-4 border-b-2 border-[#3A3A3A]">
+        <h1 className="font-mono text-2xl font-bold tracking-widest uppercase text-[#E8E8E8]">[ OPERATIONS ]</h1>
+        <span className="font-mono text-xs text-[#787878] tracking-wider">REV 2.7 // UNIT/D-01</span>
+      </div>
 
-      {/* Quick Play — Create or join a lobby */}
-      <section id="quick-play" className="mb-6">
-        <h2 className="mb-3 text-lg font-semibold text-font-primary">
-          Quick Play
-        </h2>
+      {/* {'>'} {'>'} {'>'} ACTIVE SORTIES */}
+      <section className="mb-8">
+        <h2 className="font-mono text-sm font-bold tracking-widest uppercase text-[#787878] mb-4">{'>'} {'>'} {'>'} ACTIVE SORTIES</h2>
+        {hasActiveLobbies ? (
+          <ActiveLobbiesList lobbies={activeLobbies} />
+        ) : (
+          <div className="border-2 border-dashed border-[#2A2A2A] bg-[#0D0D0D] p-8 text-center">
+            <p className="font-mono text-sm text-[#787878] tracking-wider">NO ACTIVE SORTIES DETECTED</p>
+            <p className="mt-2 font-mono text-xs text-[#555]">{'>'} {'>'} {'>'} INITIATE NEW OPERATION BELOW</p>
+          </div>
+        )}
+      </section>
+
+      <hr className="border-t-2 border-[#3A3A3A] my-8" />
+
+      {/* {'>'} {'>'} {'>'} INITIATE OPERATION */}
+      <section className="mb-8">
+        <h2 className="font-mono text-sm font-bold tracking-widest uppercase text-[#787878] mb-4">{'>'} {'>'} {'>'} INITIATE OPERATION</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <CreateLobby decks={decks ?? []} />
           <JoinLobby decks={decks ?? []} />
         </div>
       </section>
 
-      {/* Active games */}
-      <section className="mb-6">
-        <h2 className="mb-3 text-sm font-semibold text-font-secondary">
-          Active Games
-        </h2>
-        {hasActiveLobbies ? (
-          <ActiveLobbiesList lobbies={activeLobbies} />
-        ) : (
-          <div className="rounded-xl border border-border bg-bg-card p-6 text-center">
-            <Swords className="mx-auto h-8 w-8 text-font-muted" />
-            <p className="mt-2 text-sm text-font-secondary">
-              No active games. Create a lobby or join one with a code.
-            </p>
-          </div>
-        )}
-      </section>
+      <hr className="border-t-2 border-[#3A3A3A] my-8" />
 
-      {/* 1v1 invitations — challenge a community member + incoming list */}
-      <div className="mb-6">
+      {/* {'>'} {'>'} {'>'} INCOMING CHALLENGES */}
+      <section className="mb-8">
+        <h2 className="font-mono text-sm font-bold tracking-widest uppercase text-[#787878] mb-4">{'>'} {'>'} {'>'} INCOMING CHALLENGES</h2>
         <InvitationsPanel
           decks={decks ?? []}
           initialInvitations={
@@ -189,48 +190,38 @@ export default async function PlayPage() {
           }
           userId={user.id}
         />
-      </div>
-
-      {/* Game History */}
-      <section className="mb-6">
-        {hasFinishedGames ? (
-          <GameHistoryList games={gamesWithDetails} userId={user.id} />
-        ) : (
-          <div className="rounded-xl border border-border bg-bg-card p-6 text-center">
-            <Swords className="mx-auto h-8 w-8 text-font-muted" />
-            <p className="mt-2 text-sm text-font-secondary">
-              No finished games yet. Your completed matches will appear here.
-            </p>
-          </div>
-        )}
       </section>
 
-      {/* Tools — utilities for in-person play */}
-      <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-font-primary">Tools</h2>
+      <hr className="border-t-2 border-[#3A3A3A] my-8" />
+
+      {/* {'>'} {'>'} {'>'} MISSION LOG */}
+      <section className="mb-8">
+        <h2 className="font-mono text-sm font-bold tracking-widest uppercase text-[#787878] mb-4">{'>'} {'>'} {'>'} MISSION LOG</h2>
+        <GameHistoryList games={gamesWithDetails} userId={user.id} />
+      </section>
+
+      <hr className="border-t-2 border-[#3A3A3A] my-8" />
+
+      {/* {'>'} {'>'} {'>'} TOOLS */}
+      <section className="mb-8">
+        <h2 className="font-mono text-sm font-bold tracking-widest uppercase text-[#787878] mb-4">{'>'} {'>'} {'>'} TOOLS</h2>
         <Link
           href="/play/life-counter"
-          className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-surface p-4 transition-colors hover:bg-bg-hover"
+          className="flex items-center justify-between gap-3 border-2 border-[#2A2A2A] bg-[#141414] p-4 transition-colors hover:border-[#787878]"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-red/20">
-              <Heart className="h-5 w-5 text-bg-red" />
-            </div>
+            <span className="font-mono text-lg text-[#FF2A2A]">[+]</span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-font-primary">
-                  Life Counter
-                </span>
-                <span className="rounded-full bg-bg-yellow/20 px-2 py-0.5 text-[10px] font-bold text-bg-yellow">
-                  BETA
-                </span>
+                <span className="font-mono text-sm font-bold text-[#E8E8E8] tracking-widest uppercase">LIFE COUNTER</span>
+                <span className="font-mono text-[10px] text-[#4AF626] tracking-wider">// ACTIVE</span>
               </div>
-              <p className="text-xs text-font-muted">
-                Track life totals during in-person games
+              <p className="font-mono text-xs text-[#787878] mt-1">
+                TRACK LIFE TOTALS DURING IN-PERSON GAMES
               </p>
             </div>
           </div>
-          <ChevronRight className="h-5 w-5 shrink-0 text-font-muted" />
+          <span className="font-mono text-xs text-[#787878]">{'>'}</span>
         </Link>
       </section>
     </div>

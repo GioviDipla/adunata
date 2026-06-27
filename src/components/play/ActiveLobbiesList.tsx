@@ -59,10 +59,7 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
 
   return (
     <div className="mb-6">
-      <h2 className="mb-3 text-sm font-semibold text-font-secondary">Active Games</h2>
-      {lobbies.length === 0 ? (
-        <p className="text-sm text-font-muted">No active games</p>
-      ) : (
+      {lobbies.length === 0 ? null : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {lobbies.map((lobby) => {
             const href = lobby.status === 'playing' ? `/play/${lobby.id}/game` : `/play/${lobby.id}`
@@ -73,7 +70,7 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
             return (
               <div
                 key={lobby.id}
-                className="group relative flex flex-col gap-3 rounded-xl border border-border bg-bg-card p-4 transition-colors hover:border-border-light hover:bg-bg-hover"
+                className="group relative flex flex-col gap-3 rounded-none border border-[#2A2A2A] bg-[#141414] p-4 transition-colors hover:bg-[#1A1A1A]"
               >
                 {/* Main clickable area */}
                 <Link href={href} className="flex flex-col gap-3">
@@ -81,19 +78,19 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
                     <span
                       className={
                         lobby.status === 'playing'
-                          ? 'shrink-0 rounded-full bg-bg-green/20 px-2 py-0.5 text-[11px] font-semibold text-bg-green'
-                          : 'shrink-0 rounded-full bg-bg-yellow/20 px-2 py-0.5 text-[11px] font-semibold text-bg-yellow'
+                          ? 'shrink-0 bg-[#4AF626]/20 px-2 py-0.5 text-[11px] font-semibold text-[#4AF626]'
+                          : 'shrink-0 bg-[#FFB800]/20 px-2 py-0.5 text-[11px] font-semibold text-[#FFB800]'
                       }
                     >
                       {lobby.status === 'playing' ? 'In Game' : 'Waiting'}
                     </span>
-                    <span className="text-xs text-font-muted">{lobby.format}</span>
+                    <span className="font-mono text-xs text-[#787878]">{lobby.format}</span>
                   </div>
-                  <p className="text-sm font-medium text-font-primary line-clamp-2">
+                  <p className="line-clamp-2 font-mono tracking-wider text-[#E8E8E8]">
                     {displayName}
                   </p>
-                  <div className="mt-auto flex items-center gap-3 text-xs text-font-muted">
-                    <span className="flex items-center gap-1">
+                  <div className="mt-auto flex items-center gap-3">
+                    <span className="flex items-center gap-1 font-mono text-xs text-[#555]">
                       <Clock className="h-3 w-3" />
                       {timeAgo(lobby.created_at)}
                     </span>
@@ -106,20 +103,20 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
                     <button
                       onClick={() => handleClose(lobby.id)}
                       disabled={isClosing || isPending}
-                      className="rounded-md bg-bg-red px-2 py-1 text-[10px] font-bold text-font-white active:bg-bg-red/80 disabled:opacity-40"
+                      className="rounded-none bg-[#FF2A2A] px-3 py-1.5 font-mono text-xs tracking-wider text-white disabled:opacity-40"
                     >
                       {isClosing ? (
                         <Loader2 size={11} className="animate-spin" />
                       ) : (
-                        'Close'
+                        '[ CONFIRM ]'
                       )}
                     </button>
                     <button
                       onClick={() => setConfirming(null)}
                       disabled={isClosing}
-                      className="rounded-md bg-bg-cell px-2 py-1 text-[10px] font-bold text-font-secondary active:bg-bg-hover disabled:opacity-40"
+                      className="rounded-none bg-[#1A1A1A] px-3 py-1.5 font-mono text-xs tracking-wider text-[#787878] disabled:opacity-40"
                     >
-                      Cancel
+                      [ CANCEL ]
                     </button>
                   </div>
                 ) : (
@@ -128,7 +125,7 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
                       e.preventDefault()
                       setConfirming(lobby.id)
                     }}
-                    className="absolute top-3 right-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-font-muted transition-all hover:bg-bg-red/10 hover:text-bg-red sm:opacity-0 sm:group-hover:opacity-100"
+                    className="absolute top-3 right-3 flex h-11 w-11 shrink-0 items-center justify-center text-[#787878] transition-all hover:bg-[#FF2A2A]/10 hover:text-[#FF2A2A] sm:opacity-0 sm:group-hover:opacity-100"
                     title="Close lobby"
                     aria-label="Close lobby"
                   >
@@ -141,7 +138,7 @@ export default function ActiveLobbiesList({ lobbies }: ActiveLobbiesListProps) {
         </div>
       )}
       {error && (
-        <p className="mt-2 text-xs text-bg-red">{error}</p>
+        <p className="mt-2 font-mono text-xs text-[#FF2A2A]">{error}</p>
       )}
     </div>
   )
