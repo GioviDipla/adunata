@@ -62,6 +62,13 @@ export async function applyWithBotLoop(
 ): Promise<GameState> {
   let s = applyAction(state, action)
 
+  if (config.type !== 'ghost') {
+    console.log('[GoblinAI Bot] loop start. phase:', s.phase, 'turn:', s.turn,
+      'activePlayer:', s.activePlayerId === botId ? 'bot' : 'human',
+      'priority:', s.priorityPlayerId === botId ? 'bot' : 'human',
+      'hand:', s.players[botId]?.hand?.length ?? 0, 'cards')
+  }
+
   let iterations = 0
   while (iterations < 100) {
     // Bot mulligan: auto-keep immediately
@@ -106,12 +113,15 @@ export async function applyWithBotLoop(
 
         // 2. Heuristic returned null → need AI decision
         if (needsAIDecision(s, botId, cardMap)) {
+          console.log('[GoblinAI Bot] calling AI for decision... phase:', s.phase)
           const aiAction = await fetchAIDecision(s, botId, cardMap)
           if (aiAction) {
+            console.log('[GoblinAI Bot] AI action:', aiAction.type, aiAction.text)
             s = applyAction(s, aiAction)
             iterations++
             continue
           }
+          console.log('[GoblinAI Bot] AI returned no action, falling back to pass')
         }
 
         // 3. Fallback: pass
