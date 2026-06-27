@@ -6,6 +6,8 @@ import { GAME_LOG_COLUMNS, CARD_GAME_COLUMNS } from '@/lib/supabase/columns'
 import GameHistoryView from '@/components/play/GameHistoryView'
 import type { CardMap, LogEntry } from '@/lib/game/types'
 import { toCardMapEntry } from '@/lib/game/card-map'
+import { computeGameStats } from '@/lib/game/stats'
+import type { GameStats } from '@/lib/game/stats'
 
 export default async function GameHistoryPage({
   params,
@@ -103,6 +105,17 @@ export default async function GameHistoryPage({
     createdAt: row.created_at,
   }))
 
+  // Compute stats
+  const playerIds = (players ?? []).map((p) => p.user_id)
+  const stats: GameStats = computeGameStats(
+    log,
+    cardMap,
+    playerIds,
+    lobby.winner_id,
+    lobby.started_at,
+    lobby.updated_at,
+  )
+
   return (
     <GameHistoryView
       gameName={lobby.name ?? lobby.lobby_code}
@@ -113,6 +126,7 @@ export default async function GameHistoryPage({
       cardMap={cardMap}
       startedAt={lobby.started_at}
       finishedAt={lobby.updated_at}
+      stats={stats}
     />
   )
 }
