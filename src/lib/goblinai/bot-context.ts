@@ -178,17 +178,26 @@ export function buildBotPrompt(
   // ── Decision prompt ──
   lines.push(`=== YOUR DECISION ===`)
   if (state.phase === 'main1' || state.phase === 'main2') {
-    lines.push(`You are in your main phase. You may cast ONE creature from your hand.`)
-    lines.push(`Evaluate ALL cards in your hand. Consider: mana cost, power/toughness, keywords (Flying, Deathtouch, Haste, etc.), ETB effects, and how each card interacts with the opponent's board.`)
+    lines.push(`You are in your main phase. You may cast ONE card from your hand.`)
+    lines.push(`You can play ANY card type:`)
+    lines.push(`  - Creatures → go to your battlefield. They can attack/block.`)
+    lines.push(`  - Enchantments, Artifacts, Planeswalkers → go to your battlefield as permanents.`)
+    lines.push(`  - Instants, Sorceries → resolve immediately and go to graveyard. These can remove opponent's creatures, draw cards, deal damage, counter spells, create tokens, etc.`)
+    lines.push(`  - Lands → go to battlefield, tap for mana.`)
+    lines.push(``)
+    lines.push(`Evaluate ALL cards in your hand. Read their oracle text carefully. Consider:`)
+    lines.push(`  - What does this card DO? (removal? pump? draw? token creation? protection?)`)
+    lines.push(`  - Is now the right time? (removal when opponent has a big threat, draw when you need cards)`)
+    lines.push(`  - Does it have immediate impact? (ETB effects, haste, removal) vs delayed value (upkeep triggers)`)
     if (opponent?.battlefield.length) {
-      lines.push(`Threat assessment: opponent has ${opponent.battlefield.length} permanents. Look at their card texts — do they have flyers you need to block? Are they threatening lethal damage?`)
+      lines.push(`  - Opponent threats: read each opponent permanent's text. Use removal on the most dangerous one.`)
     }
     lines.push(`Response: {"action":"play_card","instanceId":"<id>","reasoning":"..."} or {"action":"pass_priority"}`)
   } else if (state.phase === 'declare_attackers' && state.activePlayerId === botId) {
     lines.push(`You are declaring attackers. Your untapped creatures can attack.`)
     if (opponent?.battlefield.length) {
       const untappedOppBlocker = opponent.battlefield.filter((c) => !c.tapped).length
-      lines.push(`Opponent has ${untappedOppBlocker} untapped creature(s) that can block. Evaluate combat math carefully:`)
+      lines.push(`Opponent has ${untappedOppBlocker} untapped creature(s) that can block. Evaluate combat math:`)
     }
     lines.push(`Consider: can you deal lethal damage? Will opponent be forced into unfavorable blocks? Do you need to hold back creatures to block on opponent's next turn?`)
     lines.push(`Response: {"action":"declare_attackers","attackerIds":["id1"],"reasoning":"..."} or {"action":"pass_priority"} for no attacks`)

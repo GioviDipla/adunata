@@ -51,6 +51,12 @@ export async function POST(request: Request) {
           return NextResponse.json({ action: { type: 'pass_priority', playerId: botId, data: {}, text: '' } })
         }
         const card = cardMap[instanceId]
+        const typeLine = card?.typeLine?.toLowerCase() ?? ''
+
+        // Instants and sorceries resolve immediately → graveyard
+        const isInstantOrSorcery = typeLine.includes('instant') || typeLine.includes('sorcery')
+        const destination = isInstantOrSorcery ? 'graveyard' : 'battlefield'
+
         action = {
           type: 'play_card',
           playerId: botId,
@@ -58,11 +64,11 @@ export async function POST(request: Request) {
             instanceId,
             cardId: card?.cardId ?? 0,
             from: 'hand',
-            to: 'battlefield',
+            to: destination,
             isCommander: card?.isCommander ?? false,
             isToken: false,
           },
-          text: `GoblinAI plays ${card?.name ?? 'a card'}. (${parsed.reasoning ?? 'AI decision'})`,
+          text: `GoblinAI casts ${card?.name ?? 'a card'}. (${parsed.reasoning ?? 'AI decision'})`,
         }
         break
       }

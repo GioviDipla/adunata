@@ -33,14 +33,16 @@ export function needsAIDecision(state: GameState, botId: string, cardMap: CardMa
   const phase = state.phase
   const isBotTurn = state.activePlayerId === botId
 
-  // Main phase: AI decides which creature to cast
+  // Main phase: AI decides which card to play (any non-land type)
   if (isBotTurn && (phase === 'main1' || phase === 'main2')) {
-    // Only ask AI if there are creatures in hand (lands handled by heuristic)
-    const hasCreatures = botState.hand.some((iid) => {
+    const hasPlayable = botState.hand.some((iid) => {
       const card = cardMap[iid]
-      return card && card.typeLine?.toLowerCase().includes('creature')
+      if (!card) return false
+      const type = card.typeLine?.toLowerCase() ?? ''
+      // Lands handled by heuristic — only ask AI for spells/permanents
+      return !type.includes('land')
     })
-    return hasCreatures
+    return hasPlayable
   }
 
   // Declare attackers: AI decides which creatures attack
