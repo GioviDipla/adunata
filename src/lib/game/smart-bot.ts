@@ -110,12 +110,14 @@ export function botDecideActionHeuristic(
         }
       }
     }
-    // If no land, check if AI is needed for creatures
-    const hasCreatures = botState.hand.some((iid) => {
+    // If no land, check if AI is needed for ANY non-land card
+    const hasPlayable = botState.hand.some((iid) => {
       const card = cardMap[iid]
-      return card && card.typeLine?.toLowerCase().includes('creature')
+      if (!card) return false
+      const type = card.typeLine?.toLowerCase() ?? ''
+      return !type.includes('land')
     })
-    if (hasCreatures) return null // Let AI decide
+    if (hasPlayable) return null // Let AI decide which card to play
   }
 
   // Declare attackers/blockers: let AI decide (return null)
