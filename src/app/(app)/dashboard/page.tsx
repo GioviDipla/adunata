@@ -5,19 +5,13 @@ import { CARD_GRID_COLUMNS } from "@/lib/supabase/columns";
 import {
   Swords,
   ArrowRight,
-  Clock,
-  Users,
   Heart,
   Search,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-
-const STATUS_LABELS: Record<string, string> = {
-  waiting: "Waiting",
-  playing: "In progress",
-};
+import ActiveGamesSection from "@/components/dashboard/ActiveGamesSection";
 
 function timeAgo(dateStr: string): string {
   const date = new Date(dateStr);
@@ -45,7 +39,7 @@ export default async function DashboardPage() {
     { data: profile },
     { data: previewCards },
     { data: likedRows },
-    { data: activeGames },
+    { data: myPlayers },
     { data: publicDecks },
     { data: myDecks },
     { data: myDeckCovers },
@@ -66,12 +60,11 @@ export default async function DashboardPage() {
       .select("card_id")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
+    // Get user's game_players rows to find their lobbies
     supabase
-      .from("game_lobbies")
-      .select("id, name, format, status, host_user_id, created_at")
-      .in("status", ["waiting", "playing"])
-      .order("created_at", { ascending: false })
-      .limit(5),
+      .from("game_players")
+      .select("lobby_id")
+      .eq("user_id", user.id),
     // Public decks via RPC: dynamic cover (commander or first main card),
     // creator names, commander, likes, price — all in one call. No reliance
     // on the stored decks.cover_card_id (null for most decks).
@@ -105,41 +98,38 @@ export default async function DashboardPage() {
     (myDeckCovers ?? []).map((c) => [c.deck_id, c]),
   );
 
-  // ── Collect IDs for batch 2 ──
-  // Public decks come from the RPC with their own cover + creator fields,
-  // so only game-host profile IDs need resolving here.
-  const gameHostIds = [
-    ...new Set(
-      (activeGames ?? []).map((g) => g.host_user_id).filter(Boolean),
-    ),
-  ];
-  const allUserIds = [...new Set([...gameHostIds])];
+  // ── Fetch active games filtered to user's own lobbies ──
+  const myLobbyIds = (myPlayers || []).map((p) => p.lobby_id);
 
-  // ── Batch 2: resolve liked card images + game-host profiles ──
+  const { data: activeGames } = myLobbyIds.length > 0
+    ? await supabase
+        .from("game_lobbies")
+        .select("id, name, format, status, host_user_id, created_at")
+        .in("id", myLobbyIds)
+        .in("status", ["waiting", "playing"])
+        .order("created_at", { ascending: false })
+        .limit(5)
+    : { data: [] };
+
+  // Role lookup: is the current user the host of each game?
+  const myGameRoles = new Map(
+    (activeGames || []).map((g) => [g.id, g.host_user_id === user.id]),
+  );
+
+  // ── Batch 2: resolve liked card images ──
   const allCardIds = [...new Set([...likedCardIds])];
 
-  const [{ data: cardDetails }, { data: allProfiles }] = await Promise.all([
-    allCardIds.length > 0
-      ? admin
-          .from("cards")
-          .select(
-            "id, name, image_art_crop, image_normal, image_small, type_line, mana_cost",
-          )
-          .in("id", allCardIds as any)
-      : { data: [] },
-    allUserIds.length > 0
-      ? supabase
-          .from("profiles")
-          .select("id, username, display_name")
-          .in("id", allUserIds)
-      : { data: [] },
-  ]);
+  const { data: cardDetails } = await (allCardIds.length > 0
+    ? admin
+        .from("cards")
+        .select(
+          "id, name, image_art_crop, image_normal, image_small, type_line, mana_cost",
+        )
+        .in("id", allCardIds as any)
+    : { data: [] });
 
   const cardMap = new Map(
     (cardDetails ?? []).map((c) => [c.id, c]),
-  );
-  const profileMap = new Map(
-    (allProfiles ?? []).map((p) => [p.id, p]),
   );
 
   const displayName =
@@ -309,49 +299,10 @@ export default async function DashboardPage() {
               View all <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {activeGames!.map((game) => {
-              const host = profileMap.get(game.host_user_id);
-              const hostName =
-                host?.display_name || host?.username || "Unknown";
-              return (
-                <Link
-                  key={game.id}
-                  href={`/play/${game.id}`}
-                  className="group flex flex-col gap-3 rounded-xl border border-border bg-bg-card p-4 transition-colors hover:border-border-light hover:bg-bg-hover"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={
-                        game.status === "playing"
-                          ? "shrink-0 rounded-full bg-bg-green/20 px-2 py-0.5 text-[11px] font-semibold text-bg-green"
-                          : "shrink-0 rounded-full bg-bg-yellow/20 px-2 py-0.5 text-[11px] font-semibold text-bg-yellow"
-                      }
-                    >
-                      {STATUS_LABELS[game.status] || game.status}
-                    </span>
-                    <span className="text-xs text-font-muted">
-                      {game.format}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium text-font-primary line-clamp-2">
-                    {game.name || "Unnamed lobby"}
-                  </p>
-                  <div className="mt-auto flex items-center gap-3 text-xs text-font-muted">
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      {hostName}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {timeAgo(game.created_at)}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+          <ActiveGamesSection
+            games={activeGames!}
+            myRoles={myGameRoles}
+          />
         </section>
       )}
 
