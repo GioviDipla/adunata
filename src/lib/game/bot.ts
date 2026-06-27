@@ -136,11 +136,41 @@ export async function applyWithBotLoop(
       continue
     }
 
-    // During bot's turn, auto-pass for human too
+    // Auto-pass for human during bot's turn (bot is playing solo)
     if (s.activePlayerId === botId && s.priorityPlayerId !== botId) {
       s = applyAction(s, {
         type: 'pass_priority',
         playerId: s.priorityPlayerId,
+        data: {},
+        text: '',
+      })
+      iterations++
+      continue
+    }
+
+    // Auto-pass for human during their own end_step/cleanup
+    // so the turn transitions to the bot without extra clicks
+    if (
+      s.activePlayerId !== botId &&
+      s.priorityPlayerId !== botId &&
+      (s.phase === 'end_step' || s.phase === 'cleanup')
+    ) {
+      s = applyAction(s, {
+        type: 'pass_priority',
+        playerId: s.priorityPlayerId,
+        data: {},
+        text: '',
+      })
+      iterations++
+      continue
+    }
+
+    // Auto-pass for bot when human is active but bot has priority
+    // (e.g. during human's main phase when bot needs to respond)
+    if (s.activePlayerId !== botId && s.priorityPlayerId === botId) {
+      s = applyAction(s, {
+        type: 'pass_priority',
+        playerId: botId,
         data: {},
         text: '',
       })
