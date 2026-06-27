@@ -219,3 +219,15 @@ Distinti perché in MTG sono concetti diversi (una carta può avere colori nel c
 **Pattern riutilizzato:** `CardAutocomplete` + `UserAutocomplete` replicano `AddCardSearch` (300ms debounce, AbortController, keyboard nav ArrowUp/Down/Enter/Esc, click-outside close, `<img>` consistente col codebase card-search).
 
 **RPC:** `p_creator` (text ILIKE) → `p_creator_id` (text, cast uuid, exact). `p_commander` ILIKE `%X%` → exact `=`. DROP+CREATE (rename param non permesso via CREATE OR REPLACE). Color filter (mana cost) resta contains (non menzionato da utente).
+
+---
+
+## 2026-06-27 — Preferenze utente: temi + personalizzazione controlli
+
+**Storage: `localStorage` per-device, non DB.** Le preferenze (tema, inversione controlli) vivono in `localStorage` (`adunata:prefs`) via `PreferencesContext`, non nei `profiles` Supabase. Perché: (1) il tema deve applicarsi prima del paint anche su pagine pubbliche/anon e pre-login — un fetch DB introdurrebbe flash; (2) l'inversione controlli è naturalmente per-dispositivo (desktop e mobile hanno contesti d'input diversi); (3) zero migration, zero round-trip, funziona offline. Trade-off: non sincronizza tra dispositivi — accettabile e anzi desiderabile per controlli per-device.
+
+**No-flash tema: script inline bloccante in `<head>`.** Eccezione consapevole alla regola "usa next/script": il tema deve essere applicato su `<html data-theme>` PRIMA del primo paint per evitare flash della palette default. `next/script` (anche `beforeInteractive`) non garantisce esecuzione pre-paint. Usato `<script dangerouslySetInnerHTML>` in `<head>` del root layout + `suppressHydrationWarning` su `<html>`.
+
+**Temi: CSS-var override per `:root[data-theme="…"]`.** Tailwind v4 `@theme` registra i token come default (= Dark). Ogni tema ridichiara le stesse `--color-*` sotto `:root[data-theme="x"]` (specificità (0,2,0) > `:root`), così tutto il layer di utility Tailwind ricolora senza toccare i componenti. 10 temi: auto, dark, light, midnight, sunburned, blue, yellow, forest, crimson, sepia. Colori semantici (green/red/yellow/orange di stato, mana-*) restano costanti. `auto` risolto in JS via `prefers-color-scheme` (con listener live).
+
+**Controlli: `useCardGestures` factory hook centralizzato.** Un solo hook incapsula long-press + routing click/right-click + inversione, condiviso da tutte le superfici card delle aree deck (DeckGridView/DeckTextView/DeckCard/CardItem). Forma factory (`getHandlers({onPrimary,onSecondary})`) per chiamare l'hook una volta e generare props per-card senza violare le regole degli hooks. Default: desktop sx=primario/dx=secondario, mobile tap=primario/long-press=secondario. `invertDesktop`/`invertMobile` indipendenti. Ambito: solo aree deck (la partita mantiene controlli fissi, scelta utente). La tabella spiegazione in `/about` e `/profile` (`GestureControls`) si rietichetta live in base alle preferenze.

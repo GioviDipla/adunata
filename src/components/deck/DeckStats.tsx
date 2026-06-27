@@ -136,7 +136,7 @@ export default function DeckStats({ cards, format, commanderIdentity }: DeckStat
   return (
     <div className="flex flex-col gap-4">
       {/* Tab bar — horizontal scroll on mobile */}
-      <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 pb-1">
+      <div className="scrollbar-hide -mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 pb-1">
         {TABS.map((t) => (
           <button
             key={t.key}

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import PlayGame from '@/components/play/PlayGame'
-import { GHOST_BOT } from '@/lib/game/bot'
+import { GHOST_BOT, SMART_BOT, BotConfig } from '@/lib/game/bot'
 import { CARD_GAME_COLUMNS, DECK_DETAIL_COLUMNS } from '@/lib/supabase/columns'
 import type { GameState, CardMap, PlayerState, CombatState } from '@/lib/game/types'
 import { toCardMapEntry } from '@/lib/game/card-map'
@@ -23,10 +23,13 @@ function shuffle<T>(arr: T[]): T[] {
 
 export default async function GoldfishPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ bot?: string }>
 }) {
   const { id } = await params
+  const { bot: botType } = await searchParams
   const user = await getAuthenticatedUser()
   if (!user) redirect('/login')
 
@@ -43,6 +46,8 @@ export default async function GoldfishPage({
 
   if (deckError || !deck) redirect('/decks')
   if (deck.user_id !== user.id) redirect('/decks')
+
+  const botConfig: BotConfig = botType === 'ghost' ? GHOST_BOT : SMART_BOT
 
   // Build card instances and CardMap
   const cardMap: CardMap = {}
@@ -112,7 +117,7 @@ export default async function GoldfishPage({
   // numbers. Hand stays empty (goldfish = no opponent plays).
   const shuffledGhostLibrary = shuffle(ghostLibrary)
   const ghostState: PlayerState = {
-    life: GHOST_BOT.life,
+    life: botConfig.life,
     library: shuffledGhostLibrary,
     libraryCount: shuffledGhostLibrary.length,
     hand: [],
@@ -174,7 +179,7 @@ export default async function GoldfishPage({
       initialState={initialState}
       initialCardMap={cardMap}
       botId={BOT_ID}
-      botConfig={GHOST_BOT}
+      botConfig={botConfig}
       deckId={id}
       deckTokens={deckTokensList}
     />

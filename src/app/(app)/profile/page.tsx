@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import ThemePicker from '@/components/preferences/ThemePicker';
+import GestureControls from '@/components/preferences/GestureControls';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -286,6 +288,30 @@ export default function ProfilePage() {
             {profileLoading ? 'Saving...' : 'Save'}
           </button>
         </form>
+      </section>
+
+      {/* Preferenze */}
+      <section className="rounded-xl border border-border bg-bg-surface p-5">
+        <h2 className="mb-4 text-lg font-semibold text-font-primary">
+          Preferenze
+        </h2>
+        <div className="space-y-5">
+          <div>
+            <label className="mb-1 block text-sm text-font-secondary">Tema</label>
+            <p className="mb-2 text-xs text-font-muted">
+              Scegli i colori dell&apos;interfaccia. La modifica è immediata.
+            </p>
+            <ThemePicker />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-font-secondary">Controlli</label>
+            <p className="mb-2 text-xs text-font-muted">
+              Personalizza tocco rapido e anteprima per carte e liste.
+            </p>
+            <GestureControls />
+          </div>
+        </div>
       </section>
 
       {/* Change Password */}

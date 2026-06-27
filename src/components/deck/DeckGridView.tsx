@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { Crown, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import UpscaledBadge from '@/components/cards/UpscaledBadge'
+import { useCardGestures } from '@/lib/hooks/useCardGestures'
+import { usePreferences } from '@/lib/contexts/PreferencesContext'
 import type { Database } from '@/types/supabase'
-
-const LONG_PRESS_MS = 350
-const LONG_PRESS_MOVE_PX = 10
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -43,18 +42,6 @@ interface DeckGridViewProps {
   cols?: number
 }
 
-// Inline long-press tracker shared across the grid's cards. The
-// `triggered` flag is a one-shot — `consume()` returns the value and
-// clears it so a long-press doesn't suppress the next tap. `start`
-// records the pointer position so a drift > LONG_PRESS_MOVE_PX cancels
-// the press (treats it as a scroll).
-interface LongPressRef {
-  timer: ReturnType<typeof setTimeout> | null
-  triggered: boolean
-  startX: number
-  startY: number
-}
-
 export default function DeckGridView({
   cards,
   onQuantityChange,
@@ -70,48 +57,16 @@ export default function DeckGridView({
   cols,
 }: DeckGridViewProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
-  const longPressRef = useRef<LongPressRef>({
-    timer: null,
-    triggered: false,
-    startX: 0,
-    startY: 0,
-  })
+  // Floating zoom preview shown on mouse hover (desktop only — gated by
+  // `hidden md:block` on the preview node, so it never appears on touch).
+  const [hoverCard, setHoverCard] = useState<{ card: CardRow; rect: DOMRect } | null>(null)
+  // Centralised gesture handling + user control inversion (desktop click /
+  // mobile long-press), shared with the other deck-area surfaces.
+  const { getHandlers } = useCardGestures()
+  // Hover-zoom preview can be turned off in preferences (desktop only).
+  const { prefs } = usePreferences()
+  const hoverZoomEnabled = prefs.gridHoverZoom
 
-  const startLongPress = (e: React.PointerEvent, cb: () => void) => {
-    const ref = longPressRef.current
-    if (ref.timer) clearTimeout(ref.timer)
-    ref.triggered = false
-    ref.startX = e.clientX
-    ref.startY = e.clientY
-    ref.timer = setTimeout(() => {
-      ref.triggered = true
-      ref.timer = null
-      cb()
-    }, LONG_PRESS_MS)
-  }
-  const cancelLongPress = () => {
-    const ref = longPressRef.current
-    if (ref.timer) {
-      clearTimeout(ref.timer)
-      ref.timer = null
-    }
-  }
-  const handlePointerMove = (e: React.PointerEvent) => {
-    const ref = longPressRef.current
-    if (!ref.timer) return
-    if (
-      Math.abs(e.clientX - ref.startX) > LONG_PRESS_MOVE_PX ||
-      Math.abs(e.clientY - ref.startY) > LONG_PRESS_MOVE_PX
-    ) {
-      cancelLongPress()
-    }
-  }
-  const consumeLongPress = () => {
-    const ref = longPressRef.current
-    const v = ref.triggered
-    ref.triggered = false
-    return v
-  }
   if (cards.length === 0) {
     return (
       <div className="rounded-xl border border-border-light border-dashed bg-bg-surface p-8 text-center">
@@ -130,9 +85,9 @@ export default function DeckGridView({
     ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
     : undefined
 
-  // Editing mode = onMoveToBoard wired. In editing mode tap opens the
-  // context menu and long-press / right-click opens the card detail
-  // modal. View mode (no onMoveToBoard) keeps tap = open detail.
+  // Editing mode = onMoveToBoard wired. In editing mode the quick action opens
+  // the context menu and the preview gesture opens the card detail modal. View
+  // mode (no onMoveToBoard) keeps both gestures on open-detail.
   const editingMode = !!onMoveToBoard
 
   return (
@@ -141,30 +96,21 @@ export default function DeckGridView({
         const commander = isCommander?.(entry.card.id) ?? false
         const openContext = (x: number, y: number) =>
           setContextMenu({ x, y, cardId: entry.card.id, board: entry.board })
+        const gestures = getHandlers({
+          onPrimary: editingMode
+            ? (c) => openContext(c.x, c.y)
+            : () => onCardClick?.(entry.card),
+          onSecondary: () => onCardClick?.(entry.card),
+        })
         return (
           <div
             key={`${entry.card.id}-${entry.board}`}
-            className={`group relative rounded-lg overflow-hidden transition-all ${
+            {...gestures}
+            className={`group relative cursor-pointer rounded-lg overflow-hidden transition-all ${
               commander
                 ? 'ring-2 ring-bg-yellow shadow-lg shadow-bg-yellow/20'
                 : 'ring-1 ring-border hover:ring-border-light'
             }`}
-            onContextMenu={(e) => {
-              if (!editingMode) return
-              e.preventDefault()
-              // Right-click in editing mode opens card detail (was: context).
-              onCardClick?.(entry.card)
-            }}
-            onPointerDown={(e) => {
-              if (editingMode && e.pointerType === 'touch') {
-                startLongPress(e, () => onCardClick?.(entry.card))
-              }
-            }}
-            onPointerMove={handlePointerMove}
-            onPointerUp={cancelLongPress}
-            onPointerLeave={cancelLongPress}
-            onPointerCancel={cancelLongPress}
-            style={{ touchAction: 'manipulation' }}
           >
             {/* Card image */}
             {entry.card.image_normal ? (
@@ -172,39 +118,28 @@ export default function DeckGridView({
                 <img
                   src={entry.card.image_normal}
                   alt={entry.card.name}
-                  className="w-full h-auto cursor-pointer select-none"
+                  className="w-full h-auto select-none"
                   loading="lazy"
                   draggable={false}
-                  onClick={(e) => {
-                    if (consumeLongPress()) return
-                  if (editingMode) {
-                    openContext(e.clientX, e.clientY)
-                  } else {
-                    onCardClick?.(entry.card)
+                  onMouseEnter={
+                    hoverZoomEnabled
+                      ? (e) =>
+                          setHoverCard({ card: entry.card, rect: e.currentTarget.getBoundingClientRect() })
+                      : undefined
                   }
-                }}
-              />
-              {entry.isFoil && (
-                <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-bg-yellow/90 text-bg-dark backdrop-blur-sm">
-                  <Sparkles className="h-3 w-3" />
-                </div>
-              )}
-              {entry.card.has_upscaled_2x && (
-                <UpscaledBadge className={`absolute right-1.5 ${entry.board === 'removed' && onMoveToBoard ? 'bottom-8' : 'bottom-1.5'}`} />
-              )}
+                  onMouseLeave={hoverZoomEnabled ? () => setHoverCard(null) : undefined}
+                />
+                {entry.isFoil && (
+                  <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-bg-yellow/90 text-bg-dark backdrop-blur-sm">
+                    <Sparkles className="h-3 w-3" />
+                  </div>
+                )}
+                {entry.card.has_upscaled_2x && (
+                  <UpscaledBadge className={`absolute right-1.5 ${entry.board === 'removed' && onMoveToBoard ? 'bottom-8' : 'bottom-1.5'}`} />
+                )}
               </div>
             ) : (
-              <div
-                className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2 cursor-pointer select-none"
-                onClick={(e) => {
-                  if (consumeLongPress()) return
-                  if (editingMode) {
-                    openContext(e.clientX, e.clientY)
-                  } else {
-                    onCardClick?.(entry.card)
-                  }
-                }}
-              >
+              <div className="flex aspect-[488/680] items-center justify-center bg-bg-cell p-2 select-none">
                 <span className="text-center text-xs text-font-muted">
                   {entry.card.name}
                 </span>
@@ -251,9 +186,10 @@ export default function DeckGridView({
                 <div className="flex items-center gap-1">
                   {onQuantityChange && (
                     <button
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.stopPropagation()
                         onQuantityChange(entry.card.id, entry.quantity - 1, entry.board)
-                      }
+                      }}
                       className="flex h-6 flex-1 items-center justify-center rounded bg-bg-cell/80 text-xs font-medium text-font-primary hover:bg-bg-hover"
                     >
                       -
@@ -261,9 +197,10 @@ export default function DeckGridView({
                   )}
                   {onQuantityChange && (
                     <button
-                      onClick={() =>
+                      onClick={(e) => {
+                        e.stopPropagation()
                         onQuantityChange(entry.card.id, entry.quantity + 1, entry.board)
-                      }
+                      }}
                       className="flex h-6 flex-1 items-center justify-center rounded bg-bg-cell/80 text-xs font-medium text-font-primary hover:bg-bg-hover"
                     >
                       +
@@ -275,6 +212,27 @@ export default function DeckGridView({
           </div>
         )
       })}
+      {/* Floating zoom preview on hover — desktop only (`hidden md:block`).
+          Positioned to the right of the hovered card, clamped to the
+          viewport so it never spills off-screen. */}
+      {hoverZoomEnabled && hoverCard && hoverCard.card.image_normal && (
+        <div
+          className="pointer-events-none fixed z-50 hidden md:block"
+          style={{
+            left: Math.min(hoverCard.rect.right + 8, window.innerWidth - 240),
+            top: Math.max(8, Math.min(hoverCard.rect.top, window.innerHeight - 340)),
+          }}
+        >
+          <img
+            src={hoverCard.card.image_normal}
+            alt={hoverCard.card.name}
+            className="h-auto w-56 rounded-lg shadow-2xl"
+          />
+          {hoverCard.card.has_upscaled_2x && (
+            <UpscaledBadge className="absolute bottom-1.5 right-1.5" />
+          )}
+        </div>
+      )}
       {contextMenu && onMoveToBoard && (() => {
         const entry = cards.find(
           (e) => e.card.id === contextMenu.cardId && e.board === contextMenu.board,

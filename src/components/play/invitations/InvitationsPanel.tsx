@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Search, Loader2, Send, Check, X, UserPlus, Swords } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
+import DeckSelect from '@/components/ui/DeckSelect'
 
 interface Deck { id: string; name: string; format: string }
 
@@ -195,18 +196,14 @@ export default function InvitationsPanel({
         <label className="text-[11px] font-semibold uppercase tracking-wider text-font-muted">
           Invite a player
         </label>
-        <select
+        <DeckSelect
+          decks={decks}
           value={selectedDeck}
-          onChange={(e) => setSelectedDeck(e.target.value)}
-          className="w-full rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-font-primary"
+          onChange={setSelectedDeck}
           disabled={!hasDecks}
-        >
-          {hasDecks ? decks.map((d) => (
-            <option key={d.id} value={d.id}>{d.name} ({d.format})</option>
-          )) : (
-            <option>Create a deck first</option>
-          )}
-        </select>
+          placeholder="Select a deck..."
+          emptyMessage="Create a deck first"
+        />
 
         <div className="relative" ref={searchBoxRef}>
           {targetPreview ? (

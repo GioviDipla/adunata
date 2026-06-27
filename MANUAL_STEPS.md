@@ -97,3 +97,10 @@ Quando: se vuoi login con Apple ID.
 3. Return URL: `https://wyujskkzqeexvmrwudup.supabase.co/auth/v1/callback`
 4. Genera key per Sign In with Apple, scarica `.p8`
 5. Supabase Dashboard → Authentication → Providers → Apple → abilita, compila Service ID, Team ID, Key ID, incolla contenuto `.p8`
+
+## [STEP] — Applicare migration `search_my_decks` (My Decks filtri + load more)
+Quando: prima di promuovere `dev` → `release`/`main`. La pagina My Decks usa l'RPC `search_my_decks`; finché non è applicata, la lista mostra lo stato vuoto.
+Cosa fare: applicare il file `supabase/migrations/20260627160000_search_my_decks.sql` al progetto Supabase condiviso. Due opzioni:
+  1. Autorizzare il Supabase MCP (OAuth) e farlo applicare a Claude.
+  2. Manuale: SQL Editor del dashboard Supabase → incolla il contenuto del file → Run.
+Dove inserire il risultato: nessun valore da copiare; verificare con `select proname from pg_proc where proname='search_my_decks';` (deve restituire 1 riga).

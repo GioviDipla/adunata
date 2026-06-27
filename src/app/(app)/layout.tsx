@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { SidebarProvider } from "@/lib/contexts/SidebarContext";
 import { MainContent } from "@/components/MainContent";
 import { GoblinAIButton } from "@/components/goblinai/GoblinAIButton";
+import OnboardingWizard from "@/components/preferences/OnboardingWizard";
 
 // Routes inside the (app) group that anon visitors may access. The deck
 // detail page handles its own private/unlisted/public branching, so the
@@ -42,6 +43,7 @@ export default async function AppLayout({
         <MainContent>{children}</MainContent>
       </div>
       <GoblinAIButton />
+      <OnboardingWizard />
     </SidebarProvider>
   );
 }

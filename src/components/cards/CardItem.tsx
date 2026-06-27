@@ -1,12 +1,12 @@
 'use client'
 
-import { memo, useRef, useState } from 'react'
+import { memo, useState } from 'react'
 import Image from 'next/image'
 import { Heart } from 'lucide-react'
 import type { Database } from '@/types/supabase'
 import ManaCost from './ManaCost'
 import UpscaledBadge from './UpscaledBadge'
-import { useLongPress } from '@/lib/hooks/useLongPress'
+import { useCardGestures } from '@/lib/hooks/useCardGestures'
 import { formatPreferredPrice } from '@/lib/utils/price'
 
 type Card = Database['public']['Tables']['cards']['Row']
@@ -20,48 +20,24 @@ interface CardItemProps {
 
 const CardItem = memo(function CardItem({ card, liked, onSelect, onContextAction }: CardItemProps) {
   const [showPreview, setShowPreview] = useState(false)
-  const rootRef = useRef<HTMLDivElement | null>(null)
-
-  // When `onContextAction` is wired, swap the gestures: tap opens the
-  // context menu (Add to deck / Like / Share), long-press / right-click
-  // opens the card detail modal. Without `onContextAction`, click keeps
-  // the legacy behaviour (open detail).
-  const longPress = useLongPress({
-    onLongPress: () => {
-      if (onContextAction) onSelect(card)
-    },
+  // Centralised gesture handling + user control inversion (desktop click /
+  // mobile long-press). When `onContextAction` is wired the quick action opens
+  // the context menu (Add to deck / Like / Share) and the preview gesture opens
+  // the card detail modal. Without it, both gestures open the detail.
+  const { getHandlers } = useCardGestures()
+  const gestures = getHandlers({
+    onPrimary: onContextAction
+      ? (c) => onContextAction(card, c.x, c.y)
+      : () => onSelect(card),
+    onSecondary: () => onSelect(card),
   })
 
   return (
     <div
-      ref={rootRef}
       className="group relative cursor-pointer"
-      onContextMenu={(e) => {
-        if (!onContextAction) return
-        e.preventDefault()
-        onSelect(card)
-      }}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
-      {...longPress.handlers}
-      onPointerUp={(e) => {
-        // Let long-press cancel its timer first.
-        longPress.handlers.onPointerUp?.()
-        if (longPress.wasLongPress()) return
-        if (e.button !== 0) return
-        if (onContextAction) {
-          const { clientX, clientY } = e
-          if (clientX || clientY) {
-            onContextAction(card, clientX, clientY)
-          } else {
-            const rect = rootRef.current?.getBoundingClientRect()
-            if (rect) onContextAction(card, rect.left + rect.width / 2, rect.top + rect.height / 2)
-            else onContextAction(card, 0, 0)
-          }
-        } else {
-          onSelect(card)
-        }
-      }}
+      {...gestures}
     >
       {/* Card image — `image_normal` (488×680), same as DeckGridView. next/image
        *  downscales via `sizes` so the actual bytes on the wire match the rendered size. */}

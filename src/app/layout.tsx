@@ -3,7 +3,14 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import { MobileViewportFix } from "@/components/MobileViewportFix";
 import { TapDebugProbe } from "@/components/TapDebugProbe";
+import { PreferencesProvider } from "@/lib/contexts/PreferencesContext";
 import "./globals.css";
+
+// Runs before first paint: reads the persisted theme from localStorage and
+// sets `data-theme` on <html> so there's no flash of the default palette.
+// Kept as a raw inline <head> script on purpose — next/script (even
+// beforeInteractive) can't guarantee execution ahead of the first paint.
+const NO_FLASH_THEME = `(function(){try{var p=JSON.parse(localStorage.getItem('adunata:prefs')||'{}');var t=p.theme||'dark';if(t==='auto'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})();`;
 
 const inter = Inter({
   subsets: ["latin"],
@@ -42,8 +49,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
+    <html lang="en" data-theme="dark" suppressHydrationWarning className={`${inter.variable} h-full`}>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME }} />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -53,7 +61,7 @@ export default function RootLayout({
       <body className="min-h-full bg-bg-dark text-font-primary font-[family-name:var(--font-inter)] antialiased">
         <MobileViewportFix />
         <TapDebugProbe />
-        {children}
+        <PreferencesProvider>{children}</PreferencesProvider>
         <Script
           id="sw-register"
           strategy="afterInteractive"

@@ -6,9 +6,12 @@ import {
   Fish,
   Users,
   MousePointerClick,
+  Palette,
   Hand,
   ArrowRight,
 } from 'lucide-react'
+import GestureControls from '@/components/preferences/GestureControls'
+import ThemePicker from '@/components/preferences/ThemePicker'
 
 export const metadata = {
   title: 'Info — Adunata',
@@ -28,6 +31,33 @@ export default function AboutPage() {
           </p>
         </div>
       </div>
+
+      {/* Gesture cheat sheet */}
+      <section className="mb-8 rounded-xl border border-border bg-bg-surface p-4 sm:p-6">
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-font-primary">
+          <MousePointerClick className="h-5 w-5 text-font-accent" /> Gesti e controlli
+        </h2>
+        <GestureControls />
+        <p className="mt-3 flex items-start gap-2 text-xs text-font-muted">
+          <Hand className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Il long-press &egrave; stato scelto apposta perch&eacute; il tasto destro su mobile non
+            esiste. Tieni premuto circa mezzo secondo per aprire il pannello; tap veloce = azione
+            diretta.
+          </span>
+        </p>
+      </section>
+
+      {/* Theme picker */}
+      <section className="mb-8 rounded-xl border border-border bg-bg-surface p-4 sm:p-6">
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-font-primary">
+          <Palette className="h-5 w-5 text-font-accent" /> Tema
+        </h2>
+        <p className="mb-4 text-sm text-font-secondary">
+          Scegli l&apos;aspetto dell&apos;interfaccia. La scelta viene salvata sul tuo dispositivo.
+        </p>
+        <ThemePicker />
+      </section>
 
       {/* Intro */}
       <section className="mb-8 rounded-xl border border-border bg-bg-surface p-4 sm:p-6">
@@ -68,60 +98,17 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Gesture cheat sheet */}
-      <section className="mb-8 rounded-xl border border-border bg-bg-surface p-4 sm:p-6">
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-font-primary">
-          <MousePointerClick className="h-5 w-5 text-font-accent" /> Gesti e controlli
-        </h2>
-        <p className="mb-4 text-sm text-font-secondary">
-          Stessa regola ovunque: <strong>tap/click</strong> per l&apos;azione rapida,{' '}
-          <strong>long-press (mobile)</strong> o <strong>tasto destro (desktop)</strong> per aprire
-          l&apos;anteprima con tutte le azioni contestuali.
-        </p>
-        <div className="overflow-x-auto rounded-lg border border-border/50">
-          <table className="w-full text-left text-xs sm:text-sm">
-            <thead className="bg-bg-cell">
-              <tr>
-                <th className="px-3 py-2 font-semibold text-font-secondary">Azione</th>
-                <th className="px-3 py-2 font-semibold text-font-secondary">Desktop</th>
-                <th className="px-3 py-2 font-semibold text-font-secondary">Mobile</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              <GestureRow action="Giocare / tappare / aggiungere al deck" desktop="Click sinistro" mobile="Tap" />
-              <GestureRow
-                action="Anteprima carta + azioni contestuali"
-                desktop="Tasto destro"
-                mobile="Long-press (~500ms)"
-              />
-              <GestureRow action="Scorrere liste" desktop="Rotella / trackpad" mobile="Swipe" />
-              <GestureRow action="Uscire da una modale" desktop="Esc o click sullo sfondo" mobile="Tap sullo sfondo" />
-              <GestureRow action="Ingrandire campo avversario" desktop="Freccia Expand" mobile="Freccia Expand" />
-              <GestureRow action="Collassare sidebar" desktop="Bottone Collapse in basso" mobile="\u2014" />
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-3 flex items-start gap-2 text-xs text-font-muted">
-          <Hand className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            Il long-press &egrave; stato scelto apposta perch&eacute; il tasto destro su mobile non
-            esiste. Tieni premuto circa mezzo secondo per aprire il pannello; tap veloce = azione
-            diretta.
-          </span>
-        </p>
-      </section>
-
       {/* FAQ */}
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-font-primary">FAQ</h2>
         <div className="space-y-2">
           <FaqItem
             q="Posso installare Adunata come app sul telefono?"
-            a="S\u00ec. Su iOS apri Safari \u2192 Condividi \u2192 Aggiungi alla schermata Home. Su Android usa Chrome \u2192 menu \u2192 Installa app. Funziona come PWA con splash screen e icona."
+            a="Sì. Su iOS apri Safari → Condividi → Aggiungi alla schermata Home. Su Android usa Chrome → menu → Installa app. Funziona come PWA con splash screen e icona."
           />
           <FaqItem
-            q="Adunata \u00e8 gratis?"
-            a="S\u00ec. Il progetto gira su tier gratuiti di Supabase + Vercel. Nessun piano a pagamento."
+            q="Adunata è gratis?"
+            a="Sì. Il progetto gira su tier gratuiti di Supabase + Vercel. Nessun piano a pagamento."
           />
           <FaqItem
             q="Come importo un deck da Moxfield / Archidekt / MTGO?"
@@ -129,7 +116,7 @@ export default function AboutPage() {
           />
           <FaqItem
             q="Come si aggiungono i token al mazzo?"
-            a="Nel deck editor, tab Tokens, cerca il nome (es. Soldier, Treasure, Zombie). Il token viene salvato come qualsiasi altra carta, e in partita lo trovi nel menu Special \u2192 Create Token gi\u00e0 pronto con immagine e P/T."
+            a="Nel deck editor, tab Tokens, cerca il nome (es. Soldier, Treasure, Zombie). Il token viene salvato come qualsiasi altra carta, e in partita lo trovi nel menu Special → Create Token già pronto con immagine e P/T."
           />
           <FaqItem
             q="I prezzi sono in EUR o USD?"
@@ -137,19 +124,19 @@ export default function AboutPage() {
           />
           <FaqItem
             q="Come gioco una partita con un amico?"
-            a="Play \u2192 Create lobby, scegli mazzo e formato. Copia il codice e mandalo all'amico, che fa Play \u2192 Join lobby e lo incolla."
+            a="Play → Create lobby, scegli mazzo e formato. Copia il codice e mandalo all'amico, che fa Play → Join lobby e lo incolla."
           />
           <FaqItem
-            q="Non si applicano le regole avanzate \u2014 \u00e8 normale?"
-            a="S\u00ec, per scelta. Adunata gestisce fasi, turni, pescate, mulligan, vita e zone. Il resto (trigger, stack, priorit\u00e0 su singole risoluzioni) lo gestite voi a voce, come al tavolo."
+            q="Non si applicano le regole avanzate — è normale?"
+            a="Sì, per scelta. Adunata gestisce fasi, turni, pescate, mulligan, vita e zone. Il resto (trigger, stack, priorità su singole risoluzioni) lo gestite voi a voce, come al tavolo."
           />
           <FaqItem
-            q="Ho chiuso la pagina in mezzo a una partita. \u00c8 persa?"
-            a="No. Lo stato della partita \u00e8 salvato su Supabase. Riapri la lobby e ritrovi tutto."
+            q="Ho chiuso la pagina in mezzo a una partita. È persa?"
+            a="No. Lo stato della partita è salvato su Supabase. Riapri la lobby e ritrovi tutto."
           />
           <FaqItem
-            q="Perch\u00e9 la prima volta che cerco una carta nuova ci mette un attimo?"
-            a="Se la carta non \u00e8 ancora nel DB locale, la scarichiamo da Scryfall al volo e la cacheriamo. Dalla seconda volta \u00e8 istantanea."
+            q="Perché la prima volta che cerco una carta nuova ci mette un attimo?"
+            a="Se la carta non è ancora nel DB locale, la scarichiamo da Scryfall al volo e la cacheriamo. Dalla seconda volta è istantanea."
           />
         </div>
       </section>
@@ -201,16 +188,6 @@ function FeatureCard({
       </div>
       <p className="text-xs leading-relaxed text-font-secondary">{body}</p>
     </div>
-  )
-}
-
-function GestureRow({ action, desktop, mobile }: { action: string; desktop: string; mobile: string }) {
-  return (
-    <tr>
-      <td className="px-3 py-2 text-font-primary">{action}</td>
-      <td className="px-3 py-2 text-font-secondary">{desktop}</td>
-      <td className="px-3 py-2 text-font-secondary">{mobile}</td>
-    </tr>
   )
 }
 

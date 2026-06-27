@@ -212,11 +212,11 @@ export function GoblinAIStandalone() {
   return (
     <div className="flex flex-col h-dvh bg-bg-dark">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3 pt-[env(safe-area-inset-top,0px)]">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3 pt-[env(safe-area-inset-top,0px)]">
         <GoblinIcon className="h-8 w-8" />
         <div className="flex-1 min-w-0">
-          <h1 className="text-white font-bold">GoblinAI</h1>
-          <p className="text-xs text-white/40 truncate">
+          <h1 className="text-font-primary font-bold">GoblinAI</h1>
+          <p className="text-xs text-font-muted truncate">
             {activeConversationTitle ?? 'MTG Rules Assistant'}
           </p>
         </div>
@@ -230,7 +230,7 @@ export function GoblinAIStandalone() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && !loading && (
-          <p className="text-sm text-white/50 text-center mt-8">
+          <p className="text-sm text-font-muted text-center mt-8">
             Chiedi una regola. Usa @ per citare ogni carta coinvolta.
           </p>
         )}
@@ -248,7 +248,7 @@ export function GoblinAIStandalone() {
         ))}
 
         {loading && (
-          <p className="text-sm text-white/50 animate-pulse">GoblinAI pensa...</p>
+          <p className="text-sm text-font-muted animate-pulse">GoblinAI pensa...</p>
         )}
 
         {error && (

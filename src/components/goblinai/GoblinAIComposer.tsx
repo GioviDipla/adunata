@@ -186,12 +186,12 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
   }, [])
 
   return (
-    <div className="border-t border-white/10 p-3 relative">
+    <div className="border-t border-border p-3 relative">
       {/* Mention autocomplete dropdown */}
       {showMentionDropdown && (
-        <div className="absolute bottom-full left-3 right-3 mb-1 rounded border border-white/20 bg-bg-dark shadow-xl max-h-48 overflow-y-auto">
+        <div className="absolute bottom-full left-3 right-3 mb-1 rounded border border-border-light bg-bg-dark shadow-xl max-h-48 overflow-y-auto">
           {mentionResults.length === 0 ? (
-            <div className="px-3 py-4 text-center text-xs text-white/40">
+            <div className="px-3 py-4 text-center text-xs text-font-muted">
               {text.slice(0, cursorPos).match(AT_MENTION_RE)?.[1]?.trimEnd().length === 0
                 ? 'Scrivi il nome della carta...'
                 : 'Nessuna carta trovata'}
@@ -201,12 +201,12 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
               <button
                 key={card.id}
                 onClick={() => selectMention(card)}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 ${
-                  i === mentionCursorIdx ? 'bg-white/10' : ''
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-bg-cell ${
+                  i === mentionCursorIdx ? 'bg-bg-cell' : ''
                 }`}
               >
-                <span className="text-white">{card.name}</span>
-                <span className="text-white/40 ml-2">{card.type_line}</span>
+                <span className="text-font-primary">{card.name}</span>
+                <span className="text-font-muted ml-2">{card.type_line}</span>
               </button>
             ))
           )}
@@ -243,12 +243,12 @@ export function GoblinAIComposer({ onSend, disabled, placeholder }: GoblinAIComp
           placeholder={placeholder ?? 'Chiedi una regola... (@ per citare carte)'}
           disabled={disabled}
           rows={2}
-          className="flex-1 resize-none rounded border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary-500"
+          className="flex-1 resize-none rounded border border-border bg-bg-cell/40 px-3 py-2 text-sm text-font-primary placeholder:text-font-muted focus:outline-none focus:border-primary-500"
         />
         <button
           onClick={handleSubmit}
           disabled={disabled || text.trim().length === 0}
-          className="rounded bg-primary-600 p-2 text-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded bg-primary-600 p-2 text-font-white hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
           aria-label="Send"
         >
           <Send className="h-4 w-4" />

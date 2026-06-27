@@ -26,10 +26,18 @@ export interface PublicDeck {
   cover_image_normal: string | null
   like_count: number
   price_eur: number
+  /** Only present for the "My Decks" variant (search_my_decks). */
+  visibility?: string | null
 }
 
 interface PublicDeckBrowserProps {
   initialDecks: PublicDeck[]
+  /** Search endpoint. Defaults to the public-decks search. */
+  endpoint?: string
+  /** Hide the creator filter (e.g. on "My Decks", where it's always you). */
+  hideCreator?: boolean
+  /** Empty-results message. */
+  emptyText?: string
 }
 
 function buildQuery(f: FilterState, offset: number): string {
@@ -58,7 +66,12 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString()
 }
 
-export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserProps) {
+export default function PublicDeckBrowser({
+  initialDecks,
+  endpoint = '/api/decks/public/search',
+  hideCreator = false,
+  emptyText = 'No public decks match these filters.',
+}: PublicDeckBrowserProps) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
   const [decks, setDecks] = useState<PublicDeck[]>(initialDecks)
   const [hasMore, setHasMore] = useState(initialDecks.length === PAGE_SIZE)
@@ -76,7 +89,7 @@ export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserPro
       setLoading(true)
       try {
         const res = await fetch(
-          `/api/decks/public/search?${buildQuery(filters, 0)}`,
+          `${endpoint}?${buildQuery(filters, 0)}`,
           { signal: controller.signal },
         )
         if (controller.signal.aborted) return
@@ -98,7 +111,7 @@ export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserPro
       if (!searchAbortRef.current?.signal.aborted) setLoading(false)
     }, 350)
     return () => clearTimeout(handle)
-  }, [filters])
+  }, [filters, endpoint])
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
@@ -109,7 +122,7 @@ export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserPro
     try {
       const offset = decks.length
       const res = await fetch(
-        `/api/decks/public/search?${buildQuery(filters, offset)}`,
+        `${endpoint}?${buildQuery(filters, offset)}`,
         { signal: controller.signal },
       )
       if (controller.signal.aborted) return
@@ -125,11 +138,11 @@ export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserPro
       if ((err as Error).name !== 'AbortError') setHasMore(false)
     }
     if (!loadMoreAbortRef.current?.signal.aborted) setLoadingMore(false)
-  }, [loadingMore, hasMore, decks.length, filters])
+  }, [loadingMore, hasMore, decks.length, filters, endpoint])
 
   return (
     <div className="flex flex-col gap-6">
-      <DeckFilters filters={filters} onChange={setFilters} />
+      <DeckFilters filters={filters} onChange={setFilters} hideCreator={hideCreator} />
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -137,9 +150,7 @@ export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserPro
         </div>
       ) : decks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-bg-card p-8 text-center">
-          <p className="text-sm text-font-muted">
-            No public decks match these filters.
-          </p>
+          <p className="text-sm text-font-muted">{emptyText}</p>
         </div>
       ) : (
         <>
@@ -171,6 +182,11 @@ export default function PublicDeckBrowser({ initialDecks }: PublicDeckBrowserPro
                     {d.format && (
                       <span className="absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
                         {d.format}
+                      </span>
+                    )}
+                    {d.visibility && d.visibility !== 'public' && (
+                      <span className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium capitalize text-white backdrop-blur-sm">
+                        {d.visibility}
                       </span>
                     )}
                   </div>

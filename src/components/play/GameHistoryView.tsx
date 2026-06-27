@@ -9,6 +9,8 @@ import type { LogEntry, CardMap } from '@/lib/game/types'
 import type { Database } from '@/types/supabase'
 import LogText from './log/LogText'
 import { styleForEntry, toneClasses } from './log/LogEntryStyle'
+import GameStatsDashboard from './GameStatsDashboard'
+import type { GameStats } from '@/lib/game/stats'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
 
@@ -77,6 +79,7 @@ export default function GameHistoryView({
   cardMap,
   startedAt,
   finishedAt: _finishedAt,
+  stats,
 }: {
   gameName: string
   winnerId: string | null
@@ -86,6 +89,7 @@ export default function GameHistoryView({
   cardMap: CardMap
   startedAt: string | null
   finishedAt: string
+  stats: GameStats
 }) {
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const won = winnerId === userId
@@ -124,6 +128,9 @@ export default function GameHistoryView({
           <span className="text-[10px] text-font-muted">{log.length} actions</span>
         </div>
       </div>
+
+      {/* Stats Dashboard */}
+      <GameStatsDashboard stats={stats} playerNames={playerNames} />
 
       {/* Log */}
       <div className="rounded-xl border border-border bg-bg-card p-4">
