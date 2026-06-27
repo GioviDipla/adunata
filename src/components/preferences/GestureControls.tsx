@@ -48,8 +48,9 @@ function Toggle({
  * match the user's choice. Shared between /about and /profile.
  */
 export default function GestureControls() {
-  const { prefs, setInvertDesktop, setInvertMobile } = usePreferences()
-  const { invertDesktop, invertMobile } = prefs
+  const { prefs, setInvertDesktop, setInvertMobile, setGridHoverZoom } =
+    usePreferences()
+  const { invertDesktop, invertMobile, gridHoverZoom } = prefs
 
   // Default desktop: left-click = quick, right-click = preview.
   // Default mobile:  tap        = quick, long-press = preview.
@@ -72,6 +73,12 @@ export default function GestureControls() {
           onChange={setInvertMobile}
           label="Inverti gesti mobile"
           hint="Scambia tap e long-press"
+        />
+        <Toggle
+          checked={gridHoverZoom}
+          onChange={setGridHoverZoom}
+          label="Anteprima al passaggio mouse"
+          hint="Ingrandimento carta in grid view (desktop)"
         />
       </div>
 

@@ -5,6 +5,7 @@ import { Crown, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import { useCardGestures } from '@/lib/hooks/useCardGestures'
+import { usePreferences } from '@/lib/contexts/PreferencesContext'
 import type { Database } from '@/types/supabase'
 
 type CardRow = Database['public']['Tables']['cards']['Row']
@@ -62,6 +63,9 @@ export default function DeckGridView({
   // Centralised gesture handling + user control inversion (desktop click /
   // mobile long-press), shared with the other deck-area surfaces.
   const { getHandlers } = useCardGestures()
+  // Hover-zoom preview can be turned off in preferences (desktop only).
+  const { prefs } = usePreferences()
+  const hoverZoomEnabled = prefs.gridHoverZoom
 
   if (cards.length === 0) {
     return (
@@ -117,10 +121,13 @@ export default function DeckGridView({
                   className="w-full h-auto select-none"
                   loading="lazy"
                   draggable={false}
-                  onMouseEnter={(e) =>
-                    setHoverCard({ card: entry.card, rect: e.currentTarget.getBoundingClientRect() })
+                  onMouseEnter={
+                    hoverZoomEnabled
+                      ? (e) =>
+                          setHoverCard({ card: entry.card, rect: e.currentTarget.getBoundingClientRect() })
+                      : undefined
                   }
-                  onMouseLeave={() => setHoverCard(null)}
+                  onMouseLeave={hoverZoomEnabled ? () => setHoverCard(null) : undefined}
                 />
                 {entry.isFoil && (
                   <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-bg-yellow/90 text-bg-dark backdrop-blur-sm">
@@ -208,7 +215,7 @@ export default function DeckGridView({
       {/* Floating zoom preview on hover — desktop only (`hidden md:block`).
           Positioned to the right of the hovered card, clamped to the
           viewport so it never spills off-screen. */}
-      {hoverCard && hoverCard.card.image_normal && (
+      {hoverZoomEnabled && hoverCard && hoverCard.card.image_normal && (
         <div
           className="pointer-events-none fixed z-50 hidden md:block"
           style={{

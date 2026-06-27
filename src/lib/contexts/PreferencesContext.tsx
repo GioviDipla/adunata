@@ -35,12 +35,15 @@ export interface Preferences {
   invertDesktop: boolean
   /** Mobile: when true, tap and long-press swap roles. */
   invertMobile: boolean
+  /** Grid view: when false, the enlarged hover preview is disabled (desktop). */
+  gridHoverZoom: boolean
 }
 
 const DEFAULT_PREFS: Preferences = {
   theme: 'dark',
   invertDesktop: false,
   invertMobile: false,
+  gridHoverZoom: true,
 }
 
 export const PREFS_STORAGE_KEY = 'adunata:prefs'
@@ -50,6 +53,7 @@ interface PreferencesContextType {
   setTheme: (theme: ThemeId) => void
   setInvertDesktop: (value: boolean) => void
   setInvertMobile: (value: boolean) => void
+  setGridHoverZoom: (value: boolean) => void
 }
 
 const PreferencesContext = createContext<PreferencesContextType>({
@@ -57,6 +61,7 @@ const PreferencesContext = createContext<PreferencesContextType>({
   setTheme: () => {},
   setInvertDesktop: () => {},
   setInvertMobile: () => {},
+  setGridHoverZoom: () => {},
 })
 
 export function usePreferences() {
@@ -76,6 +81,8 @@ function readStored(): Preferences {
           : DEFAULT_PREFS.theme,
       invertDesktop: !!parsed.invertDesktop,
       invertMobile: !!parsed.invertMobile,
+      gridHoverZoom:
+        parsed.gridHoverZoom === undefined ? true : !!parsed.gridHoverZoom,
     }
   } catch {
     return DEFAULT_PREFS
@@ -129,6 +136,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     setTheme: (theme) => persist({ ...prefs, theme }),
     setInvertDesktop: (invertDesktop) => persist({ ...prefs, invertDesktop }),
     setInvertMobile: (invertMobile) => persist({ ...prefs, invertMobile }),
+    setGridHoverZoom: (gridHoverZoom) => persist({ ...prefs, gridHoverZoom }),
   }
 
   return (
