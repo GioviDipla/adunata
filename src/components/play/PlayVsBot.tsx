@@ -16,10 +16,31 @@ interface Deck {
 export default function PlayVsBot({ decks }: { decks: Deck[] }) {
   const router = useRouter()
   const [selectedDeck, setSelectedDeck] = useState(decks[0]?.id ?? '')
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  function handlePlay() {
+  async function handlePlay() {
     if (!selectedDeck) return
-    router.push(`/decks/${selectedDeck}/goldfish`)
+    setCreating(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/lobbies/bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deckId: selectedDeck }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Failed to start game')
+        setCreating(false)
+        return
+      }
+      const { lobbyId } = await res.json()
+      router.push(`/play/${lobbyId}/game`)
+    } catch {
+      setError('Network error')
+      setCreating(false)
+    }
   }
 
   return (
@@ -47,13 +68,15 @@ export default function PlayVsBot({ decks }: { decks: Deck[] }) {
             />
           </div>
           <p className="mb-3 text-[11px] text-font-muted">
-            Test your deck against a bot opponent that plays lands, casts creatures, attacks, and blocks.
+            Play a real multiplayer game against GoblinAI. Full game log, chat, and all features.
           </p>
+          {error && <p className="mb-2 text-xs text-bg-red">{error}</p>}
           <Button
             variant="primary"
             size="sm"
             onClick={handlePlay}
-            disabled={!selectedDeck}
+            loading={creating}
+            disabled={!selectedDeck || creating}
           >
             <Play className="h-4 w-4" /> Start
           </Button>
