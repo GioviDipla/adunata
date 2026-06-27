@@ -37,7 +37,7 @@ export default async function PlayPage() {
       .from('decks')
       .select('id, name, format')
       .eq('user_id', user.id)
-      .order('updated_at', { ascending: false }),
+      .order('name', { ascending: true }),
     supabase
       .from('game_players')
       .select('lobby_id')

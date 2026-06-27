@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { LogIn, ClipboardPaste } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import DeckSelect from '@/components/ui/DeckSelect'
 
 interface Deck { id: string; name: string; format: string }
 
@@ -62,15 +63,14 @@ export default function JoinLobby({ decks }: { decks: Deck[] }) {
         </>
       ) : (
         <>
-          <select
-            value={selectedDeck}
-            onChange={(e) => setSelectedDeck(e.target.value)}
-            className="mb-3 w-full rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-font-primary"
-          >
-            {decks.map((d) => (
-              <option key={d.id} value={d.id}>{d.name} ({d.format})</option>
-            ))}
-          </select>
+          <div className="mb-3">
+            <DeckSelect
+              decks={decks}
+              value={selectedDeck}
+              onChange={setSelectedDeck}
+              placeholder="Select a deck..."
+            />
+          </div>
           {error && <p className="mb-2 text-xs text-bg-red">{error}</p>}
           <Button variant="primary" size="sm" onClick={handleJoin} loading={joining} disabled={code.length < 6 || !selectedDeck}>
             <LogIn className="h-4 w-4" /> Join
