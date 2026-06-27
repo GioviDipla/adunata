@@ -85,12 +85,11 @@ export default function GameHistoryList({ games, userId }: { games: HistoryGame[
 
   return (
     <div className="mt-8">
-      <h2 className="mb-3 font-mono text-sm font-bold tracking-widest uppercase text-[#787878]">Game History</h2>
+      <h2 className="mb-3 text-sm font-semibold text-font-secondary">Game History</h2>
       {games.length === 0 ? (
-        <div className="rounded-none border border-[#2A2A2A] bg-[#141414] px-4 py-6 text-center">
-          <ScrollText size={32} className="mx-auto mb-2 text-[#787878]" />
-          <p className="font-mono text-sm tracking-wider text-[#787878]">NO MISSION LOGS</p>
-          <p className="mt-1 font-mono text-xs text-[#555]">Complete a game and it will appear here</p>
+        <div className="rounded-xl border border-border bg-bg-card px-4 py-6 text-center">
+          <ScrollText size={32} className="mx-auto mb-2 text-font-muted" />
+          <p className="text-sm text-font-muted">No finished games yet. Complete a game and it will appear here.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -101,7 +100,7 @@ export default function GameHistoryList({ games, userId }: { games: HistoryGame[
             const isConfirmingDelete = confirmDelete === game.id
 
             return (
-              <div key={game.id} className="rounded-none border border-[#2A2A2A] bg-[#141414] px-4 py-3">
+              <div key={game.id} className="rounded-xl border border-border bg-bg-card px-4 py-3">
                 {isEditing ? (
                   /* Rename input */
                   <div className="flex items-center gap-1">
@@ -113,14 +112,14 @@ export default function GameHistoryList({ games, userId }: { games: HistoryGame[
                         if (e.key === 'Enter') handleRename(game.id)
                         if (e.key === 'Escape') setEditing(null)
                       }}
-                      className="flex-1 rounded-none border border-[#2A2A2A] bg-[#0D0D0D] px-2 py-1 font-mono text-xs text-[#E8E8E8] outline-none"
+                      className="flex-1 rounded bg-bg-cell px-2 py-1 text-xs text-font-primary outline-none"
                       autoFocus
                     />
                     <button onClick={() => handleRename(game.id)} disabled={saving}
-                      className="flex h-6 w-6 items-center justify-center rounded-none bg-[#4AF626]/20 text-[#4AF626]">
+                      className="flex h-6 w-6 items-center justify-center rounded bg-bg-green text-font-white">
                       {saving ? <Loader2 size={10} className="animate-spin" /> : <Check size={12} />}
                     </button>
-                    <button onClick={() => setEditing(null)} className="flex h-6 w-6 items-center justify-center rounded-none bg-[#1A1A1A] text-[#787878]">
+                    <button onClick={() => setEditing(null)} className="flex h-6 w-6 items-center justify-center rounded bg-bg-cell text-font-muted">
                       <X size={12} />
                     </button>
                   </div>
@@ -128,46 +127,46 @@ export default function GameHistoryList({ games, userId }: { games: HistoryGame[
                   <div className="flex flex-col gap-1.5">
                     {/* Row 1: Name + Badge + Actions */}
                     <div className="flex items-center gap-2">
-                      <p className="min-w-0 flex-1 truncate font-mono text-sm tracking-wider text-[#E8E8E8]">
+                      <p className="flex-1 min-w-0 text-sm font-medium text-font-primary truncate">
                         {game.name ?? game.lobby_code}
                       </p>
-                      <span className={`shrink-0 rounded-none px-2 py-0.5 font-mono text-[10px] tracking-wider ${
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold ${
                         isDraw
-                          ? 'bg-[#787878]/20 text-[#787878]'
+                          ? 'bg-bg-cell text-font-muted'
                           : won
-                            ? 'bg-[#4AF626]/20 text-[#4AF626]'
-                            : 'bg-[#FF2A2A]/20 text-[#FF2A2A]'
+                            ? 'bg-bg-green/20 text-bg-green'
+                            : 'bg-bg-red/20 text-bg-red'
                       }`}>
                         {isDraw ? 'Draw' : won ? 'Won' : 'Lost'}
                       </span>
                       {!isConfirmingDelete && (
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
                           <Link href={`/play/${game.id}/history`}
-                            className="flex h-11 w-11 items-center justify-center rounded-none text-[#787878] hover:bg-[#1A1A1A] hover:text-[#E8E8E8]"
+                            className="flex h-10 w-10 items-center justify-center rounded-lg text-font-muted hover:bg-bg-hover hover:text-font-accent"
                             title="View log">
                             <ScrollText size={16} />
                           </Link>
                           <button onClick={() => { setEditing(game.id); setEditName(game.name ?? game.lobby_code) }}
-                            className="flex h-11 w-11 items-center justify-center rounded-none text-[#787878] hover:bg-[#1A1A1A] hover:text-[#E8E8E8]"
+                            className="flex h-10 w-10 items-center justify-center rounded-lg text-font-muted hover:bg-bg-hover hover:text-font-accent"
                             title="Rename">
                             <Pencil size={16} />
                           </button>
                           <button onClick={() => setConfirmDelete(game.id)}
-                            className="flex h-11 w-11 items-center justify-center rounded-none text-[#787878] hover:bg-[#1A1A1A] hover:text-[#FF2A2A]"
+                            className="flex h-10 w-10 items-center justify-center rounded-lg text-font-muted hover:bg-bg-red/10 hover:text-bg-red"
                             title="Delete">
                             <Trash2 size={16} />
                           </button>
                         </div>
                       )}
                       {isConfirmingDelete && (
-                        <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <button onClick={() => handleDelete(game.id)} disabled={deleting === game.id || isPending}
-                            className="rounded-none bg-[#FF2A2A] px-2 py-1 font-mono text-[10px] tracking-wider uppercase text-white disabled:opacity-40">
-                            {deleting === game.id ? <Loader2 size={11} className="animate-spin" /> : '[ DELETE ]'}
+                            className="rounded-md bg-bg-red px-2 py-1 text-[10px] font-bold text-font-white disabled:opacity-40">
+                            {deleting === game.id ? <Loader2 size={11} className="animate-spin" /> : 'Delete'}
                           </button>
                           <button onClick={() => setConfirmDelete(null)} disabled={deleting === game.id}
-                            className="rounded-none bg-[#1A1A1A] px-2 py-1 font-mono text-[10px] tracking-wider uppercase text-[#787878] disabled:opacity-40">
-                            [ CANCEL ]
+                            className="rounded-md bg-bg-cell px-2 py-1 text-[10px] font-bold text-font-secondary disabled:opacity-40">
+                            Cancel
                           </button>
                         </div>
                       )}
@@ -175,9 +174,9 @@ export default function GameHistoryList({ games, userId }: { games: HistoryGame[
 
                     {/* Row 2: Format + vs Opponent with Deck */}
                     {(game.format || game.opponentName) && (
-                      <div className="flex items-center gap-1.5 font-mono text-xs text-[#787878]">
+                      <div className="flex items-center gap-1.5 text-xs text-font-muted">
                         {game.format && (
-                          <span className="rounded-none bg-[#1A1A1A] px-1.5 py-0.5 font-mono text-[10px] text-[#787878]">
+                          <span className="rounded bg-bg-cell px-1.5 py-0.5 text-[10px] font-medium text-font-secondary">
                             {game.format}
                           </span>
                         )}
@@ -190,13 +189,13 @@ export default function GameHistoryList({ games, userId }: { games: HistoryGame[
                     )}
 
                     {/* Row 3: Date */}
-                    <p className="font-mono text-xs text-[#555]">{timeAgo(game.updated_at)}</p>
+                    <p className="text-[10px] text-font-muted">{timeAgo(game.updated_at)}</p>
                   </div>
                 )}
               </div>
             )
           })}
-          {error && <p className="mt-2 font-mono text-xs text-[#FF2A2A]">{error}</p>}
+          {error && <p className="mt-2 text-xs text-bg-red">{error}</p>}
         </div>
       )}
     </div>
