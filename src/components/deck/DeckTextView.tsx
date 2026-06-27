@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Crown, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
+import { useCardGestures } from '@/lib/hooks/useCardGestures'
 import UpscaledBadge from '@/components/cards/UpscaledBadge'
 import { getCardTypeCategory, TYPE_ORDER } from '@/lib/utils/card'
 import type { Database } from '@/types/supabase'
@@ -58,40 +59,9 @@ export default function DeckTextView({
   // context menu, long-press / right-click = open card detail. View
   // mode keeps tap = open detail.
   const editingMode = !!onMoveToBoard
-  // Per-row long-press timer state. `consumeLongPress` is one-shot — it
-  // returns the flag and clears it so a long-press doesn't suppress the
-  // next tap.
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressFired = useRef(false)
-  const longPressStart = useRef<{ x: number; y: number } | null>(null)
-  const startLongPress = (e: React.PointerEvent, cb: () => void) => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current)
-    longPressFired.current = false
-    longPressStart.current = { x: e.clientX, y: e.clientY }
-    longPressTimer.current = setTimeout(() => {
-      longPressFired.current = true
-      longPressTimer.current = null
-      cb()
-    }, 350)
-  }
-  const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-    longPressStart.current = null
-  }
-  const handleLongPressMove = (e: React.PointerEvent) => {
-    if (!longPressTimer.current || !longPressStart.current) return
-    const dx = Math.abs(e.clientX - longPressStart.current.x)
-    const dy = Math.abs(e.clientY - longPressStart.current.y)
-    if (dx > 10 || dy > 10) cancelLongPress()
-  }
-  const consumeLongPress = () => {
-    const v = longPressFired.current
-    longPressFired.current = false
-    return v
-  }
+  // Centralised gesture handling (long-press + desktop/mobile inversion).
+  // Called once; per-row handlers are built inline below.
+  const { getHandlers } = useCardGestures()
 
   if (cards.length === 0 && (!groupsProp || groupsProp.length === 0)) {
     return (
@@ -134,54 +104,40 @@ export default function DeckTextView({
               <div className="flex flex-col">
                 {entries.map((entry) => {
                   const commander = isCommander?.(entry.card.id) ?? false
+                  // Editing mode: primary opens the context menu, secondary
+                  // opens card detail. View mode: both open detail.
+                  const gestures = getHandlers({
+                    onPrimary: editingMode
+                      ? (c) =>
+                          setContextMenu({ x: c.x, y: c.y, cardId: entry.card.id, board: entry.board })
+                      : () => onCardClick?.(entry.card),
+                    onSecondary: () => onCardClick?.(entry.card),
+                  })
                   return (
                     <div
                       key={`${entry.card.id}-${entry.board}`}
                       className={`group flex items-center gap-2 rounded px-2 py-0.5 text-sm transition-colors hover:bg-bg-hover ${
                         commander ? 'bg-bg-yellow/10' : ''
                       }`}
-                      onContextMenu={(e) => {
-                        if (editingMode) {
-                          // Right-click opens card detail in editing mode.
-                          e.preventDefault()
-                          onCardClick?.(entry.card)
-                        }
-                      }}
-                      onPointerDown={(e) => {
-                        if (editingMode && e.pointerType === 'touch') {
-                          startLongPress(e, () => onCardClick?.(entry.card))
-                        }
-                      }}
-                      onPointerMove={handleLongPressMove}
-                      onPointerUp={cancelLongPress}
-                      onPointerLeave={cancelLongPress}
-                      onPointerCancel={cancelLongPress}
+                      {...gestures}
                     >
                       <span className="w-6 text-right font-mono text-xs text-font-muted">
                         {entry.quantity}x
                       </span>
-                      <button
-                        onClick={(e) => {
-                          if (consumeLongPress()) return
-                          if (editingMode) {
-                            setContextMenu({ x: e.clientX, y: e.clientY, cardId: entry.card.id, board: entry.board })
-                          } else {
-                            onCardClick?.(entry.card)
-                          }
-                        }}
+                      <span
                         onMouseEnter={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect()
                           setHoverCard({ card: entry.card, x: rect.left, y: rect.top })
                         }}
                         onMouseLeave={() => setHoverCard(null)}
-                        className={`flex-1 text-left hover:text-font-accent transition-colors ${
+                        className={`flex-1 cursor-pointer text-left hover:text-font-accent transition-colors ${
                           commander
                             ? 'font-semibold text-bg-yellow'
                             : 'text-font-primary'
                         }`}
                       >
                         {entry.card.name}
-                      </button>
+                      </span>
                       {entry.isFoil && (
                         <Sparkles className="h-3 w-3 shrink-0 text-bg-yellow" aria-label="Foil" />
                       )}
@@ -204,9 +160,10 @@ export default function DeckTextView({
                       )}
                       {onToggleCommander && (
                         <button
-                          onClick={() =>
+                          onClick={(e) => {
+                            e.stopPropagation()
                             onToggleCommander(entry.card.id, entry.board)
-                          }
+                          }}
                           className={`h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 ${
                             commander
                               ? 'flex text-bg-yellow'

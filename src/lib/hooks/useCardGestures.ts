@@ -8,11 +8,18 @@ export interface GestureCoords {
   y: number
 }
 
+export interface GestureMeta {
+  /** Pointer that produced the gesture: 'mouse' | 'touch' | 'pen'. Lets a
+   *  consumer branch (e.g. mobile action sheet vs desktop popover) without
+   *  keeping its own pointer-type ref. */
+  pointerType: string
+}
+
 export interface CardGestureHandlers {
   /** Quick action — default left-click / tap. */
-  onPrimary: (coords: GestureCoords) => void
+  onPrimary: (coords: GestureCoords, meta: GestureMeta) => void
   /** Preview + contextual actions — default right-click / long-press. */
-  onSecondary: (coords: GestureCoords) => void
+  onSecondary: (coords: GestureCoords, meta: GestureMeta) => void
 }
 
 /**
@@ -74,19 +81,20 @@ export function useCardGestures(longPressDelay = 350) {
         }
         if (e.button !== undefined && e.button !== 0) return
         const coords = coordsFrom(e)
-        if (lastPointerType.current === 'touch') {
+        const pointerType = lastPointerType.current
+        if (pointerType === 'touch') {
           // Tap = mobile primary by default; inverted = secondary.
-          ;(invertMobile ? onSecondary : onPrimary)(coords)
+          ;(invertMobile ? onSecondary : onPrimary)(coords, { pointerType })
         } else {
           // Left-click = desktop primary by default; inverted = secondary.
-          ;(invertDesktop ? onSecondary : onPrimary)(coords)
+          ;(invertDesktop ? onSecondary : onPrimary)(coords, { pointerType })
         }
       },
       onContextMenu(e: React.MouseEvent) {
         e.preventDefault()
         const coords = coordsFrom(e)
         // Right-click = desktop secondary by default; inverted = primary.
-        ;(invertDesktop ? onPrimary : onSecondary)(coords)
+        ;(invertDesktop ? onPrimary : onSecondary)(coords, { pointerType: 'mouse' })
       },
       onPointerDown(e: React.PointerEvent) {
         lastPointerType.current = e.pointerType
@@ -99,7 +107,7 @@ export function useCardGestures(longPressDelay = 350) {
           longPressFired.current = true
           timer.current = null
           // Long-press = mobile secondary by default; inverted = primary.
-          ;(invertMobile ? onPrimary : onSecondary)(coords)
+          ;(invertMobile ? onPrimary : onSecondary)(coords, { pointerType: 'touch' })
         }, longPressDelay)
       },
       onPointerMove(e: React.PointerEvent) {

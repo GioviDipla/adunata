@@ -1,13 +1,13 @@
 'use client'
 
-import { memo, useState, useRef } from 'react'
+import { memo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Minus, Plus, RotateCcw, Sparkles } from 'lucide-react'
 import CardContextMenu from './CardContextMenu'
 import SectionPicker, { type SectionOption } from './SectionPicker'
 import TagEditor from './TagEditor'
 import UpscaledBadge from '@/components/cards/UpscaledBadge'
-import { useLongPress } from '@/lib/hooks/useLongPress'
+import { useCardGestures } from '@/lib/hooks/useCardGestures'
 import { formatPreferredPrice } from '@/lib/utils/price'
 import type { Database } from '@/types/supabase'
 
@@ -126,76 +126,58 @@ function DeckCardImpl({
   const [showPreview, setShowPreview] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [showActionSheet, setShowActionSheet] = useState(false)
-  const lastPointerPos = useRef({ x: 0, y: 0 })
-  const pointerIsTouch = useRef(false)
+
+  // Centralised gesture handling + user control inversion (desktop click /
+  // mobile long-press), shared with the other deck-area surfaces.
+  const { getHandlers } = useCardGestures()
 
   // Editing mode = onMoveToBoard or full edit wiring is present.
-  // In editing mode tap opens the context menu / action sheet, while
-  // long-press / right-click opens the card detail modal. View mode
-  // (no edit handlers) keeps tap = open detail.
+  // In editing mode the quick action opens the context menu / action sheet,
+  // while the preview gesture (long-press / right-click) opens the card
+  // detail modal. View mode (no edit handlers) keeps both gestures on
+  // open-detail.
   const editingMode = !!onMoveToBoard || editingEnabled
 
-  // On touch devices (no hover) the long-press in editing mode opens
-  // card detail (was: action sheet). Desktop right-click also opens
-  // detail. Tap or click is the "edit" affordance.
-  const longPress = useLongPress({
-    onLongPress: () => {
-      if (editingMode) {
-        onCardClick?.(card)
-      }
-    },
-    delay: 500,
-  })
-
-  // Helper: opens the appropriate "edit" surface for the current device.
+  // Helper: opens the appropriate "edit" surface for the gesture's device.
   // Touch + full edit wiring → action sheet. Anything else → desktop
-  // context-menu popover anchored at the last pointer.
-  const openEditSurface = () => {
-    if (pointerIsTouch.current && editingEnabled) {
+  // context-menu popover anchored at the pointer coords from the gesture.
+  const openEditSurface = (coords: { x: number; y: number }, isTouch: boolean) => {
+    if (isTouch && editingEnabled) {
       setShowActionSheet(true)
     } else {
-      setContextMenu({
-        x: lastPointerPos.current.x,
-        y: lastPointerPos.current.y,
-      })
+      setContextMenu({ x: coords.x, y: coords.y })
     }
   }
 
+  // In editing mode the quick action opens the edit surface at the pointer;
+  // the preview gesture opens the card detail. View mode maps both to detail.
+  const gestures = getHandlers({
+    onPrimary: editingMode
+      ? (coords, meta) => openEditSurface(coords, meta.pointerType === 'touch')
+      : () => onCardClick?.(card),
+    onSecondary: () => onCardClick?.(card),
+  })
+
   return (
     <div
+      {...gestures}
+      onMouseEnter={() => setShowPreview(true)}
+      onMouseLeave={() => setShowPreview(false)}
       className={`group relative flex items-center gap-1.5 sm:gap-2 rounded-lg border px-2 py-1.5 sm:px-3 sm:py-2 transition-colors hover:bg-bg-hover ${
         isCommander
           ? 'border-bg-yellow/50 bg-bg-yellow/5'
           : 'border-border bg-bg-card'
       }`}
-      onContextMenu={(e) => {
-        if (editingMode) {
-          // Right-click opens card detail in editing mode.
-          e.preventDefault()
-          onCardClick?.(card)
-        }
-      }}
-      onPointerDown={(e) => {
-        lastPointerPos.current = { x: e.clientX, y: e.clientY }
-        pointerIsTouch.current = e.pointerType === 'touch'
-        if (editingMode) longPress.onPointerDown(e)
-      }}
-      onPointerMove={editingMode ? longPress.onPointerMove : undefined}
-      onPointerUp={editingMode ? longPress.onPointerUp : undefined}
-      onPointerLeave={() => {
-        if (editingMode) longPress.onPointerLeave()
-      }}
-      onPointerCancel={editingMode ? longPress.onPointerCancel : undefined}
-      onMouseEnter={() => setShowPreview(true)}
-      onMouseLeave={() => setShowPreview(false)}
-      style={{ touchAction: 'manipulation' }}
     >
       {/* Quantity controls — desktop only. On mobile editing happens
           through the tap context menu / action sheet. */}
       <div className="flex items-center gap-0.5 sm:gap-1">
         {onQuantityChange && (
           <button
-            onClick={() => onQuantityChange(card.id, quantity - 1, board)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onQuantityChange(card.id, quantity - 1, board)
+            }}
             className="hidden sm:flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
             aria-label="Decrease quantity"
           >
@@ -207,7 +189,10 @@ function DeckCardImpl({
         </span>
         {onQuantityChange && (
           <button
-            onClick={() => onQuantityChange(card.id, quantity + 1, board)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onQuantityChange(card.id, quantity + 1, board)
+            }}
             className="hidden sm:flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded bg-bg-cell text-font-secondary transition-colors hover:bg-bg-hover hover:text-font-primary"
             aria-label="Increase quantity"
           >
@@ -218,15 +203,9 @@ function DeckCardImpl({
 
       {/* Card info */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        {/* Name is part of the row's gesture surface — let the click bubble
+            up to the root so it routes through the shared gesture handler. */}
         <button
-          onClick={() => {
-            if (longPress.wasLongPress()) return
-            if (editingMode) {
-              openEditSurface()
-            } else {
-              onCardClick?.(card)
-            }
-          }}
           className="truncate text-xs sm:text-sm font-medium text-font-primary hover:text-font-accent transition-colors text-left"
         >
           {card.name}
@@ -274,7 +253,10 @@ function DeckCardImpl({
 
       {/* Section + tags edit affordances — desktop list view only */}
       {editingEnabled && deckId && deckCardId && sections && (
-        <div className="hidden xl:flex items-center gap-1">
+        <div
+          className="hidden xl:flex items-center gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
           <SectionPicker
             currentSectionId={sectionId ?? null}
             sections={sections}
@@ -291,7 +273,10 @@ function DeckCardImpl({
       {/* Restore button — only on the Removed board, when editing is wired */}
       {board === 'removed' && onMoveToBoard && (
         <button
-          onClick={() => onMoveToBoard(card.id, 'removed', 'main')}
+          onClick={(e) => {
+            e.stopPropagation()
+            onMoveToBoard(card.id, 'removed', 'main')
+          }}
           className="flex h-5 sm:h-6 shrink-0 items-center gap-1 rounded-full bg-bg-green/20 px-2 text-[10px] sm:text-xs font-medium text-bg-green hover:bg-bg-green/30"
           aria-label="Restore card to main deck"
           title="Restore to main deck"
