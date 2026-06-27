@@ -165,9 +165,6 @@ export async function POST(
 
   // Check if bot is in this game (botUserId stored in game state during lobby creation)
   const botUserId = (currentState as GameState & { botUserId?: string }).botUserId ?? null
-  if (botUserId) {
-    console.log('[Bot] Detected bot game. botUserId:', botUserId, 'phase:', currentState.phase, 'priority:', currentState.priorityPlayerId, 'activePlayer:', currentState.activePlayerId)
-  }
 
   // Handle concede
   if (action.type === 'concede') {
@@ -228,13 +225,13 @@ export async function POST(
     }
 
     // Bot processing: run bot's turn server-side
+    let botProcessed = false
+    let botError: string | null = null
     if (botUserId) {
-      console.log('[Bot] Running bot turn. Phase before:', newState.phase, 'priority:', newState.priorityPlayerId,
-        'botId:', botUserId, 'hand:', newState.players[botUserId]?.hand?.length ?? 0)
       try {
         const { state: botState, logEntries } = await runBotTurn(lobbyId, botUserId, newState, admin)
         newState = botState
-        // Insert bot log entries (AFTER human's seq, BEFORE RPC updates state)
+        botProcessed = logEntries.length > 0
         if (logEntries.length > 0) {
           for (const le of logEntries) {
             await admin.from('game_log').insert({
@@ -243,9 +240,10 @@ export async function POST(
             })
           }
         }
-        console.log('[Bot] Bot turn complete. Phase after:', newState.phase, 'priority:', newState.priorityPlayerId,
-          'hand:', newState.players[botUserId]?.hand?.length ?? 0, 'bf:', newState.players[botUserId]?.battlefield?.length ?? 0)
-      } catch (err) { console.error('[Bot processing error]', err) }
+      } catch (err) {
+        botError = err instanceof Error ? err.message : String(err)
+        console.error('[Bot processing error]', err)
+      }
     }
 
     // Save via RPC — use humanActionSeq for the log entry
@@ -266,7 +264,7 @@ export async function POST(
       retries++; continue
     }
 
-    return NextResponse.json({ state: newState, seq: newState.lastActionSeq })
+    return NextResponse.json({ state: newState, seq: newState.lastActionSeq, botProcessed, botError })
   }
 
   return NextResponse.json({ error: 'Action conflict, please retry' }, { status: 409 })
