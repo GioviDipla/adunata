@@ -29,11 +29,19 @@ const SAMPLE_CARDS: { surface: string; name: string; image: string }[] = [
   },
 ]
 
+// Mock quick-action menu items per surface — purely illustrative, so the user
+// sees what the "quick action" opens on each deck-area screen.
+const QUICK_ACTIONS: Record<string, string[]> = {
+  'Deck Builder': ['Aggiungi al deck', 'Imposta comandante', 'Sposta in sideboard'],
+  'Deck Viewer': ['Apri dettaglio carta', 'Stampe alternative', 'Aggiungi al deck'],
+  'Cards search': ['Aggiungi al deck', 'Metti like', 'Condividi'],
+}
+
 /**
- * A single interactive sample card wired through useCardGestures. Reacts to the
- * real gestures (tap/click, long-press/right-click) and reports whether they
- * resolved to the quick action or the preview, reflecting the live inversion
- * settings so the user can feel their configuration on each surface.
+ * A single interactive sample card wired through useCardGestures. The real
+ * gestures (tap/click, long-press/right-click) trigger the real effects so the
+ * user sees them: the quick action opens a mock context menu, the preview
+ * gesture opens the enlarged card. Reflects the live inversion settings.
  */
 function SampleCard({
   surface,
@@ -44,11 +52,11 @@ function SampleCard({
   name: string
   image: string
 }) {
-  const [last, setLast] = useState<'primary' | 'secondary' | null>(null)
+  const [mode, setMode] = useState<'idle' | 'menu' | 'preview'>('idle')
   const { getHandlers } = useCardGestures()
   const handlers = getHandlers({
-    onPrimary: () => setLast('primary'),
-    onSecondary: () => setLast('secondary'),
+    onPrimary: () => setMode('menu'),
+    onSecondary: () => setMode('preview'),
   })
 
   return (
@@ -68,22 +76,53 @@ function SampleCard({
           draggable={false}
           className="aspect-[488/680] w-full object-cover"
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-bg-dark/80 px-2 py-1.5 text-center backdrop-blur-sm">
-          {last === null ? (
-            <span className="text-[10px] text-font-secondary">
-              Prova tap / long-press
-            </span>
-          ) : last === 'primary' ? (
-            <span className="flex items-center gap-1 text-[11px] font-semibold text-font-accent">
+
+        {/* Quick action = mock context menu over the card */}
+        {mode === 'menu' && (
+          <div
+            className="absolute inset-0 flex flex-col justify-center gap-1 bg-bg-dark/85 p-2 backdrop-blur-sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              setMode('idle')
+            }}
+          >
+            <span className="mb-1 flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-font-accent">
               <MousePointerClick className="h-3 w-3" /> Azione rapida
             </span>
-          ) : (
-            <span className="flex items-center gap-1 text-[11px] font-semibold text-bg-yellow">
-              <Eye className="h-3 w-3" /> Anteprima + menu
-            </span>
-          )}
-        </div>
+            {QUICK_ACTIONS[surface]?.map((label) => (
+              <span
+                key={label}
+                className="truncate rounded bg-bg-cell px-2 py-1 text-center text-[11px] text-font-primary"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Preview = enlarged card, viewport-centered overlay */}
+      {mode === 'preview' && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setMode('idle')}
+        >
+          <div className="flex flex-col items-center gap-2">
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-bg-yellow">
+              <Eye className="h-4 w-4" /> Anteprima
+            </span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image}
+              alt={name}
+              draggable={false}
+              className="max-h-[70vh] w-auto rounded-xl shadow-2xl"
+            />
+            <span className="text-xs text-font-secondary">{name}</span>
+            <span className="text-[11px] text-font-muted">Tocca per chiudere</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -95,8 +134,9 @@ function SampleCard({
 function GestureTester() {
   return (
     <div className="rounded-lg border border-border bg-bg-surface p-3">
-      <p className="mb-2.5 text-xs font-medium text-font-secondary">
-        Prova i controlli
+      <p className="text-xs font-medium text-font-secondary">Prova i controlli</p>
+      <p className="mb-2.5 text-[11px] text-font-muted">
+        Azione rapida → menu contestuale · Anteprima → carta ingrandita
       </p>
       <div className="grid grid-cols-3 gap-2.5">
         {SAMPLE_CARDS.map((c) => (
