@@ -170,7 +170,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const initialState: GameState = {
+  const initialState: GameState & { botUserId: string } = {
     turn: 1,
     phase: 'untap',
     activePlayerId: firstPlayerId,
@@ -180,6 +180,7 @@ export async function POST(request: NextRequest) {
     players: playerStates,
     lastActionSeq: 1,
     mulliganStage: { playerDecisions: mulliganDecisions },
+    botUserId,
   }
 
   // Create game state

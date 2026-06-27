@@ -163,16 +163,8 @@ export async function POST(
 
   const currentState = gameStateRow.state_data as unknown as GameState
 
-  // Check if bot is in this game
-  const { data: allPlayers } = await admin.from('game_players').select('user_id').eq('lobby_id', lobbyId)
-  let botUserId: string | null = null
-  for (const p of allPlayers ?? []) {
-    if (p.user_id === user.id) continue
-    try {
-      const { data: bu } = await admin.auth.admin.getUserById(p.user_id)
-      if ((bu?.user?.user_metadata as Record<string, unknown>)?.bot === true) { botUserId = p.user_id; break }
-    } catch { /* not bot */ }
-  }
+  // Check if bot is in this game (botUserId stored in game state during lobby creation)
+  const botUserId = (currentState as GameState & { botUserId?: string }).botUserId ?? null
 
   // Handle concede
   if (action.type === 'concede') {
@@ -222,6 +214,9 @@ export async function POST(
     try { newState = applyAction(stateToProcess, action) }
     catch (e) { if (e instanceof ActionRejectedError) return NextResponse.json({ error: e.code, meta: e.meta ?? null }, { status: 409 }); throw e }
 
+    // Save the human's action seq BEFORE bot processing overwrites it
+    const humanActionSeq = newState.lastActionSeq
+
     // Auto-pass loop for players with autoPass enabled
     let autoPassCount = 0
     while (autoPassCount < 50 && newState.priorityPlayerId && newState.players[newState.priorityPlayerId]?.autoPass && !newState.pendingCommanderChoice && !newState.mulliganStage && !newState.players[newState.priorityPlayerId]?.revealedCards) {
@@ -234,7 +229,7 @@ export async function POST(
       try {
         const { state: botState, logEntries } = await runBotTurn(lobbyId, botUserId, newState, admin)
         newState = botState
-        // Insert bot log entries in batch
+        // Insert bot log entries (AFTER human's seq, BEFORE RPC updates state)
         if (logEntries.length > 0) {
           for (const le of logEntries) {
             await admin.from('game_log').insert({
@@ -246,11 +241,11 @@ export async function POST(
       } catch (err) { console.error('[Bot processing error]', err) }
     }
 
-    // Save via RPC
+    // Save via RPC — use humanActionSeq for the log entry
     const { data: rpcResult, error: rpcError } = await admin.rpc('process_game_action', {
       p_lobby_id: lobbyId, p_player_id: action.playerId, p_action: action.type,
       p_action_data: (action.data ?? null) as Json, p_action_text: action.text,
-      p_action_seq: newState.lastActionSeq, p_new_state: newState as unknown as Json,
+      p_action_seq: humanActionSeq, p_new_state: newState as unknown as Json,
       p_turn_number: newState.turn, p_active_player_id: newState.activePlayerId,
       p_phase: newState.phase, p_expected_seq: expectedSeq,
     })
