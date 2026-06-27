@@ -49,6 +49,8 @@ const FORMATS = ['Commander', 'Standard', 'Modern', 'Legacy']
 interface DeckFiltersProps {
   filters: FilterState
   onChange: (f: FilterState) => void
+  /** Hide the creator field (e.g. on "My Decks", where it's always you). */
+  hideCreator?: boolean
 }
 
 function ColorGroup({
@@ -88,7 +90,7 @@ function ColorGroup({
   )
 }
 
-export default function DeckFilters({ filters, onChange }: DeckFiltersProps) {
+export default function DeckFilters({ filters, onChange, hideCreator = false }: DeckFiltersProps) {
   const toggle = (key: 'colors' | 'colorIdentity', code: string) => {
     const arr = filters[key]
     onChange({
@@ -103,7 +105,7 @@ export default function DeckFilters({ filters, onChange }: DeckFiltersProps) {
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-bg-card p-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className={`grid gap-3 ${hideCreator ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-font-secondary">
             Deck name
@@ -116,14 +118,16 @@ export default function DeckFilters({ filters, onChange }: DeckFiltersProps) {
             className="rounded-lg border border-border bg-bg-surface px-3 py-2 text-sm text-font-primary placeholder:text-font-muted focus:border-bg-accent focus:outline-none"
           />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-font-secondary">Creator</span>
-          <UserAutocomplete
-            value={filters.creator}
-            onChange={(u) => set('creator', u)}
-            placeholder="Search creator..."
-          />
-        </label>
+        {!hideCreator && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-font-secondary">Creator</span>
+            <UserAutocomplete
+              value={filters.creator}
+              onChange={(u) => set('creator', u)}
+              placeholder="Search creator..."
+            />
+          </label>
+        )}
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-font-secondary">Commander</span>
           <CardAutocomplete
