@@ -68,6 +68,7 @@ export function botDecideActionHeuristic(
   state: GameState,
   botId: string,
   cardMap: CardMap,
+  landPlayedThisTurn = false,
 ): GameAction | null {
   const botState = state.players[botId]
   if (!botState) return null
@@ -97,8 +98,8 @@ export function botDecideActionHeuristic(
     return { type: 'resolve_combat_damage', playerId: botId, data: {}, text: '' }
   }
 
-  // Main phase: play a land (heuristic handles land, AI handles creatures)
-  if (isBotTurn && (phase === 'main1' || phase === 'main2')) {
+  // Main phase: play a land (one per turn)
+  if (isBotTurn && (phase === 'main1' || phase === 'main2') && !landPlayedThisTurn) {
     for (const iid of botState.hand) {
       const card = cardMap[iid]
       if (card && card.typeLine?.toLowerCase().includes('land')) {

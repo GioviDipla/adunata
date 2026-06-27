@@ -53,6 +53,7 @@ async function runBotTurn(
   let s = state
   const logEntries: Array<{ seq: number; playerId: string | null; action: string; data: Json; text: string }> = []
   let iterations = 0
+  let landPlayedThisTurn = false
 
   while (iterations < 100) {
     // Mulligan: auto-keep
@@ -67,8 +68,16 @@ async function runBotTurn(
 
     // Bot priority
     if (s.priorityPlayerId === botId) {
-      const heuristicAction = botDecideActionHeuristic(s, botId, cardMap)
+      const heuristicAction = botDecideActionHeuristic(s, botId, cardMap, landPlayedThisTurn)
       if (heuristicAction) {
+        // Track land plays for one-land-per-turn rule
+        if (heuristicAction.type === 'play_card') {
+          const iid = (heuristicAction.data as Record<string, unknown>)?.instanceId as string | undefined
+          const card = iid ? cardMap[iid] : null
+          if (card?.typeLine?.toLowerCase().includes('land')) {
+            landPlayedThisTurn = true
+          }
+        }
         s = applyAction(s, heuristicAction)
         logEntries.push({ seq: s.lastActionSeq, playerId: botId, action: heuristicAction.type, data: (heuristicAction.data ?? {}) as Json, text: heuristicAction.text || '' })
         iterations++; continue

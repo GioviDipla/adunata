@@ -102,7 +102,7 @@ export async function applyWithBotLoop(
       // Smart bot: try heuristic first, fall back to AI
       if (config.type === 'bot' && cardMap) {
         // 1. Try heuristic action (land, untap, mulligan, damage resolve, pass)
-        const heuristicAction = botDecideActionHeuristic(s, botId, cardMap)
+        const heuristicAction = botDecideActionHeuristic(s, botId, cardMap, false)
 
         if (heuristicAction) {
           // Heuristic returned an action (including pass_priority for simple states)
