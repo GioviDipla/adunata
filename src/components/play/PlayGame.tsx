@@ -415,7 +415,7 @@ export default function PlayGame(props: PlayGameProps) {
       if (gameState) {
         let nextState
         try {
-          nextState = applyWithBotLoop(gameState, action, gProps.botId, gProps.botConfig, cardMap)
+          nextState = await applyWithBotLoop(gameState, action, gProps.botId, gProps.botConfig, cardMap)
         } catch (e) {
           if (e instanceof ActionRejectedError) {
             badgeRef.current?.pulse()

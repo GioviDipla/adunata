@@ -1,6 +1,6 @@
 import { applyAction } from './engine'
 import type { GameState, GameAction, CardMap } from './types'
-import { botDecideAction } from './smart-bot'
+import { botDecideActionHeuristic, needsAIDecision } from './smart-bot'
 
 export type BotType = 'ghost' | 'bot'
 
@@ -23,16 +23,43 @@ export const SMART_BOT: BotConfig = {
 }
 
 /**
+ * Call the AI decision API to get the bot's next action.
+ * Returns null if the API call fails (caller should fall back to pass).
+ */
+async function fetchAIDecision(
+  state: GameState,
+  botId: string,
+  cardMap: CardMap,
+): Promise<GameAction | null> {
+  try {
+    const res = await fetch('/api/game/bot-decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state, botId, cardMap }),
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as { action?: GameAction; fallback?: boolean }
+    if (data.action) {
+      return data.action
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Apply a player action then auto-respond for the bot until
  * priority returns to a human player or no more bot actions needed.
+ * Async — may call AI API for complex decisions.
  */
-export function applyWithBotLoop(
+export async function applyWithBotLoop(
   state: GameState,
   action: GameAction,
   botId: string,
   config: BotConfig,
   cardMap?: CardMap,
-): GameState {
+): Promise<GameState> {
   let s = applyAction(state, action)
 
   let iterations = 0
@@ -65,15 +92,29 @@ export function applyWithBotLoop(
         continue
       }
 
-      // Smart bot: ask decision engine
+      // Smart bot: try heuristic first, fall back to AI
       if (config.type === 'bot' && cardMap) {
-        const botAction = botDecideAction(s, botId, cardMap)
-        if (botAction) {
-          s = applyAction(s, botAction)
+        // 1. Try heuristic action (land, untap, mulligan, damage resolve, pass)
+        const heuristicAction = botDecideActionHeuristic(s, botId, cardMap)
+
+        if (heuristicAction) {
+          // Heuristic returned an action (including pass_priority for simple states)
+          s = applyAction(s, heuristicAction)
           iterations++
           continue
         }
-        // Fallback: pass
+
+        // 2. Heuristic returned null → need AI decision
+        if (needsAIDecision(s, botId, cardMap)) {
+          const aiAction = await fetchAIDecision(s, botId, cardMap)
+          if (aiAction) {
+            s = applyAction(s, aiAction)
+            iterations++
+            continue
+          }
+        }
+
+        // 3. Fallback: pass
         s = applyAction(s, {
           type: 'pass_priority',
           playerId: botId,
@@ -95,7 +136,7 @@ export function applyWithBotLoop(
       continue
     }
 
-    // During bot's turn, auto-pass for human too (nothing to respond to on ghost's turn)
+    // During bot's turn, auto-pass for human too
     if (s.activePlayerId === botId && s.priorityPlayerId !== botId) {
       s = applyAction(s, {
         type: 'pass_priority',

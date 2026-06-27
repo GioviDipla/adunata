@@ -1,68 +1,68 @@
 import type { GameState, GameAction, PlayerState, CardMap } from './types'
 
 /**
- * GoblinAI Smart Bot — heuristic opponent.
+ * GoblinAI Smart Bot — hybrid opponent.
  *
- * Decision priorities:
+ * Heuristics (fast, no API call):
  *  1. Mulligan: auto-keep
- *  2. Play a land (one per turn, any available)
- *  3. Play the biggest creature affordable with current mana
- *  4. Attack with all eligible creatures when active player
- *  5. Block to preserve as much life as possible
- *  6. Pass priority for everything else
+ *  2. Untap: auto-confirm
+ *  3. Land drop: play a land from hand
+ *  4. Combat damage: auto-resolve
+ *  5. Fallback: pass priority
+ *
+ * AI decisions (calls DeepSeek API):
+ *  A. Which creature to cast (main phase)
+ *  B. Which creatures to attack with
+ *  C. How to block incoming attackers
  */
 
-function countLandsPlayedThisTurn(botState: PlayerState, cardMap: CardMap): number {
-  // We can't easily track this without turn state. Approximate: assume the bot
-  // played 1 land per previous turn, so it can play 1 land per turn.
-  // For now: always play a land if hand has one with type including "Land".
-  return 0
-}
+// Actions that should use AI when available
+const AI_ACTIONS = new Set(['play_card', 'declare_attackers', 'declare_blockers'])
 
-function hasLandInHand(botState: PlayerState, cardMap: CardMap): string | null {
-  for (const iid of botState.hand) {
-    const card = cardMap[iid]
-    if (card && card.typeLine?.toLowerCase().includes('land')) {
-      return iid
-    }
+/**
+ * Returns true if the current game state requires an AI decision
+ * (complex choice: which creature to cast, attack, or block).
+ * Returns false for simple heuristic actions (land, untap, mulligan, pass).
+ */
+export function needsAIDecision(state: GameState, botId: string, cardMap: CardMap): boolean {
+  const botState = state.players[botId]
+  if (!botState) return false
+  if (state.priorityPlayerId !== botId) return false
+  if (state.mulliganStage) return false // heuristic handles mulligan
+
+  const phase = state.phase
+  const isBotTurn = state.activePlayerId === botId
+
+  // Main phase: AI decides which creature to cast
+  if (isBotTurn && (phase === 'main1' || phase === 'main2')) {
+    // Only ask AI if there are creatures in hand (lands handled by heuristic)
+    const hasCreatures = botState.hand.some((iid) => {
+      const card = cardMap[iid]
+      return card && card.typeLine?.toLowerCase().includes('creature')
+    })
+    return hasCreatures
   }
-  return null
-}
 
-function getCreaturesInHand(
-  botState: PlayerState,
-  cardMap: CardMap,
-): { instanceId: string; power: number; toughness: number }[] {
-  const result: { instanceId: string; power: number; toughness: number }[] = []
-  for (const iid of botState.hand) {
-    const card = cardMap[iid]
-    if (!card || !card.typeLine?.toLowerCase().includes('creature')) continue
-    const power = parseInt(card.power ?? '0', 10) || 0
-    const toughness = parseInt(card.toughness ?? '0', 10) || 0
-    result.push({ instanceId: iid, power, toughness })
+  // Declare attackers: AI decides which creatures attack
+  if (isBotTurn && phase === 'declare_attackers') {
+    const eligible = botState.battlefield.filter((c) => !c.tapped && !c.attacking)
+    return eligible.length > 0
   }
-  // Sort by power descending (biggest first)
-  result.sort((a, b) => b.power - a.power || b.toughness - a.toughness)
-  return result
-}
 
-function getEligibleAttackers(botState: PlayerState): string[] {
-  return botState.battlefield
-    .filter((c) => !c.tapped && !c.attacking)
-    .map((c) => c.instanceId)
-}
+  // Declare blockers: AI decides blocking assignments
+  if (!isBotTurn && phase === 'declare_blockers') {
+    const available = botState.battlefield.filter((c) => !c.tapped)
+    return available.length > 0 && state.combat.attackers.length > 0
+  }
 
-function getAvailableBlockers(botState: PlayerState): string[] {
-  return botState.battlefield
-    .filter((c) => !c.tapped)
-    .map((c) => c.instanceId)
+  return false
 }
 
 /**
- * Main bot decision function.
- * Returns the best GameAction for the bot given the current state.
+ * Heuristic-only decisions (fast, no API call).
+ * Returns null if AI should decide instead.
  */
-export function botDecideAction(
+export function botDecideActionHeuristic(
   state: GameState,
   botId: string,
   cardMap: CardMap,
@@ -70,122 +70,68 @@ export function botDecideAction(
   const botState = state.players[botId]
   if (!botState) return null
 
-  // 1. Mulligan: auto-keep
-  if (state.mulliganStage) {
-    const decision = state.mulliganStage.playerDecisions[botId]
-    if (decision && !decision.decided) {
-      return {
-        type: 'keep_hand',
-        playerId: botId,
-        data: {},
-        text: '',
-      }
-    }
-    // Still in mulligan stage — no other actions
-    return { type: 'pass_priority', playerId: botId, data: {}, text: '' }
-  }
-
   const isBotPriority = state.priorityPlayerId === botId
   const isBotTurn = state.activePlayerId === botId
   const phase = state.phase
 
-  if (!isBotPriority) return null // Not bot's turn to act
+  if (!isBotPriority) return null
 
-  // 2. Bot's main phase — play land then creature
-  if (isBotTurn && (phase === 'main1' || phase === 'main2')) {
-    // Play a land
-    const landIid = hasLandInHand(botState, cardMap)
-    if (landIid) {
-      const card = cardMap[landIid]
-      return {
-        type: 'play_card',
-        playerId: botId,
-        data: {
-          instanceId: landIid,
-          cardId: card?.cardId ?? 0,
-          from: 'hand',
-          to: 'battlefield',
-          isCommander: false,
-          isToken: false,
-        },
-        text: `Bot plays ${card?.name ?? 'a land'}.`,
-      }
-    }
-
-    // Play biggest creature from hand
-    const creatures = getCreaturesInHand(botState, cardMap)
-    if (creatures.length > 0) {
-      const best = creatures[0]
-      const card = cardMap[best.instanceId]
-      return {
-        type: 'play_card',
-        playerId: botId,
-        data: {
-          instanceId: best.instanceId,
-          cardId: card?.cardId ?? 0,
-          from: 'hand',
-          to: 'battlefield',
-          isCommander: false,
-          isToken: false,
-        },
-        text: `Bot casts ${card?.name ?? 'a creature'}.`,
-      }
-    }
-  }
-
-  // 3. Declare attackers — attack with all eligible creatures
-  if (isBotTurn && phase === 'declare_attackers') {
-    const attackers = getEligibleAttackers(botState)
-    if (attackers.length > 0) {
-      // Find the human player
-      const humanId = Object.keys(state.players).find((pid) => pid !== botId)
-      return {
-        type: 'declare_attackers',
-        playerId: botId,
-        data: {
-          attackerIds: attackers,
-          targetPlayerId: humanId ?? '',
-        },
-        text: `Bot attacks with ${attackers.length} creature${attackers.length > 1 ? 's' : ''}.`,
-      }
+  // Mulligan: auto-keep
+  if (state.mulliganStage) {
+    const decision = state.mulliganStage.playerDecisions[botId]
+    if (decision && !decision.decided) {
+      return { type: 'keep_hand', playerId: botId, data: {}, text: '' }
     }
     return { type: 'pass_priority', playerId: botId, data: {}, text: '' }
   }
 
-  // 4. Declare blockers — block to preserve life
-  if (!isBotTurn && phase === 'declare_blockers') {
-    const blockers = getAvailableBlockers(botState)
-    const attackers = state.combat.attackers
-    if (blockers.length > 0 && attackers.length > 0) {
-      // Simple strategy: each available blocker blocks one attacker
-      const assignments = []
-      const maxBlocks = Math.min(blockers.length, attackers.length)
-      for (let i = 0; i < maxBlocks; i++) {
-        assignments.push({
-          blockerId: blockers[i],
-          attackerId: attackers[i].instanceId,
-        })
-      }
-      return {
-        type: 'declare_blockers',
-        playerId: botId,
-        data: { blockerAssignments: assignments },
-        text: `Bot blocks with ${assignments.length} creature${assignments.length > 1 ? 's' : ''}.`,
-      }
-    }
-    return { type: 'pass_priority', playerId: botId, data: {}, text: '' }
-  }
-
-  // 5. Auto-resolve combat damage
-  if (phase === 'combat_damage' && !state.combat.damageAssigned) {
-    return { type: 'resolve_combat_damage', playerId: botId, data: {}, text: '' }
-  }
-
-  // 6. Confirm untap step
+  // Untap: auto-confirm
   if (isBotTurn && phase === 'untap') {
     return { type: 'confirm_untap', playerId: botId, data: {}, text: '' }
   }
 
-  // 7. Default: pass priority
+  // Combat damage: auto-resolve
+  if (phase === 'combat_damage' && !state.combat.damageAssigned) {
+    return { type: 'resolve_combat_damage', playerId: botId, data: {}, text: '' }
+  }
+
+  // Main phase: play a land (heuristic handles land, AI handles creatures)
+  if (isBotTurn && (phase === 'main1' || phase === 'main2')) {
+    for (const iid of botState.hand) {
+      const card = cardMap[iid]
+      if (card && card.typeLine?.toLowerCase().includes('land')) {
+        return {
+          type: 'play_card',
+          playerId: botId,
+          data: { instanceId: iid, cardId: card.cardId, from: 'hand', to: 'battlefield', isCommander: false, isToken: false },
+          text: `Bot plays ${card.name}.`,
+        }
+      }
+    }
+    // If no land, check if AI is needed for creatures
+    const hasCreatures = botState.hand.some((iid) => {
+      const card = cardMap[iid]
+      return card && card.typeLine?.toLowerCase().includes('creature')
+    })
+    if (hasCreatures) return null // Let AI decide
+  }
+
+  // Declare attackers/blockers: let AI decide (return null)
+  if (isBotTurn && phase === 'declare_attackers') return null
+  if (!isBotTurn && phase === 'declare_blockers') return null
+
+  // Default: pass priority
   return { type: 'pass_priority', playerId: botId, data: {}, text: '' }
+}
+
+/**
+ * Kept for backward compat — same as botDecideActionHeuristic.
+ * The async AI path is handled by applyWithBotLoop calling the API route.
+ */
+export function botDecideAction(
+  state: GameState,
+  botId: string,
+  cardMap: CardMap,
+): GameAction | null {
+  return botDecideActionHeuristic(state, botId, cardMap)
 }
