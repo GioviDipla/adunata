@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedUser } from '@/lib/supabase/get-user'
 import CreateLobby from '@/components/play/CreateLobby'
 import JoinLobby from '@/components/play/JoinLobby'
+import PlayVsBot from '@/components/play/PlayVsBot'
 import ActiveLobbiesList from '@/components/play/ActiveLobbiesList'
 import GameHistoryList from '@/components/play/GameHistoryList'
 import InvitationsPanel from '@/components/play/invitations/InvitationsPanel'
@@ -213,6 +214,9 @@ export default async function PlayPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <CreateLobby decks={decks ?? []} />
           <JoinLobby decks={decks ?? []} />
+        </div>
+        <div className="mt-4">
+          <PlayVsBot decks={decks ?? []} />
         </div>
       </section>
 

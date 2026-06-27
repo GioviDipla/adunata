@@ -1,5 +1,6 @@
 import { applyAction } from './engine'
-import type { GameState, GameAction } from './types'
+import type { GameState, GameAction, CardMap } from './types'
+import { botDecideAction } from './smart-bot'
 
 export type BotType = 'ghost' | 'bot'
 
@@ -15,6 +16,12 @@ export const GHOST_BOT: BotConfig = {
   life: 20,
 }
 
+export const SMART_BOT: BotConfig = {
+  type: 'bot',
+  name: 'GoblinAI',
+  life: 20,
+}
+
 /**
  * Apply a player action then auto-respond for the bot until
  * priority returns to a human player or no more bot actions needed.
@@ -24,6 +31,7 @@ export function applyWithBotLoop(
   action: GameAction,
   botId: string,
   config: BotConfig,
+  cardMap?: CardMap,
 ): GameState {
   let s = applyAction(state, action)
 
@@ -44,7 +52,7 @@ export function applyWithBotLoop(
       }
     }
 
-    // Bot priority: auto-pass
+    // Bot priority: delegate to bot decision engine
     if (s.priorityPlayerId === botId) {
       if (config.type === 'ghost') {
         s = applyAction(s, {
@@ -56,10 +64,38 @@ export function applyWithBotLoop(
         iterations++
         continue
       }
-      // Future bot types: decision logic goes here
+
+      // Smart bot: ask decision engine
+      if (config.type === 'bot' && cardMap) {
+        const botAction = botDecideAction(s, botId, cardMap)
+        if (botAction) {
+          s = applyAction(s, botAction)
+          iterations++
+          continue
+        }
+        // Fallback: pass
+        s = applyAction(s, {
+          type: 'pass_priority',
+          playerId: botId,
+          data: {},
+          text: '',
+        })
+        iterations++
+        continue
+      }
+
+      // Unknown bot type: pass
+      s = applyAction(s, {
+        type: 'pass_priority',
+        playerId: botId,
+        data: {},
+        text: '',
+      })
+      iterations++
+      continue
     }
 
-    // During bot's turn, auto-pass for human too (nothing to respond to on ghost's empty turn)
+    // During bot's turn, auto-pass for human too (nothing to respond to on ghost's turn)
     if (s.activePlayerId === botId && s.priorityPlayerId !== botId) {
       s = applyAction(s, {
         type: 'pass_priority',
