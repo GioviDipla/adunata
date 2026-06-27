@@ -5,13 +5,45 @@ import { MousePointerClick, Eye } from 'lucide-react'
 import { usePreferences } from '@/lib/contexts/PreferencesContext'
 import { useCardGestures } from '@/lib/hooks/useCardGestures'
 
+// Three real example cards, one per deck-area surface. Images come from
+// Scryfall's named-card image endpoint (302-redirects to the art), so no
+// hard-coded CDN hashes that could rot on a new printing.
+const SAMPLE_CARDS: { surface: string; name: string; image: string }[] = [
+  {
+    surface: 'Deck Builder',
+    name: 'Llanowar Elves',
+    image:
+      'https://api.scryfall.com/cards/named?exact=Llanowar%20Elves&format=image&version=normal',
+  },
+  {
+    surface: 'Deck Viewer',
+    name: 'Krenko, Mob Boss',
+    image:
+      'https://api.scryfall.com/cards/named?exact=Krenko%2C%20Mob%20Boss&format=image&version=normal',
+  },
+  {
+    surface: 'Cards search',
+    name: 'Emrakul, the Aeons Torn',
+    image:
+      'https://api.scryfall.com/cards/named?exact=Emrakul%2C%20the%20Aeons%20Torn&format=image&version=normal',
+  },
+]
+
 /**
- * Interactive sandbox: a sample card that reacts to the real gestures
- * (tap/click, long-press/right-click) through useCardGestures, so the user
- * can feel their current configuration. The feedback re-labels itself with the
- * active inversion, matching the explanation table above.
+ * A single interactive sample card wired through useCardGestures. Reacts to the
+ * real gestures (tap/click, long-press/right-click) and reports whether they
+ * resolved to the quick action or the preview, reflecting the live inversion
+ * settings so the user can feel their configuration on each surface.
  */
-function GestureTester() {
+function SampleCard({
+  surface,
+  name,
+  image,
+}: {
+  surface: string
+  name: string
+  image: string
+}) {
   const [last, setLast] = useState<'primary' | 'secondary' | null>(null)
   const { getHandlers } = useCardGestures()
   const handlers = getHandlers({
@@ -20,27 +52,56 @@ function GestureTester() {
   })
 
   return (
-    <div className="rounded-lg border border-border bg-bg-surface p-3">
-      <p className="mb-2 text-xs font-medium text-font-secondary">
-        Prova i controlli
-      </p>
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-font-muted">
+        {surface}
+      </span>
       <div
         {...handlers}
-        className="flex aspect-[16/9] cursor-pointer select-none items-center justify-center rounded-lg border border-dashed border-border-light bg-bg-cell/50 p-4 text-center transition-colors hover:bg-bg-cell"
+        className="group relative cursor-pointer select-none overflow-hidden rounded-lg ring-1 ring-border transition-all hover:ring-border-light"
       >
-        {last === null ? (
-          <span className="text-xs text-font-muted">
-            Tocca / clicca, oppure long-press / tasto destro qui sopra
-          </span>
-        ) : last === 'primary' ? (
-          <span className="flex items-center gap-2 text-sm font-semibold text-font-accent">
-            <MousePointerClick className="h-4 w-4" /> Azione rapida
-          </span>
-        ) : (
-          <span className="flex items-center gap-2 text-sm font-semibold text-bg-yellow">
-            <Eye className="h-4 w-4" /> Anteprima + menu
-          </span>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image}
+          alt={name}
+          loading="lazy"
+          draggable={false}
+          className="aspect-[488/680] w-full object-cover"
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center bg-bg-dark/80 px-2 py-1.5 text-center backdrop-blur-sm">
+          {last === null ? (
+            <span className="text-[10px] text-font-secondary">
+              Prova tap / long-press
+            </span>
+          ) : last === 'primary' ? (
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-font-accent">
+              <MousePointerClick className="h-3 w-3" /> Azione rapida
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-bg-yellow">
+              <Eye className="h-3 w-3" /> Anteprima + menu
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Interactive sandbox: three sample cards, one per deck-area surface, that the
+ * user can poke to feel their current control configuration.
+ */
+function GestureTester() {
+  return (
+    <div className="rounded-lg border border-border bg-bg-surface p-3">
+      <p className="mb-2.5 text-xs font-medium text-font-secondary">
+        Prova i controlli
+      </p>
+      <div className="grid grid-cols-3 gap-2.5">
+        {SAMPLE_CARDS.map((c) => (
+          <SampleCard key={c.name} {...c} />
+        ))}
       </div>
     </div>
   )
