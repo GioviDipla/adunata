@@ -70,6 +70,9 @@ export default function DeckGridView({
   cols,
 }: DeckGridViewProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cardId: number; board: string } | null>(null)
+  // Floating zoom preview shown on mouse hover (desktop only — gated by
+  // `hidden md:block` on the preview node, so it never appears on touch).
+  const [hoverCard, setHoverCard] = useState<{ card: CardRow; rect: DOMRect } | null>(null)
   const longPressRef = useRef<LongPressRef>({
     timer: null,
     triggered: false,
@@ -175,6 +178,10 @@ export default function DeckGridView({
                   className="w-full h-auto cursor-pointer select-none"
                   loading="lazy"
                   draggable={false}
+                  onMouseEnter={(e) =>
+                    setHoverCard({ card: entry.card, rect: e.currentTarget.getBoundingClientRect() })
+                  }
+                  onMouseLeave={() => setHoverCard(null)}
                   onClick={(e) => {
                     if (consumeLongPress()) return
                   if (editingMode) {
@@ -275,6 +282,27 @@ export default function DeckGridView({
           </div>
         )
       })}
+      {/* Floating zoom preview on hover — desktop only (`hidden md:block`).
+          Positioned to the right of the hovered card, clamped to the
+          viewport so it never spills off-screen. */}
+      {hoverCard && hoverCard.card.image_normal && (
+        <div
+          className="pointer-events-none fixed z-50 hidden md:block"
+          style={{
+            left: Math.min(hoverCard.rect.right + 8, window.innerWidth - 240),
+            top: Math.max(8, Math.min(hoverCard.rect.top, window.innerHeight - 340)),
+          }}
+        >
+          <img
+            src={hoverCard.card.image_normal}
+            alt={hoverCard.card.name}
+            className="h-auto w-56 rounded-lg shadow-2xl"
+          />
+          {hoverCard.card.has_upscaled_2x && (
+            <UpscaledBadge className="absolute bottom-1.5 right-1.5" />
+          )}
+        </div>
+      )}
       {contextMenu && onMoveToBoard && (() => {
         const entry = cards.find(
           (e) => e.card.id === contextMenu.cardId && e.board === contextMenu.board,
